@@ -1,4 +1,4 @@
-import { resolveApiUrl } from '@/config/env';
+import { isLocalHost, resolveApiUrl } from '@/config/env';
 
 describe('resolveApiUrl', () => {
   it("privilégie la variable d'environnement et retire le / final", () => {
@@ -13,5 +13,17 @@ describe('resolveApiUrl', () => {
   });
   it('retombe sur localhost sans information', () => {
     expect(resolveApiUrl(undefined, null)).toBe('http://localhost:3000');
+  });
+});
+
+describe('isLocalHost', () => {
+  it.each(['localhost', 'poste.local', '10.0.0.121', '192.168.1.5', '172.16.0.1', '172.31.255.1', '127.0.0.1'])('accepte %s', (h) =>
+    expect(isLocalHost(h)).toBe(true),
+  );
+  it.each(['abc-anonymous-8082.exp.direct', 'x.trycloudflare.com', 'x.loca.lt', '8.8.8.8', '172.32.0.1', '172.15.0.1'])('refuse %s', (h) =>
+    expect(isLocalHost(h)).toBe(false),
+  );
+  it('ignore un tunnel quel que soit le fournisseur', () => {
+    expect(resolveApiUrl(undefined, 'x.trycloudflare.com:443')).toBe('http://localhost:3000');
   });
 });

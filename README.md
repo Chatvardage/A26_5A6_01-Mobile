@@ -54,7 +54,7 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 4. l'adresse de la machine qui exécute Metro, sur le port 3000 ;
 5. `http://localhost:3000`.
 
-Un tunnel (`*.exp.direct`) ne donne pas accès au backend : il est ignoré à l'étape 4. Après toute modification de `.env`, relancer avec le cache vidé (`npm start -- -c`).
+À l'étape 4, seule une adresse locale (`localhost`, `*.local`, IP privée `10.x`, `172.16-31.x`, `192.168.x`) est retenue : un tunnel (exp.direct, ngrok, Cloudflare…) ne donne pas accès au backend et est ignoré. Après toute modification de `.env`, relancer avec le cache vidé (`npm start -- -c`).
 
 ### Cas A : poste sans WSL2, backend sur le même poste
 
@@ -190,7 +190,7 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 | Couche | Dossier | Rôle |
 |---|---|---|
 | Écrans / composants | `src/screens`, `src/components` | Affichage et transmission des actions, aucun appel réseau |
-| Hooks | `src/hooks` | `useLoadable` (états loading / empty / error / ready, réessai, rafraîchissement) et ses usages `useDirectMessages`, `useServers`, `useServerChannels` ; `useConversationHistory` |
+| Hooks | `src/hooks` | `useLoadable` (états loading / empty / error / ready, réessai, rafraîchissement) et ses usages `useDirectMessages`, `useServers`, `useServerChannels` et `useConversationHistory` |
 | Services | `src/services` | Client HTTP, traduction des erreurs (`ApiError`), messages privés, serveurs et salons, historique |
 | Session | `src/session` | Contrat `useSession` (voir limites) |
 

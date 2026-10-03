@@ -10,6 +10,8 @@ type DmItem = {
   lastMessage: { id: string; senderId: string; content: string; createdAt: string };
 };
 
+const activityTime = (c: ConversationSummary): number => (c.lastMessage ? Date.parse(c.lastMessage.createdAt) || 0 : 0);
+
 /** Messages privés de l'utilisateur, du plus récemment actif au plus ancien. */
 export async function fetchDirectMessages(unread: UnreadSource = noUnreadSource): Promise<ConversationSummary[]> {
   const [items, counts] = await Promise.all([
@@ -29,5 +31,5 @@ export async function fetchDirectMessages(unread: UnreadSource = noUnreadSource)
         unreadCount: Math.max(0, counts[id] ?? 0),
       };
     })
-    .sort((a, b) => Date.parse(b.lastMessage?.createdAt ?? '') - Date.parse(a.lastMessage?.createdAt ?? ''));
+    .sort((a, b) => activityTime(b) - activityTime(a));
 }

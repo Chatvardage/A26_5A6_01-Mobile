@@ -6,6 +6,9 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 type TokenProvider = () => string | null;
 
+// Configuration volontairement globale : la couche session la branche une seule fois au démarrage
+// (`configureHttpClient`), pour que les services n'aient ni à connaître le jeton ni à le recevoir.
+// TODO(tests) : si des tests d'intégration appellent `configureHttpClient`, la réinitialiser entre les suites.
 let tokenProvider: TokenProvider = () => null;
 let onUnauthorized: (() => void) | null = null;
 
@@ -48,10 +51,13 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     } catch {
       // corps non JSON : on garde le statut
     }
+    // Sans jeton, un 401 est une réponse normale (ex. mauvais mot de passe à la connexion) :
+    // seule l'expiration d'une session existante déclenche la déconnexion.
     if (response.status === 401 && token) onUnauthorized?.();
     throw new ApiError(kindFromStatus(response.status), detail, response.status);
   }
 
+  // Les réponses 204 n'ont pas de corps : l'appelant doit typer l'appel `apiFetch<void>`.
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

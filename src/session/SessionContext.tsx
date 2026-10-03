@@ -22,6 +22,8 @@ const SessionContext = createContext<Session | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(null);
+  // TODO(session) : provisoire. Le jeton reste en mémoire et se perd à chaque redémarrage. La session
+  // complète le stockera avec expo-secure-store et le restaurera au démarrage (status « loading »).
   const tokenRef = useRef<string | null>(null);
 
   const signOut = useCallback(() => {

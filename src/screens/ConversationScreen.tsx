@@ -35,7 +35,7 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
       <FlatList
         // Liste inversée : le plus récent est en bas et le clavier ne le masque pas.
         inverted
-        data={state.messages}
+        data={state.data}
         keyExtractor={(m) => m.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"

@@ -21,6 +21,7 @@ export async function fetchHistory(conversationId: string, limit = 50): Promise<
       : `/api/messages/rooms/${ref.targetId}/history?limit=${limit}`;
   const raw = await apiFetch<RawMessage[]>(path);
 
+  // Messages privés : `senderId` ; messages de salon : `authorId` (les deux existent toujours côté API).
   const senderIds = raw.map((m) => m.senderId ?? m.authorId ?? '');
   const names = await lookupPseudos(senderIds.filter(Boolean)).catch(() => ({}) as Record<string, string>);
 

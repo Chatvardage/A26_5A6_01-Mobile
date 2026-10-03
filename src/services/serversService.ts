@@ -2,12 +2,18 @@ import type { ConversationSummary } from '@/types/conversation';
 import { toConversationId } from '@/types/conversationId';
 import type { ServerSummary } from '@/types/server';
 
+import { mapWithConcurrency } from '@/utils/mapWithConcurrency';
+
 import { apiFetch } from './httpClient';
 import { noUnreadSource, type UnreadCounts, type UnreadSource } from './unreadSource';
 
 type RawChannel = { id: string; nom: string };
 type RawServer = { id: string; nom: string; nombreMembres: number; salons: RawChannel[] };
 type RawRoomMessage = { id: string; authorId: string; content: string; createdAt: string };
+
+// Une requête de dernier message par salon (pas d'endpoint dédié) : on limite la concurrence sur mobile.
+// TODO(api) : à supprimer si le Serveur-API ajoute `dernierMessage` à la réponse de GET /api/servers/:id.
+const LAST_MESSAGE_CONCURRENCY = 5;
 
 const roomId = (channelId: string) => toConversationId({ kind: 'room', targetId: channelId });
 
@@ -33,8 +39,10 @@ export type ServerChannels = { name: string; channels: ConversationSummary[] };
 export async function fetchServerChannels(serverId: string, unread: UnreadSource = noUnreadSource): Promise<ServerChannels> {
   const [server, counts] = await Promise.all([apiFetch<RawServer>(`/api/servers/${serverId}`), safeCounts(unread)]);
 
-  const channels = await Promise.all(
-    server.salons.map(async (salon): Promise<ConversationSummary> => {
+  const channels = await mapWithConcurrency(
+    server.salons,
+    LAST_MESSAGE_CONCURRENCY,
+    async (salon): Promise<ConversationSummary> => {
       const last = await apiFetch<RawRoomMessage[]>(`/api/messages/rooms/${salon.id}/history?limit=1`).then(
         (messages) => messages[messages.length - 1] ?? null,
         () => null,
@@ -49,7 +57,7 @@ export async function fetchServerChannels(serverId: string, unread: UnreadSource
           : null,
         unreadCount: Math.max(0, counts[id] ?? 0),
       };
-    }),
+    },
   );
   return { name: server.nom, channels };
 }
