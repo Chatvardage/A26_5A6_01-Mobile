@@ -29,6 +29,8 @@ export function RootNavigator() {
   const { status } = useSession();
   const theme = useNavigationTheme();
 
+  // Provisoire : jamais atteint tant que SessionContext ne charge pas la session depuis SecureStore.
+  // À conserver pour la restauration de session au démarrage.
   if (status === 'loading') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>

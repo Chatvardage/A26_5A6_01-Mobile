@@ -62,4 +62,8 @@ if (isWsl()) {
 }
 
 const child = spawn('npx', ['expo', 'start', ...args], { stdio: 'inherit', env });
+child.on('error', (err) => {
+  console.error(`[start] Impossible de lancer expo : ${err.message}`);
+  process.exit(1);
+});
 child.on('exit', (code) => process.exit(code ?? 0));

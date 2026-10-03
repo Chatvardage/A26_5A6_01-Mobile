@@ -37,6 +37,7 @@ export function LoginScreen() {
       // La navigation bascule d'elle-même vers Main quand la session passe à « signedIn ».
     } catch (e) {
       setError(loginErrorMessage(e));
+    } finally {
       setSubmitting(false);
     }
   }

@@ -9,7 +9,7 @@ export async function lookupPseudos(ids: string[]): Promise<Record<string, strin
   for (let i = 0; i < unique.length; i += MAX_IDS) {
     const chunk = unique.slice(i, i + MAX_IDS);
     const users = await apiFetch<{ id: string; pseudo: string }[]>(
-      `/api/users/lookup?ids=${chunk.join(',')}`,
+      `/api/users/lookup?ids=${chunk.map(encodeURIComponent).join(',')}`,
     );
     for (const u of users) result[u.id] = u.pseudo;
   }
