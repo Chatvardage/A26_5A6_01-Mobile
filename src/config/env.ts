@@ -22,5 +22,8 @@ export function resolveApiUrl(configured: string | undefined, hostUri: string | 
   return FALLBACK_API_URL;
 }
 
-/** Seul endroit qui lit la configuration d'environnement. */
+/**
+ * Seul endroit qui lit la configuration d'environnement. Résolue au chargement du bundle :
+ * un changement d'IP ou de `.env` demande de relancer Metro (`npm start -- -c`).
+ */
 export const API_URL = resolveApiUrl(process.env.EXPO_PUBLIC_API_URL, Constants.expoConfig?.hostUri);

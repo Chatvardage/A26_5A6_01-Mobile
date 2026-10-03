@@ -1,4 +1,4 @@
-export type ApiErrorKind = 'network' | 'unauthorized' | 'forbidden' | 'not_found' | 'server' | 'unknown';
+export type ApiErrorKind = 'network' | 'timeout' | 'unauthorized' | 'forbidden' | 'not_found' | 'server' | 'unknown';
 
 export class ApiError extends Error {
   constructor(
@@ -25,6 +25,8 @@ export function userMessage(error: unknown): string {
     switch (error.kind) {
       case 'network':
         return 'Impossible de joindre le serveur. Vérifiez votre connexion.';
+      case 'timeout':
+        return 'Le serveur met trop de temps à répondre. Réessayez.';
       case 'unauthorized':
         return 'Votre session a expiré. Reconnectez-vous.';
       case 'forbidden':

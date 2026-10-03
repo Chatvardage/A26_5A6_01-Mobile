@@ -10,6 +10,7 @@ import { useSession } from '@/session/SessionContext';
 
 function loginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.kind === 'timeout') return 'Le serveur met trop de temps à répondre. Réessayez.';
     if (error.kind === 'network') return 'Impossible de joindre le serveur. Vérifiez votre connexion.';
     if (error.kind === 'unauthorized') return 'Identifiant ou mot de passe incorrect.';
     if (error.status === 429) return 'Trop de tentatives. Réessayez dans quelques instants.';

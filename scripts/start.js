@@ -23,6 +23,11 @@ function isWsl() {
   }
 }
 
+function isIpv4(value) {
+  const parts = value.split('.');
+  return parts.length === 4 && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+}
+
 function powershell(command) {
   const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 15000 });
   return result.status === 0 ? result.stdout.replace(/\r/g, '').trim() : null;
@@ -45,7 +50,7 @@ if (isWsl()) {
       "$i=(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).InterfaceIndex;" +
         '(Get-NetIPAddress -InterfaceIndex $i -AddressFamily IPv4 | Select-Object -First 1).IPAddress',
     );
-    if (ip && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+    if (ip && isIpv4(ip)) {
       env.EXPO_PUBLIC_API_URL = `http://${ip}:${WSL_API_PORT}`;
       console.log(`[start] WSL2 : API détectée à ${env.EXPO_PUBLIC_API_URL}`);
       const rules = powershell('netsh interface portproxy show v4tov4');

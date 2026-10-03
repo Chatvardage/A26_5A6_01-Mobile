@@ -31,7 +31,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
         ...init.headers,
       },
     });
-  } catch {
+  } catch (error) {
+    // Le délai dépassé (abort du AbortController) est distingué d'une panne réseau.
+    if (error instanceof Error && error.name === 'AbortError') throw new ApiError('timeout', 'Request timed out');
     throw new ApiError('network', 'Network request failed');
   } finally {
     clearTimeout(timer);

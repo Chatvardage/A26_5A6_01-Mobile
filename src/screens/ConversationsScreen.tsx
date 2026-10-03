@@ -1,4 +1,6 @@
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
@@ -7,12 +9,15 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { useConversations } from '@/hooks/useConversations';
-import type { MainTabParamList } from '@/navigation/routes';
-import { Routes } from '@/navigation/routes';
+import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
 
-type Props = BottomTabScreenProps<MainTabParamList, 'Conversations'>;
+// Écran d'onglet dont la route « Conversation » vit dans la pile parente : navigate() y remonte seul, typé.
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Conversations'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export function ConversationsScreen({ navigation }: Props) {
   const theme = useTheme();
@@ -21,7 +26,7 @@ export function ConversationsScreen({ navigation }: Props) {
 
   const open = useCallback(
     (conversation: ConversationSummary) =>
-      navigation.getParent()?.navigate(Routes.Conversation, {
+      navigation.navigate(Routes.Conversation, {
         conversationId: conversation.id,
         title: conversation.title,
       }),
