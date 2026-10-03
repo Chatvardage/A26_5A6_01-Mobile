@@ -1,0 +1,55 @@
+import type { ConversationSummary } from '@/types/conversation';
+import { toConversationId } from '@/types/conversationId';
+import type { ServerSummary } from '@/types/server';
+
+import { apiFetch } from './httpClient';
+import { noUnreadSource, type UnreadCounts, type UnreadSource } from './unreadSource';
+
+type RawChannel = { id: string; nom: string };
+type RawServer = { id: string; nom: string; nombreMembres: number; salons: RawChannel[] };
+type RawRoomMessage = { id: string; authorId: string; content: string; createdAt: string };
+
+const roomId = (channelId: string) => toConversationId({ kind: 'room', targetId: channelId });
+
+async function safeCounts(unread: UnreadSource): Promise<UnreadCounts> {
+  return unread.getCounts().catch(() => ({}));
+}
+
+/** Serveurs de l'utilisateur, dans l'ordre de l'API (serveur par défaut en premier). */
+export async function fetchServers(unread: UnreadSource = noUnreadSource): Promise<ServerSummary[]> {
+  const [servers, counts] = await Promise.all([apiFetch<RawServer[]>('/api/servers'), safeCounts(unread)]);
+  return servers.map((server) => ({
+    id: server.id,
+    name: server.nom,
+    memberCount: server.nombreMembres,
+    channelIds: server.salons.map((s) => s.id),
+    unreadCount: server.salons.reduce((sum, s) => sum + Math.max(0, counts[roomId(s.id)] ?? 0), 0),
+  }));
+}
+
+export type ServerChannels = { name: string; channels: ConversationSummary[] };
+
+/** Salons accessibles d'un serveur (l'API ne renvoie que ceux que l'utilisateur peut voir), avec leur dernier message. */
+export async function fetchServerChannels(serverId: string, unread: UnreadSource = noUnreadSource): Promise<ServerChannels> {
+  const [server, counts] = await Promise.all([apiFetch<RawServer>(`/api/servers/${serverId}`), safeCounts(unread)]);
+
+  const channels = await Promise.all(
+    server.salons.map(async (salon): Promise<ConversationSummary> => {
+      const last = await apiFetch<RawRoomMessage[]>(`/api/messages/rooms/${salon.id}/history?limit=1`).then(
+        (messages) => messages[messages.length - 1] ?? null,
+        () => null,
+      );
+      const id = roomId(salon.id);
+      return {
+        id,
+        kind: 'room',
+        title: `#${salon.nom}`,
+        lastMessage: last
+          ? { id: last.id, senderId: last.authorId, content: last.content, createdAt: last.createdAt }
+          : null,
+        unreadCount: Math.max(0, counts[id] ?? 0),
+      };
+    }),
+  );
+  return { name: server.nom, channels };
+}

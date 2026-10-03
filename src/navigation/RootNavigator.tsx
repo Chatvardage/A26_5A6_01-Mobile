@@ -5,6 +5,7 @@ import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { ConversationScreen } from '@/screens/ConversationScreen';
+import { ServerScreen } from '@/screens/ServerScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { useSession } from '@/session/SessionContext';
 
@@ -45,6 +46,11 @@ export function RootNavigator() {
         {status === 'signedIn' ? (
           <>
             <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
+            <Stack.Screen
+              name={Routes.Server}
+              component={ServerScreen}
+              options={({ route }) => ({ title: route.params?.title ?? 'Serveur' })}
+            />
             <Stack.Screen
               name={Routes.Conversation}
               component={ConversationScreen}

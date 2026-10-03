@@ -1,4 +1,4 @@
-import { parseConversationParams } from '@/navigation/routes';
+import { parseConversationParams, parseServerParams } from '@/navigation/routes';
 import { parseConversationId, toConversationId } from '@/types/conversationId';
 
 const UUID = '0b7d6f3e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
@@ -28,5 +28,17 @@ describe('parseConversationParams', () => {
     expect(parseConversationParams(undefined)).toBeNull();
     expect(parseConversationParams({})).toBeNull();
     expect(parseConversationParams({ conversationId: 'nope' })).toBeNull();
+  });
+});
+
+describe('parseServerParams', () => {
+  it('valide un identifiant de serveur et conserve le titre', () => {
+    expect(parseServerParams({ serverId: UUID, title: 'Chatvardage' })).toEqual({ serverId: UUID, title: 'Chatvardage' });
+  });
+  it('refuse des paramètres absents ou invalides', () => {
+    expect(parseServerParams(undefined)).toBeNull();
+    expect(parseServerParams({})).toBeNull();
+    expect(parseServerParams({ serverId: 'nope' })).toBeNull();
+    expect(parseServerParams({ serverId: `dm:${UUID}` })).toBeNull();
   });
 });

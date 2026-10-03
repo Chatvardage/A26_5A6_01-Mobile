@@ -164,35 +164,42 @@ Puis `npm start -- -c`. Cette machine doit autoriser le port 3000 dans son pare-
 
 ## Navigation
 
-Routes centralisées dans [`src/navigation/routes.ts`](src/navigation/routes.ts).
+Routes centralisées dans [`src/navigation/routes.ts`](src/navigation/routes.ts), organisées comme l'app desktop : messages privés d'un côté, serveurs et leurs salons de l'autre.
 
 ```text
 RootStack (native-stack)
 ├── sans session : Login
-└── avec session : Main (bottom-tabs) ─┬ Conversations
+└── avec session : Main (bottom-tabs) ─┬ DirectMessages   liste des messages privés
+                                       ├ Servers          liste des serveurs
                                        ├ Search
                                        └ Preferences
-                   Conversation { conversationId: string, title?: string }
+                   Server        { serverId: string, title?: string }        salons d'un serveur
+                   Conversation  { conversationId: string, title?: string }  messages d'un DM ou d'un salon
 ```
 
-- `conversationId` vaut `dm:<uuid de l'interlocuteur>` ou `room:<uuid du salon>`; il est validé avant tout appel API (`parseConversationId`). Un identifiant invalide affiche une erreur, sans requête.
-- Login → Main bascule d'elle-même quand `useSession().status` passe à `signedIn`; la déconnexion ramène à Login.
-- Retour Android : depuis Conversation, retour vers la liste; depuis Recherche ou Préférences, retour vers Conversations (`backBehavior="firstRoute"`), puis l'application se ferme.
+Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Conversation`.
+
+- `conversationId` vaut `dm:<uuid de l'interlocuteur>` ou `room:<uuid du salon>` ; `serverId` est un UUID. Les deux sont validés avant tout appel API (`parseConversationParams`, `parseServerParams`) : un identifiant invalide affiche une erreur, sans requête.
+- Chaque liste a ses propres états (chargement, vide, erreur) : la panne d'une source n'empêche pas l'autre de s'afficher.
+- Un serveur n'affiche que les salons que l'API autorise pour l'utilisateur ; la pastille d'un serveur est la somme des non-lus de ses salons.
+- Login → Main bascule d'elle-même quand `useSession().status` passe à `signedIn` ; la déconnexion ramène à Login.
+- Retour Android : de Conversation vers l'écran précédent (liste de DM ou salons du serveur), de Server vers Serveurs ; depuis Serveurs, Recherche ou Préférences, retour vers Messages privés (`backBehavior="firstRoute"`), puis l'application se ferme.
 
 ## Architecture
 
 | Couche | Dossier | Rôle |
 |---|---|---|
 | Écrans / composants | `src/screens`, `src/components` | Affichage et transmission des actions, aucun appel réseau |
-| Hooks | `src/hooks` | `useConversations`, `useConversationHistory` : états loading / empty / error / ready |
-| Services | `src/services` | Client HTTP, traduction des erreurs (`ApiError`), conversations, historique |
+| Hooks | `src/hooks` | `useLoadable` (états loading / empty / error / ready, réessai, rafraîchissement) et ses usages `useDirectMessages`, `useServers`, `useServerChannels` ; `useConversationHistory` |
+| Services | `src/services` | Client HTTP, traduction des erreurs (`ApiError`), messages privés, serveurs et salons, historique |
 | Session | `src/session` | Contrat `useSession` (voir limites) |
 
 ## Limites connues
 
 - **Session provisoire** : `SessionContext` garde le jeton en mémoire seulement (pas de SecureStore, de restauration au redémarrage ni de renouvellement). Le contrat (`status`, `user`, `signIn`, `signOut`) est celui que la session complète doit respecter.
-- **Non-lus** : la liste affiche `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
-- **Dernier message d'un salon** : une requête `history?limit=1` par salon (aucun endpoint dédié).
+- **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
+- **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
+- **Rejoindre / quitter un serveur** et **ouvrir un nouveau message privé** : non implantés ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
 - **Écran Conversation** : historique en lecture seule; l'envoi, le temps réel, la pagination et la modification ne sont pas branchés. L'écran Recherche n'a pas encore de service de recherche.
 - Notifications : non implantées.
 - Comportement clavier / retour Android : vérifié par bundle Android et tests unitaires; à confirmer sur émulateur ou appareil.

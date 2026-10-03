@@ -1,9 +1,33 @@
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import type { ReactNode } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+export type RefreshProps = { refreshing: boolean; onRefresh: () => void };
+
+/** Zone centrée ; avec `refresh`, elle devient défilable pour permettre de tirer pour rafraîchir. */
+function Centered({ children, refresh, ...rest }: { children: ReactNode; refresh?: RefreshProps; accessibilityRole?: 'alert' }) {
+  if (!refresh) {
+    return (
+      <ThemedView style={styles.center} {...rest}>
+        {children}
+      </ThemedView>
+    );
+  }
+  return (
+    <ScrollView
+      testID="refreshable-state"
+      contentContainerStyle={styles.center}
+      refreshControl={<RefreshControl refreshing={refresh.refreshing} onRefresh={refresh.onRefresh} />}
+      {...rest}
+    >
+      {children}
+    </ScrollView>
+  );
+}
 
 export function LoadingState({ label = 'Chargement…' }: { label?: string }) {
   const theme = useTheme();
@@ -17,23 +41,23 @@ export function LoadingState({ label = 'Chargement…' }: { label?: string }) {
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function EmptyState({ title, hint, refresh }: { title: string; hint?: string; refresh?: RefreshProps }) {
   return (
-    <ThemedView style={styles.center}>
+    <Centered refresh={refresh}>
       <ThemedText type="smallBold">{title}</ThemedText>
       {hint ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
           {hint}
         </ThemedText>
       ) : null}
-    </ThemedView>
+    </Centered>
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorState({ message, onRetry, refresh }: { message: string; onRetry?: () => void; refresh?: RefreshProps }) {
   const theme = useTheme();
   return (
-    <ThemedView style={styles.center} accessibilityRole="alert">
+    <Centered refresh={refresh} accessibilityRole="alert">
       <ThemedText type="smallBold" style={{ color: theme.danger }}>
         Une erreur est survenue
       </ThemedText>
@@ -51,7 +75,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
           </ThemedText>
         </Pressable>
       ) : null}
-    </ThemedView>
+    </Centered>
   );
 }
 

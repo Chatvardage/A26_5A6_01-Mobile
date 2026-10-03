@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { UnreadBadge } from '@/components/UnreadBadge';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ConversationSummary } from '@/types/conversation';
@@ -12,10 +13,6 @@ type Props = {
   currentUserId?: string;
   onPress: (conversation: ConversationSummary) => void;
 };
-
-export function unreadLabel(count: number): string {
-  return count > 99 ? '99+' : String(count);
-}
 
 function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
   const theme = useTheme();
@@ -58,13 +55,7 @@ function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
           >
             {preview}
           </ThemedText>
-          {hasUnread ? (
-            <View style={[styles.badge, { backgroundColor: theme.tint }]} testID="unread-badge">
-              <ThemedText type="smallBold" style={styles.badgeText}>
-                {unreadLabel(unreadCount)}
-              </ThemedText>
-            </View>
-          ) : null}
+          <UnreadBadge count={unreadCount} />
         </View>
       </View>
     </Pressable>
@@ -81,13 +72,4 @@ const styles = StyleSheet.create({
   previewLine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   preview: { flex: 1 },
   previewUnread: { fontWeight: '700' },
-  badge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { color: '#ffffff', fontSize: 12, lineHeight: 16 },
 });

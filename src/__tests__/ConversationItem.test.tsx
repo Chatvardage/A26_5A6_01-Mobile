@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { ConversationItem, unreadLabel } from '@/components/ConversationItem';
+import { ConversationItem } from '@/components/ConversationItem';
+import { unreadLabel } from '@/components/UnreadBadge';
 import type { ConversationSummary } from '@/types/conversation';
 
 const base: ConversationSummary = {
