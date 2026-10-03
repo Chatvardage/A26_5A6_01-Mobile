@@ -1,0 +1,51 @@
+import { memo } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { UnreadBadge } from '@/components/UnreadBadge';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import type { ServerSummary } from '@/types/server';
+
+type Props = { server: ServerSummary; onPress: (server: ServerSummary) => void };
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+
+function ServerItemBase({ server, onPress }: Props) {
+  const theme = useTheme();
+  const details = `${plural(server.memberCount, 'membre', 'membres')} · ${plural(server.channelIds.length, 'salon', 'salons')}`;
+
+  return (
+    <Pressable
+      onPress={() => onPress(server)}
+      accessibilityRole="button"
+      accessibilityLabel={`${server.name}, ${details}${server.unreadCount > 0 ? `, ${server.unreadCount} non lu${server.unreadCount > 1 ? 's' : ''}` : ''}`}
+      android_ripple={{ color: theme.backgroundSelected }}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
+    >
+      <View style={[styles.avatar, { backgroundColor: theme.tint }]}>
+        <ThemedText type="smallBold" style={styles.avatarText}>
+          {server.name.slice(0, 1).toUpperCase()}
+        </ThemedText>
+      </View>
+      <View style={styles.main}>
+        <ThemedText type="smallBold" numberOfLines={1}>
+          {server.name}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+          {details}
+        </ThemedText>
+      </View>
+      <UnreadBadge count={server.unreadCount} />
+    </Pressable>
+  );
+}
+
+export const ServerItem = memo(ServerItemBase);
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
+  avatar: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#ffffff', fontSize: 18 },
+  main: { flex: 1, gap: Spacing.half },
+});
