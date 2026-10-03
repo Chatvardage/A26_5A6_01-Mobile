@@ -8,7 +8,7 @@ type TokenProvider = () => string | null;
 
 // Configuration volontairement globale : la couche session la branche une seule fois au démarrage
 // (`configureHttpClient`), pour que les services n'aient ni à connaître le jeton ni à le recevoir.
-// TODO(tests) : si des tests d'intégration appellent `configureHttpClient`, la réinitialiser entre les suites.
+// Les tests qui l'appellent réinitialisent l'état avec `resetHttpClient()` (afterEach).
 let tokenProvider: TokenProvider = () => null;
 let onUnauthorized: (() => void) | null = null;
 
@@ -16,6 +16,12 @@ let onUnauthorized: (() => void) | null = null;
 export function configureHttpClient(options: { getToken: TokenProvider; onUnauthorized?: () => void }) {
   tokenProvider = options.getToken;
   onUnauthorized = options.onUnauthorized ?? null;
+}
+
+/** Remet la configuration par défaut (aucun jeton). Réservé aux tests, pour les isoler entre eux. */
+export function resetHttpClient() {
+  tokenProvider = () => null;
+  onUnauthorized = null;
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {

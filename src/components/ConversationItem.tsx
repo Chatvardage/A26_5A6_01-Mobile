@@ -26,7 +26,7 @@ function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
     <Pressable
       onPress={() => onPress(conversation)}
       accessibilityRole="button"
-      accessibilityLabel={`${title}${hasUnread ? `, ${unreadCount} non lus` : ''}. ${preview}`}
+      accessibilityLabel={`${title}${hasUnread ? `, ${unreadCount} non lu${unreadCount > 1 ? 's' : ''}` : ''}. ${preview}`}
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >

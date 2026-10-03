@@ -31,6 +31,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setAuth(null);
   }, []);
 
+  // Aucune requête authentifiée ne peut partir avant cet effet : sans jeton, seul Login est monté.
+  // TODO(session) : avec la restauration au démarrage, brancher le jeton avant le premier rendu
+  // (accesseur au niveau du module) pour qu'aucun écran enfant ne devance cet effet.
   useEffect(() => {
     configureHttpClient({ getToken: () => tokenRef.current, onUnauthorized: signOut });
   }, [signOut]);

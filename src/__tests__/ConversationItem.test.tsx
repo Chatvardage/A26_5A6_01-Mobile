@@ -42,3 +42,13 @@ describe('ConversationItem', () => {
     expect(unreadLabel(7)).toBe('7');
   });
 });
+
+describe('ConversationItem accessibilité', () => {
+  it.each([
+    [1, '1 non lu.'],
+    [3, '3 non lus.'],
+  ])("accorde « non lu » pour %i message(s)", async (unreadCount, expected) => {
+    await render(<ConversationItem conversation={{ ...base, unreadCount }} onPress={jest.fn()} />);
+    expect(screen.getByRole('button').props.accessibilityLabel).toContain(expected);
+  });
+});

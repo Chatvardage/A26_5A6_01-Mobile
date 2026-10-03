@@ -162,6 +162,8 @@ Puis `npm start -- -c`. Cette machine doit autoriser le port 3000 dans son pare-
 | « Port 8081 is being used by another process » | Adminer (Infra) | Vérifier que `.env.development` est présent (Metro utilise le 8082) |
 | Port 8082 « running this app in another window » | Un Metro est déjà lancé | Le fermer (`Ctrl+C`) avant d'en relancer un |
 
+> **Web non ciblé** : `app.json` fixe `web.output` à `single` (SPA), car le rendu statique exige Expo Router, que ce projet n'utilise plus. L'application cible Android et iOS.
+
 ## Navigation
 
 Routes centralisées dans [`src/navigation/routes.ts`](src/navigation/routes.ts), organisées comme l'app desktop : messages privés d'un côté, serveurs et leurs salons de l'autre.

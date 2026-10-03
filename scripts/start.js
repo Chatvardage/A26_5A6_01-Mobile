@@ -29,7 +29,7 @@ function isIpv4(value) {
 }
 
 function powershell(command) {
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 15000 });
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 5000 });
   return result.status === 0 ? result.stdout.replace(/\r/g, '').trim() : null;
 }
 
@@ -46,6 +46,7 @@ if (isWsl()) {
   if (!args.includes('--tunnel') && !args.includes('--lan') && !args.includes('--localhost')) args.unshift('--tunnel');
 
   if (!env.EXPO_PUBLIC_API_URL && !definedInDotEnv()) {
+    console.log("[start] WSL2 : détection de l'IP Windows…");
     const ip = powershell(
       "$i=(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).InterfaceIndex;" +
         '(Get-NetIPAddress -InterfaceIndex $i -AddressFamily IPv4 | Select-Object -First 1).IPAddress',

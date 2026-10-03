@@ -21,7 +21,10 @@ describe('fetchServers', () => {
   it('ignore les compteurs négatifs et une source de non-lus en panne', async () => {
     apiFetch.mockResolvedValue([server]);
     expect((await fetchServers({ getCounts: async () => ({ [`room:${C1}`]: -4 }) }))[0].unreadCount).toBe(0);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect((await fetchServers({ getCounts: async () => Promise.reject(new Error('x')) }))[0].unreadCount).toBe(0);
+    expect(warn).toHaveBeenCalled(); // la panne est journalisée, pas avalée
+    warn.mockRestore();
   });
 });
 

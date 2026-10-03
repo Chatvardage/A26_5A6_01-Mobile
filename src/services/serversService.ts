@@ -5,7 +5,7 @@ import type { ServerSummary } from '@/types/server';
 import { mapWithConcurrency } from '@/utils/mapWithConcurrency';
 
 import { apiFetch } from './httpClient';
-import { noUnreadSource, type UnreadCounts, type UnreadSource } from './unreadSource';
+import { getCountsSafe, noUnreadSource, type UnreadSource } from './unreadSource';
 
 type RawChannel = { id: string; nom: string };
 type RawServer = { id: string; nom: string; nombreMembres: number; salons: RawChannel[] };
@@ -17,13 +17,9 @@ const LAST_MESSAGE_CONCURRENCY = 5;
 
 const roomId = (channelId: string) => toConversationId({ kind: 'room', targetId: channelId });
 
-async function safeCounts(unread: UnreadSource): Promise<UnreadCounts> {
-  return unread.getCounts().catch(() => ({}));
-}
-
 /** Serveurs de l'utilisateur, dans l'ordre de l'API (serveur par défaut en premier). */
 export async function fetchServers(unread: UnreadSource = noUnreadSource): Promise<ServerSummary[]> {
-  const [servers, counts] = await Promise.all([apiFetch<RawServer[]>('/api/servers'), safeCounts(unread)]);
+  const [servers, counts] = await Promise.all([apiFetch<RawServer[]>('/api/servers'), getCountsSafe(unread)]);
   return servers.map((server) => ({
     id: server.id,
     name: server.nom,
@@ -37,7 +33,7 @@ export type ServerChannels = { name: string; channels: ConversationSummary[] };
 
 /** Salons accessibles d'un serveur (l'API ne renvoie que ceux que l'utilisateur peut voir), avec leur dernier message. */
 export async function fetchServerChannels(serverId: string, unread: UnreadSource = noUnreadSource): Promise<ServerChannels> {
-  const [server, counts] = await Promise.all([apiFetch<RawServer>(`/api/servers/${serverId}`), safeCounts(unread)]);
+  const [server, counts] = await Promise.all([apiFetch<RawServer>(`/api/servers/${serverId}`), getCountsSafe(unread)]);
 
   const channels = await mapWithConcurrency(
     server.salons,

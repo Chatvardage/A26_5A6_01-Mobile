@@ -2,7 +2,7 @@ import type { ConversationSummary } from '@/types/conversation';
 import { toConversationId } from '@/types/conversationId';
 
 import { apiFetch } from './httpClient';
-import { noUnreadSource, type UnreadSource } from './unreadSource';
+import { getCountsSafe, noUnreadSource, type UnreadSource } from './unreadSource';
 import { lookupPseudos } from './usersService';
 
 type DmItem = {
@@ -16,7 +16,7 @@ const activityTime = (c: ConversationSummary): number => (c.lastMessage ? Date.p
 export async function fetchDirectMessages(unread: UnreadSource = noUnreadSource): Promise<ConversationSummary[]> {
   const [items, counts] = await Promise.all([
     apiFetch<DmItem[]>('/api/messages/conversations'),
-    unread.getCounts().catch(() => ({}) as Record<string, number>),
+    getCountsSafe(unread),
   ]);
   const pseudos = await lookupPseudos(items.map((i) => i.otherUserId)).catch(() => ({}) as Record<string, string>);
 

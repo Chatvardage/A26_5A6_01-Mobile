@@ -19,7 +19,7 @@ function ServerItemBase({ server, onPress }: Props) {
     <Pressable
       onPress={() => onPress(server)}
       accessibilityRole="button"
-      accessibilityLabel={`${server.name}, ${details}${server.unreadCount > 0 ? `, ${server.unreadCount} non lus` : ''}`}
+      accessibilityLabel={`${server.name}, ${details}${server.unreadCount > 0 ? `, ${server.unreadCount} non lu${server.unreadCount > 1 ? 's' : ''}` : ''}`}
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >
