@@ -5,37 +5,125 @@ import { ApiError } from './ApiError';
 import { apiFetch } from './httpClient';
 import { lookupPseudos } from './usersService';
 
-type RawMessage = { id: string; senderId?: string; authorId?: string; content: string; createdAt: string; updatedAt: string };
+export type RawMessage = {
+  id: string;
+  senderId?: string;
+  authorId?: string;
+  recipientId?: string;
+  roomId?: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function normalizeMessage(message: RawMessage, senderName?: string): ChatMessage {
+  return {
+    id: message.id,
+    senderId: message.senderId ?? message.authorId ?? '',
+    senderName,
+    content: message.content,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+  };
+}
+
+function dateValue(value: string): number {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+/** Fusionne par id, conserve la version modifiée la plus récente et trie pour FlatList inversée. */
+export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) {
+    const existing = byId.get(message.id);
+    if (!existing || dateValue(message.updatedAt) >= dateValue(existing.updatedAt)) {
+      byId.set(message.id, {
+        ...message,
+        senderName: message.senderName ?? existing?.senderName,
+      });
+    } else if (!existing.senderName && message.senderName) {
+      byId.set(message.id, { ...existing, senderName: message.senderName });
+    }
+  }
+  return [...byId.values()].sort(
+    (a, b) => dateValue(b.createdAt) - dateValue(a.createdAt) || b.id.localeCompare(a.id),
+  );
+}
+
+/** Vérifie qu'un événement Socket.IO appartient à la conversation affichée. */
+export function belongsTo(conversationId: string, currentUserId: string, rawMessage: unknown): boolean {
+  const ref = parseConversationId(conversationId);
+  if (!ref || typeof rawMessage !== 'object' || rawMessage === null) return false;
+  const message = rawMessage as Partial<RawMessage>;
+  if (ref.kind === 'room') return message.roomId === ref.targetId;
+
+  const senderId = message.senderId ?? message.authorId;
+  const recipientId = message.recipientId;
+  return (
+    (senderId === currentUserId && recipientId === ref.targetId) ||
+    (senderId === ref.targetId && recipientId === currentUserId)
+  );
+}
+
+function routeFor(conversationId: string) {
+  const ref = parseConversationId(conversationId);
+  if (!ref) throw new ApiError('not_found', 'Identifiant de conversation invalide');
+  return ref;
+}
+
+function query(limit: number, cursor?: string): string {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return params.toString();
+}
 
 /**
  * Historique récent d'une conversation, du plus récent au plus ancien (ordre attendu par une
  * FlatList inversée). L'API renvoie la page du plus ancien au plus récent : on l'inverse ici.
  */
-export async function fetchHistory(conversationId: string, limit = 50): Promise<ChatMessage[]> {
-  const ref = parseConversationId(conversationId);
-  if (!ref) throw new ApiError('not_found', 'Identifiant de conversation invalide');
-
+export async function fetchHistory(conversationId: string, limit = 50, cursor?: string): Promise<ChatMessage[]> {
+  const ref = routeFor(conversationId);
   const path =
     ref.kind === 'dm'
-      ? `/api/messages/history/${ref.targetId}?limit=${limit}`
-      : `/api/messages/rooms/${ref.targetId}/history?limit=${limit}`;
+      ? `/api/messages/history/${ref.targetId}?${query(limit, cursor)}`
+      : `/api/messages/rooms/${ref.targetId}/history?${query(limit, cursor)}`;
   const raw = await apiFetch<RawMessage[]>(path);
 
   // Messages privés : `senderId` ; messages de salon : `authorId` (les deux existent toujours côté API).
   const senderIds = raw.map((m) => m.senderId ?? m.authorId ?? '');
-  const names = await lookupPseudos(senderIds.filter(Boolean)).catch(() => ({}) as Record<string, string>);
+  const names = await lookupPseudos(senderIds.filter(Boolean));
 
   return [...raw]
     .reverse()
-    .map((m): ChatMessage => {
-      const senderId = m.senderId ?? m.authorId ?? '';
-      return {
-        id: m.id,
-        senderId,
-        senderName: names[senderId],
-        content: m.content,
-        createdAt: m.createdAt,
-        updatedAt: m.updatedAt,
-      };
-    });
+    .map((message) => normalizeMessage(message, names[message.senderId ?? message.authorId ?? '']));
+}
+
+export async function sendMessage(conversationId: string, content: string): Promise<ChatMessage> {
+  const ref = routeFor(conversationId);
+  const response =
+    ref.kind === 'dm'
+      ? await apiFetch<RawMessage>('/api/messages', {
+          method: 'POST',
+          body: JSON.stringify({ recipientId: ref.targetId, content }),
+        })
+      : await apiFetch<RawMessage>(`/api/messages/rooms/${ref.targetId}`, {
+          method: 'POST',
+          body: JSON.stringify({ content }),
+        });
+  return normalizeMessage(response);
+}
+
+export async function editMessage(conversationId: string, messageId: string, content: string): Promise<ChatMessage> {
+  const ref = routeFor(conversationId);
+  const path =
+    ref.kind === 'dm'
+      ? `/api/messages/${encodeURIComponent(messageId)}`
+      : `/api/messages/rooms/${ref.targetId}/${encodeURIComponent(messageId)}`;
+  return normalizeMessage(
+    await apiFetch<RawMessage>(path, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    }),
+  );
 }

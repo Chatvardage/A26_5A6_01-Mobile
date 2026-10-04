@@ -26,7 +26,16 @@ describe('apiFetch', () => {
 
   it('donne un message utilisateur propre à chaque cas', () => {
     expect(userMessage(new ApiError('timeout', 'x'))).toMatch(/trop de temps/);
+    expect(userMessage(new ApiError('bad_request', 'x'))).toMatch(/invalide/);
+    expect(userMessage(new ApiError('rate_limited', 'x'))).toMatch(/rapidement/);
     expect(userMessage(new Error('boom'))).toBe('Une erreur est survenue.');
+  });
+
+  it('reconnaît les erreurs HTTP 400 et 429', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) });
+    await expect(apiFetch('/x')).rejects.toMatchObject({ kind: 'bad_request' });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+    await expect(apiFetch('/x')).rejects.toMatchObject({ kind: 'rate_limited' });
   });
 });
 

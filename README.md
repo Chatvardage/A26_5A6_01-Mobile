@@ -192,8 +192,8 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 | Couche | Dossier | Rôle |
 |---|---|---|
 | Écrans / composants | `src/screens`, `src/components` | Affichage et transmission des actions, aucun appel réseau |
-| Hooks | `src/hooks` | `useLoadable` (états loading / empty / error / ready, réessai, rafraîchissement) et ses usages `useDirectMessages`, `useServers`, `useServerChannels` et `useConversationHistory` |
-| Services | `src/services` | Client HTTP, traduction des erreurs (`ApiError`), messages privés, serveurs et salons, historique |
+| Hooks | `src/hooks` | `useLoadable` pour les listes et `useMessages` pour l'historique, les événements temps réel et la pagination |
+| Services | `src/services` | Client HTTP, erreurs (`ApiError`), messages REST et socket unique `/messages`, utilisateurs, serveurs et salons |
 | Session | `src/session` | Contrat `useSession` (voir limites) |
 
 ## Limites connues
@@ -202,7 +202,7 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 - **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
 - **Rejoindre / quitter un serveur** et **ouvrir un nouveau message privé** : non implantés ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
-- **Écran Conversation** : historique en lecture seule; l'envoi, le temps réel, la pagination et la modification ne sont pas branchés. L'écran Recherche n'a pas encore de service de recherche.
+- **Écran Conversation** : historique REST, envoi/modification, réception temps réel Socket.IO et pagination sont branchés pour les DM et les salons. Les scénarios de coupure réseau, d'arrière-plan et de stabilité du défilement restent à confirmer sur appareil avec le backend.
 - Notifications : non implantées.
 - Comportement clavier / retour Android : vérifié par bundle Android et tests unitaires; à confirmer sur émulateur ou appareil.
 

@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import { login, type AuthUser } from '@/services/authService';
 import { configureHttpClient } from '@/services/httpClient';
+import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
 
 export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
 
@@ -27,6 +28,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const tokenRef = useRef<string | null>(null);
 
   const signOut = useCallback(() => {
+    disconnectRealtime();
     tokenRef.current = null;
     setAuth(null);
   }, []);
@@ -36,6 +38,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // (accesseur au niveau du module) pour qu'aucun écran enfant ne devance cet effet.
   useEffect(() => {
     configureHttpClient({ getToken: () => tokenRef.current, onUnauthorized: signOut });
+    configureRealtime({ getToken: () => tokenRef.current, onUnauthorized: signOut });
   }, [signOut]);
 
   const signIn = useCallback(async (identifiant: string, motDePasse: string) => {
