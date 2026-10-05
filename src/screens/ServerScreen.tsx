@@ -10,17 +10,20 @@ import { useServerChannels } from '@/hooks/useServerChannels';
 import { parseServerParams, Routes, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
+import { useTranslation } from '@/i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Server'>;
 
 export function ServerScreen({ route, navigation }: Props) {
+  const { strings } = useTranslation();
   // Paramètres validés avant tout chargement : un identifiant invalide n'appelle jamais l'API.
   const params = useMemo(() => parseServerParams(route.params), [route.params]);
-  if (!params) return <ErrorState message="Ce serveur est introuvable." />;
+  if (!params) return <ErrorState message={strings.states.serverNotFound} />;
   return <ValidServer serverId={params.serverId} navigation={navigation} />;
 }
 
 function ValidServer({ serverId, navigation }: { serverId: string; navigation: Props['navigation'] }) {
+  const { strings } = useTranslation();
   const { user } = useSession();
   const { state, refreshing, retry, refresh } = useServerChannels(serverId);
   useRefreshOnFocus(refresh);
@@ -32,9 +35,9 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
     [navigation],
   );
 
-  if (state.status === 'loading') return <LoadingState label="Chargement des salons…" />;
+  if (state.status === 'loading') return <LoadingState label={strings.states.loadingChannels} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} refresh={refreshProps} />;
-  if (state.status === 'empty') return <EmptyState title="Aucun salon" hint="Ce serveur n'a aucun salon accessible." refresh={refreshProps} />;
+  if (state.status === 'empty') return <EmptyState title={strings.states.noChannels} hint={strings.states.noAccessibleChannels} refresh={refreshProps} />;
 
   return (
     <ThemedView style={styles.fill}>

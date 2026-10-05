@@ -1,5 +1,6 @@
 import { apiFetch } from './httpClient';
 import { ApiError } from './ApiError';
+import { getTranslations } from '@/i18n';
 
 export type AuthUser = { id: string; pseudo: string; courriel: string; role: string };
 export type AuthResult = { jeton: string; refresh_token: string; utilisateur: AuthUser };
@@ -27,7 +28,7 @@ async function sessionRequest(path: string, body: unknown): Promise<AuthResult> 
     { method: 'POST', body: JSON.stringify(body) },
     { authenticated: false },
   );
-  if (!isSession(result)) throw new ApiError('invalid_response', 'Réponse de session invalide');
+  if (!isSession(result)) throw new ApiError('invalid_response', getTranslations().errors.invalidSessionResponse);
   return { jeton: result.jeton, refresh_token: result.refresh_token, utilisateur: result.utilisateur };
 }
 export function login(identifiant: string, motDePasse: string) {
@@ -41,7 +42,7 @@ export function refresh(refreshToken: string) {
 }
 export async function me(): Promise<AuthUser> {
   const result = await apiFetch<unknown>('/api/auth/me', {}, { retryUnauthorized: false });
-  if (!isUser(result)) throw new ApiError('invalid_response', 'Profil invalide');
+  if (!isUser(result)) throw new ApiError('invalid_response', getTranslations().errors.invalidProfile);
   return result;
 }
 export function logout(refreshToken: string): Promise<void> {

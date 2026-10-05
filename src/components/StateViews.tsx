@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation } from '@/i18n';
 
 export type RefreshProps = { refreshing: boolean; onRefresh: () => void };
 
@@ -29,13 +30,15 @@ function Centered({ children, refresh, ...rest }: { children: ReactNode; refresh
   );
 }
 
-export function LoadingState({ label = 'Chargement…' }: { label?: string }) {
+export function LoadingState({ label }: { label?: string }) {
   const theme = useTheme();
+  const { strings } = useTranslation();
+  const displayLabel = label ?? strings.states.loading;
   return (
-    <ThemedView style={styles.center} accessibilityRole="progressbar" accessibilityLabel={label}>
+    <ThemedView style={styles.center} accessibilityRole="progressbar" accessibilityLabel={displayLabel}>
       <ActivityIndicator size="large" color={theme.tint} />
       <ThemedText type="small" themeColor="textSecondary">
-        {label}
+        {displayLabel}
       </ThemedText>
     </ThemedView>
   );
@@ -56,10 +59,11 @@ export function EmptyState({ title, hint, refresh }: { title: string; hint?: str
 
 export function ErrorState({ message, onRetry, refresh }: { message: string; onRetry?: () => void; refresh?: RefreshProps }) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   return (
     <Centered refresh={refresh} accessibilityRole="alert">
       <ThemedText type="smallBold" style={{ color: theme.danger }}>
-        Une erreur est survenue
+        {strings.states.error}
       </ThemedText>
       <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
         {message}
@@ -71,7 +75,7 @@ export function ErrorState({ message, onRetry, refresh }: { message: string; onR
           style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed ? 0.7 : 1 }]}
         >
           <ThemedText type="smallBold" style={styles.buttonText}>
-            Réessayer
+            {strings.navigation.retry}
           </ThemedText>
         </Pressable>
       ) : null}

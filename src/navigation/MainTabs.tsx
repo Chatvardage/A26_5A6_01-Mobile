@@ -7,6 +7,7 @@ import { SearchScreen } from '@/screens/SearchScreen';
 import { ServersScreen } from '@/screens/ServersScreen';
 
 import { Routes, type MainTabParamList } from './routes';
+import { useTranslation } from '@/i18n';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -18,6 +19,7 @@ const ICONS = {
 } as const;
 
 export function MainTabs() {
+  const { strings } = useTranslation();
   return (
     <Tab.Navigator
       initialRouteName={Routes.DirectMessages}
@@ -29,10 +31,10 @@ export function MainTabs() {
         ),
       })}
     >
-      <Tab.Screen name={Routes.DirectMessages} component={DirectMessagesScreen} options={{ title: 'Messages privés' }} />
-      <Tab.Screen name={Routes.Servers} component={ServersScreen} options={{ title: 'Serveurs' }} />
-      <Tab.Screen name={Routes.Search} component={SearchScreen} options={{ title: 'Recherche' }} />
-      <Tab.Screen name={Routes.Preferences} component={PreferencesScreen} options={{ title: 'Préférences' }} />
+      <Tab.Screen name={Routes.DirectMessages} component={DirectMessagesScreen} options={{ title: strings.navigation.directMessages }} />
+      <Tab.Screen name={Routes.Servers} component={ServersScreen} options={{ title: strings.navigation.servers }} />
+      <Tab.Screen name={Routes.Search} component={SearchScreen} options={{ title: strings.navigation.search }} />
+      <Tab.Screen name={Routes.Preferences} component={PreferencesScreen} options={{ title: strings.navigation.preferences }} />
     </Tab.Navigator>
   );
 }

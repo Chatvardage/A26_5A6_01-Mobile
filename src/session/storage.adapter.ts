@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { ApiError } from '@/services/ApiError';
 import { isSession, type AuthResult } from '@/services/authService';
+import { getTranslations } from '@/i18n';
 
 const KEY = 'chatvardage.session.v1';
 const options = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -23,7 +24,7 @@ export const storage = {
         options,
       );
     } catch {
-      throw new ApiError('storage', 'Impossible de conserver la session.');
+      throw new ApiError('storage', getTranslations().errors.saveSession);
     }
   },
   async load(): Promise<AuthResult | null> {
@@ -31,7 +32,7 @@ export const storage = {
     try {
       raw = await SecureStore.getItemAsync(KEY, options);
     } catch {
-      throw new ApiError('storage', 'Impossible de lire la session.');
+      throw new ApiError('storage', getTranslations().errors.loadSession);
     }
     if (raw === null) return null;
     try {
@@ -47,7 +48,7 @@ export const storage = {
     try {
       await SecureStore.deleteItemAsync(KEY, options);
     } catch {
-      throw new ApiError('storage', 'Impossible de supprimer la session.');
+      throw new ApiError('storage', getTranslations().errors.clearSession);
     }
   },
 };

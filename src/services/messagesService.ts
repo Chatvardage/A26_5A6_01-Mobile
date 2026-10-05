@@ -4,6 +4,7 @@ import { parseConversationId } from '@/types/conversationId';
 import { ApiError } from './ApiError';
 import { apiFetch } from './httpClient';
 import { lookupPseudos } from './usersService';
+import { getTranslations } from '@/i18n';
 
 type RawMessage = { id: string; senderId?: string; authorId?: string; content: string; createdAt: string; updatedAt: string };
 
@@ -13,7 +14,7 @@ type RawMessage = { id: string; senderId?: string; authorId?: string; content: s
  */
 export async function fetchHistory(conversationId: string, limit = 50): Promise<ChatMessage[]> {
   const ref = parseConversationId(conversationId);
-  if (!ref) throw new ApiError('not_found', 'Identifiant de conversation invalide');
+  if (!ref) throw new ApiError('not_found', getTranslations().errors.invalidConversationId);
 
   const path =
     ref.kind === 'dm'

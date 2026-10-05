@@ -11,6 +11,7 @@ import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useServers } from '@/hooks/useServers';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import type { ServerSummary } from '@/types/server';
+import { useTranslation } from '@/i18n';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Servers'>,
@@ -18,6 +19,7 @@ type Props = CompositeScreenProps<
 >;
 
 export function ServersScreen({ navigation }: Props) {
+  const { strings } = useTranslation();
   const { state, refreshing, retry, refresh } = useServers();
   useRefreshOnFocus(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
@@ -27,10 +29,10 @@ export function ServersScreen({ navigation }: Props) {
     [navigation],
   );
 
-  if (state.status === 'loading') return <LoadingState label="Chargement des serveurs…" />;
+  if (state.status === 'loading') return <LoadingState label={strings.states.loadingServers} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} refresh={refreshProps} />;
   if (state.status === 'empty') {
-    return <EmptyState title="Aucun serveur" hint="Rejoignez un serveur public pour accéder à ses salons." refresh={refreshProps} />;
+    return <EmptyState title={strings.states.noServers} hint={strings.states.joinServer} refresh={refreshProps} />;
   }
 
   return (

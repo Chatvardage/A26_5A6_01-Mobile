@@ -7,6 +7,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ConversationSummary } from '@/types/conversation';
 import { formatMessageTime } from '@/utils/formatTime';
+import { useTranslation } from '@/i18n';
 
 type Props = {
   conversation: ConversationSummary;
@@ -16,17 +17,18 @@ type Props = {
 
 function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   const { title, subtitle, lastMessage, unreadCount } = conversation;
   const hasUnread = unreadCount > 0;
   const preview = lastMessage
-    ? `${lastMessage.senderId === currentUserId ? 'Vous : ' : ''}${lastMessage.content}`
-    : 'Aucun message';
+    ? `${lastMessage.senderId === currentUserId ? `${strings.conversation.you} : ` : ''}${lastMessage.content}`
+    : strings.conversation.noMessage;
 
   return (
     <Pressable
       onPress={() => onPress(conversation)}
       accessibilityRole="button"
-      accessibilityLabel={`${title}${hasUnread ? `, ${unreadCount} non lu${unreadCount > 1 ? 's' : ''}` : ''}. ${preview}`}
+      accessibilityLabel={`${title}${hasUnread ? `, ${strings.conversation.unread(unreadCount)}` : ''}. ${preview}`}
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >

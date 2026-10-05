@@ -2,6 +2,7 @@ import * as auth from '@/services/authService';
 import { ApiError, userMessage } from '@/services/ApiError';
 import { configureHttpClient, invalidateHttpRequests, resetHttpClient } from '@/services/httpClient';
 import { storage } from './storage.adapter';
+import { getTranslations } from '@/i18n';
 
 export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
 export type SessionState = {
@@ -61,7 +62,7 @@ export class SessionManager {
     } catch {
       this.update({
         ...this.state,
-        error: 'Le stockage sécurisé ne peut pas être effacé. Réessayez la déconnexion.',
+        error: getTranslations().errors.clearSessionLogout,
       });
     }
   }

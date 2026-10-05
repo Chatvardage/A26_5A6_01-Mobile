@@ -1,3 +1,5 @@
+import { getTranslations } from '@/i18n';
+
 export type ApiErrorKind =
   | 'network'
   | 'timeout'
@@ -36,31 +38,32 @@ export function kindFromStatus(status: number): ApiErrorKind {
 
 /** Message affichable à l'utilisateur (jamais de détail technique). */
 export function userMessage(error: unknown): string {
+  const strings = getTranslations();
   if (error instanceof ApiError) {
     switch (error.kind) {
       case 'validation':
-        return 'Vérifiez les champs du formulaire.';
+        return strings.errors.validation;
       case 'conflict':
-        return 'Ce pseudo ou ce courriel est déjà utilisé.';
+        return strings.errors.conflict;
       case 'rate_limit':
-        return 'Trop de tentatives. Réessayez dans quelques instants.';
+        return strings.errors.rateLimit;
       case 'storage':
-        return 'Le stockage sécurisé est indisponible. Réessayez.';
+        return strings.errors.storage;
       case 'invalid_response':
-        return 'Réponse du serveur invalide. Réessayez.';
+        return strings.errors.invalidResponse;
       case 'network':
-        return 'Impossible de joindre le serveur. Vérifiez votre connexion.';
+        return strings.errors.network;
       case 'timeout':
-        return 'Le serveur met trop de temps à répondre. Réessayez.';
+        return strings.errors.timeout;
       case 'unauthorized':
-        return 'Votre session a expiré. Reconnectez-vous.';
+        return strings.errors.unauthorized;
       case 'forbidden':
-        return "Vous n'avez pas accès à cette conversation.";
+        return strings.errors.forbidden;
       case 'not_found':
-        return 'Conversation introuvable.';
+        return strings.errors.notFound;
       case 'server':
-        return 'Le serveur rencontre un problème. Réessayez plus tard.';
+        return strings.errors.generic;
     }
   }
-  return 'Une erreur est survenue.';
+  return strings.errors.generic;
 }

@@ -16,9 +16,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { Routes, type RootStackParamList } from '@/navigation/routes';
 import { userMessage } from '@/services/ApiError';
 import { useSession } from '@/session/SessionContext';
+import { useTranslation } from '@/i18n';
 
 export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'Register'>) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   const { register } = useSession();
   const [pseudo, setPseudo] = useState('');
   const [courriel, setCourriel] = useState('');
@@ -32,19 +34,19 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
   async function submit() {
     if (submitting) return;
     if (!/^[A-Za-z0-9_-]{3,20}$/.test(pseudo.trim())) {
-      setError('Pseudo : 3 à 20 lettres, chiffres, _ ou -.');
+      setError(strings.auth.register.validation.username);
       return;
     }
     if (courriel.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(courriel.trim())) {
-      setError('Adresse courriel invalide.');
+      setError(strings.auth.register.validation.email);
       return;
     }
     if (password.length < 8 || password.length > 128) {
-      setError('Mot de passe : 8 à 128 caractères.');
+      setError(strings.auth.register.validation.password);
       return;
     }
     if (password !== confirmation) {
-      setError('Les mots de passe ne correspondent pas.');
+      setError(strings.auth.register.validation.confirmation);
       return;
     }
     setSubmitting(true);
@@ -62,15 +64,15 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-          <AuthHeader title="Crée ton compte" subtitle="Tes amis, tes serveurs, tes conversations." />
+          <AuthHeader title={strings.auth.register.title} subtitle={strings.auth.register.subtitle} />
           <ThemedText type="smallBold" themeColor="textSecondary">
-            PSEUDO
+            {strings.auth.register.usernameLabel}
           </ThemedText>
           <TextInput
-            accessibilityLabel="Pseudo"
+            accessibilityLabel={strings.auth.register.username}
             returnKeyType="next"
             onSubmitEditing={() => courrielRef.current?.focus()}
-            placeholder="Pseudo"
+            placeholder={strings.auth.register.username}
             placeholderTextColor={theme.textSecondary}
             value={pseudo}
             onChangeText={setPseudo}
@@ -81,14 +83,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             style={input}
           />
           <ThemedText type="smallBold" themeColor="textSecondary">
-            COURRIEL
+            {strings.auth.register.emailLabel}
           </ThemedText>
           <TextInput
-            accessibilityLabel="Courriel"
+            accessibilityLabel={strings.auth.register.email}
             ref={courrielRef}
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
-            placeholder="Courriel"
+            placeholder={strings.auth.register.email}
             placeholderTextColor={theme.textSecondary}
             value={courriel}
             onChangeText={setCourriel}
@@ -101,14 +103,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             style={input}
           />
           <ThemedText type="smallBold" themeColor="textSecondary">
-            MOT DE PASSE
+            {strings.auth.register.passwordLabel}
           </ThemedText>
           <TextInput
-            accessibilityLabel="Mot de passe"
+            accessibilityLabel={strings.auth.register.password}
             ref={passwordRef}
             returnKeyType="next"
             onSubmitEditing={() => confirmationRef.current?.focus()}
-            placeholder="Mot de passe"
+            placeholder={strings.auth.register.password}
             placeholderTextColor={theme.textSecondary}
             value={password}
             onChangeText={setPassword}
@@ -120,13 +122,13 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             style={input}
           />
           <ThemedText type="smallBold" themeColor="textSecondary">
-            CONFIRMER LE MOT DE PASSE
+            {strings.auth.register.confirmPasswordLabel}
           </ThemedText>
           <TextInput
-            accessibilityLabel="Confirmation du mot de passe"
+            accessibilityLabel={strings.auth.register.confirmPassword}
             ref={confirmationRef}
             returnKeyType="go"
-            placeholder="Confirmation du mot de passe"
+            placeholder={strings.auth.register.confirmPassword}
             placeholderTextColor={theme.textSecondary}
             value={confirmation}
             onChangeText={setConfirmation}
@@ -144,7 +146,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
           ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={submitting ? 'Inscription en cours' : 'S’inscrire'}
+            accessibilityLabel={submitting ? strings.accessibility.signingUp : strings.auth.register.submit}
             accessibilityState={{ disabled: submitting, busy: submitting }}
             disabled={submitting}
             onPress={submit}
@@ -153,7 +155,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             {submitting ? (
               <ActivityIndicator accessible={false} importantForAccessibility="no" color="#fff" />
             ) : (
-              <ThemedText style={{ color: '#fff' }}>S’inscrire</ThemedText>
+              <ThemedText style={{ color: '#fff' }}>{strings.auth.register.submit}</ThemedText>
             )}
           </Pressable>
           <Pressable
@@ -162,14 +164,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             onPress={() => navigation.navigate(Routes.Login)}
           >
             <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', marginTop: 8 }}>
-              Déjà un compte ?
+              {strings.auth.register.alreadyRegistered}
             </ThemedText>
             <ThemedText
               type="smallBold"
               themeColor="tint"
               style={{ textAlign: 'center', paddingVertical: 8 }}
             >
-              Retour à la connexion
+              {strings.auth.register.backToLogin}
             </ThemedText>
           </Pressable>
         </ScrollView>
