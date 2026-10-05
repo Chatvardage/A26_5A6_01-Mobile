@@ -155,8 +155,12 @@ export class SessionManager {
             });
           } else throw error;
         }
-      } catch {
-        if (epoch === this.epoch) await this.clear();
+      } catch (error) {
+        if (epoch !== this.epoch) return;
+        if (error instanceof ApiError && error.kind === 'storage') {
+          this.session = null;
+          this.update({ status: 'loading', user: null, error: userMessage(error) });
+        } else await this.clear();
       }
     })();
     this.restoration = pending;

@@ -55,6 +55,40 @@ const deferred = <T>() => {
   return { promise, resolve };
 };
 
+it('preserves inaccessible secure storage and validates the session after retry', async () => {
+  jest
+    .mocked(storage.load)
+    .mockRejectedValueOnce(new ApiError('storage', 'private native detail'))
+    .mockResolvedValueOnce(session);
+  await manager.start();
+  expect(manager.state).toEqual({
+    status: 'loading',
+    user: null,
+    error: 'Le stockage sécurisé est indisponible. Réessayez.',
+  });
+  expect(storage.clear).not.toHaveBeenCalled();
+  expect(storage.save).not.toHaveBeenCalled();
+  expect(auth.me).not.toHaveBeenCalled();
+  await manager.restoreSession();
+  expect(auth.me).toHaveBeenCalledTimes(1);
+  expect(manager.state).toEqual({ status: 'signedIn', user, error: null });
+});
+
+it('ignores a late storage failure after logout', async () => {
+  let reject!: (error: Error) => void;
+  jest.mocked(storage.load).mockReturnValueOnce(
+    new Promise((_resolve, fail) => {
+      reject = fail;
+    }),
+  );
+  const pending = manager.start();
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  await manager.signOut();
+  reject(new ApiError('storage', 'unavailable'));
+  await pending;
+  expect(manager.state).toEqual({ status: 'signedOut', user: null, error: null });
+});
+
 it('starts loading, restores absence to signedOut and notifies subscribers', async () => {
   const listener = jest.fn();
   const unsubscribe = manager.subscribe(listener);

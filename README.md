@@ -6,7 +6,10 @@ Au démarrage, une erreur réseau, un timeout, un HTTP 5xx ou un quota temporair
 pendant la validation `/me` conserve la session dans SecureStore. Un message et
 le bouton « Réessayer » restent visibles ; aucun écran protégé ni credential
 HTTP n'est activé avant la validation. Un 401 déclenche toujours le refresh,
-et un échec de ce refresh nettoie la session. Le client HTTP respecte également
+et un échec de ce refresh nettoie la session.
+Une erreur de lecture SecureStore affiche également « Réessayer » et préserve
+les données stockées ; aucune session n'est activée avant une lecture et une validation réussies.
+Le client HTTP respecte également
 le signal d'annulation de l'appelant, en conservant son timeout propre ; une
 annulation explicite propage l'erreur d'annulation sans la convertir en timeout.
 
