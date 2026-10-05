@@ -23,7 +23,7 @@ function ServerItemBase({ server, onPress }: Props) {
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >
-      <View style={[styles.avatar, { backgroundColor: theme.tint }]}>
+      <View style={[styles.avatar, { backgroundColor: theme.accent }]}>
         <ThemedText type="smallBold" style={styles.avatarText}>
           {server.name.slice(0, 1).toUpperCase()}
         </ThemedText>
@@ -44,7 +44,7 @@ function ServerItemBase({ server, onPress }: Props) {
 export const ServerItem = memo(ServerItemBase);
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: 14 },
   avatar: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#ffffff', fontSize: 18 },
   main: { flex: 1, gap: Spacing.half },

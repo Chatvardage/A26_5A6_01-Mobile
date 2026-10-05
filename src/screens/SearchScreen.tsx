@@ -25,7 +25,7 @@ export function SearchScreen() {
         autoCorrect={false}
         clearButtonMode="while-editing"
         accessibilityLabel={strings.accessibility.search}
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.input }]}
       />
       <EmptyState
         title={query.trim() ? strings.search.unavailable : strings.search.prompt}
@@ -37,5 +37,5 @@ export function SearchScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  input: { margin: Spacing.three, borderRadius: 10, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2, fontSize: 16 },
+  input: { margin: Spacing.three, borderRadius: 14, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2, fontSize: 16, fontWeight: '600' },
 });

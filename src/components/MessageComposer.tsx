@@ -33,7 +33,7 @@ export function MessageComposer({ onSend }: Props) {
         placeholderTextColor={theme.textSecondary}
         multiline
         maxLength={4000}
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        style={[styles.input, { color: theme.text, backgroundColor: theme.input }]}
         accessibilityLabel={strings.accessibility.message}
       />
       <Pressable
@@ -44,7 +44,7 @@ export function MessageComposer({ onSend }: Props) {
         }}
         accessibilityRole="button"
         accessibilityLabel={strings.accessibility.send}
-        style={({ pressed }) => [styles.send, { backgroundColor: theme.tint, opacity: !canSend ? 0.4 : pressed ? 0.7 : 1 }]}
+        style={({ pressed }) => [styles.send, { backgroundColor: theme.primary, opacity: !canSend ? 0.4 : pressed ? 0.7 : 1 }]}
       >
         <ThemedText type="smallBold" style={styles.sendText}>
           {strings.accessibility.send}
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  input: { flex: 1, maxHeight: 120, borderRadius: 18, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, fontSize: 16 },
-  send: { borderRadius: 18, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2 },
+  input: { flex: 1, maxHeight: 120, borderRadius: 18, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, fontSize: 16, fontWeight: '600' },
+  send: { borderRadius: 14, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2 },
   sendText: { color: '#ffffff' },
 });

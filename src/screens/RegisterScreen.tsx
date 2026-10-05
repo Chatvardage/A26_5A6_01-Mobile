@@ -59,11 +59,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
       setSubmitting(false);
     }
   }
-  const input = [styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }];
+  const input = [styles.input, { color: theme.text, backgroundColor: theme.input }];
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.form, { backgroundColor: theme.card }]}
+          keyboardShouldPersistTaps="handled"
+        >
           <AuthHeader title={strings.auth.register.title} subtitle={strings.auth.register.subtitle} />
           <ThemedText type="smallBold" themeColor="textSecondary">
             {strings.auth.register.usernameLabel}
@@ -150,7 +153,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             accessibilityState={{ disabled: submitting, busy: submitting }}
             disabled={submitting}
             onPress={submit}
-            style={[styles.button, { backgroundColor: theme.tint }]}
+            style={[styles.button, { backgroundColor: theme.authButton }]}
           >
             {submitting ? (
               <ActivityIndicator accessible={false} importantForAccessibility="no" color="#fff" />
@@ -184,23 +187,26 @@ const styles = StyleSheet.create({
   form: {
     flexGrow: 1,
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 24,
     paddingVertical: 32,
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 700,
     alignSelf: 'center',
+    borderRadius: 20,
+    marginVertical: 24,
   },
   input: {
-    borderRadius: 6,
+    borderRadius: 14,
     minHeight: 52,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '600',
     marginBottom: 8,
   },
   button: {
-    borderRadius: 6,
+    borderRadius: 14,
     minHeight: 52,
     padding: 16,
     alignItems: 'center',

@@ -13,7 +13,7 @@ export function MessageBubble({ message, mine, showAuthor }: { message: ChatMess
   const edited = message.updatedAt !== message.createdAt;
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther]}>
-      <View style={[styles.bubble, { backgroundColor: mine ? theme.tint : theme.backgroundElement }]}>
+      <View style={[styles.bubble, { backgroundColor: mine ? theme.primary : theme.bubble }]}>
         {showAuthor && !mine ? (
           <ThemedText type="smallBold" themeColor="textSecondary">
             {message.senderName ?? strings.conversation.unknownUser}
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
   row: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one, flexDirection: 'row' },
   rowMine: { justifyContent: 'flex-end' },
   rowOther: { justifyContent: 'flex-start' },
-  bubble: { maxWidth: '80%', borderRadius: 14, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  bubble: { maxWidth: '80%', borderRadius: 18, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   mineText: { color: '#ffffff' },
   meta: { alignSelf: 'flex-end', fontSize: 11, lineHeight: 14 },
 });

@@ -72,7 +72,7 @@ export function ErrorState({ message, onRetry, refresh }: { message: string; onR
         <Pressable
           onPress={onRetry}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [styles.button, { backgroundColor: theme.primary, opacity: pressed ? 0.7 : 1 }]}
         >
           <ThemedText type="smallBold" style={styles.buttonText}>
             {strings.navigation.retry}
@@ -86,6 +86,6 @@ export function ErrorState({ message, onRetry, refresh }: { message: string; onR
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.four },
   centerText: { textAlign: 'center' },
-  button: { marginTop: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, borderRadius: 8 },
+  button: { marginTop: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, borderRadius: 14 },
   buttonText: { color: '#ffffff' },
 });

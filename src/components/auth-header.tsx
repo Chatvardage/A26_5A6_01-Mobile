@@ -24,10 +24,10 @@ export function AuthHeader({ title, subtitle }: { title: string; subtitle: strin
   );
 }
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', marginBottom: 16 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 32 },
-  logo: { width: 44, height: 44 },
-  brandName: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
-  title: { fontSize: 28, lineHeight: 36, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  header: { alignItems: 'center', marginBottom: 8 },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 26 },
+  logo: { width: 58, height: 58, borderRadius: 18 },
+  brandName: { fontSize: 32, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: 24, lineHeight: 30, fontWeight: '800', textAlign: 'center', marginBottom: 6 },
+  subtitle: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });

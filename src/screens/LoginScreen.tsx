@@ -56,12 +56,15 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackPara
     }
   }
 
-  const inputStyle = [styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }];
+  const inputStyle = [styles.input, { color: theme.text, backgroundColor: theme.input }];
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={[styles.form, { backgroundColor: theme.card }]}
+          keyboardShouldPersistTaps="handled"
+        >
           <AuthHeader title={strings.auth.login.title} subtitle={strings.auth.login.subtitle} />
           <ThemedText type="smallBold" themeColor="textSecondary">
             {strings.auth.login.usernameLabel}
@@ -111,7 +114,7 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackPara
             accessibilityRole="button"
             style={({ pressed }) => [
               styles.button,
-              { backgroundColor: theme.tint, opacity: !canSubmit ? 0.5 : pressed ? 0.7 : 1 },
+              { backgroundColor: theme.authButton, opacity: !canSubmit ? 0.6 : pressed ? 0.8 : 1 },
             ]}
           >
             {submitting ? (
@@ -149,26 +152,29 @@ const styles = StyleSheet.create({
   form: {
     flexGrow: 1,
     justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: 40,
+    gap: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 32,
     width: '100%',
-    maxWidth: 480,
+    maxWidth: 700,
     alignSelf: 'center',
+    borderRadius: 20,
+    marginVertical: 24,
   },
   input: {
-    borderRadius: 6,
+    borderRadius: 14,
     minHeight: 52,
     paddingHorizontal: Spacing.three,
     paddingVertical: 14,
-    fontSize: 16,
-    marginBottom: 12,
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   button: {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 52,
-    borderRadius: 6,
+    borderRadius: 14,
     paddingVertical: Spacing.three,
     marginTop: 8,
   },

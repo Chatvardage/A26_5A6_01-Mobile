@@ -17,7 +17,7 @@ export function PreferencesScreen() {
       <ThemedText type="smallBold" themeColor="textSecondary">
         {strings.preferences.connectedAs}
       </ThemedText>
-      <ThemedText type="subtitle">{user?.pseudo ?? '—'}</ThemedText>
+      <ThemedText type="subtitle" style={styles.username}>{user?.pseudo ?? '—'}</ThemedText>
       <Pressable
         onPress={signOut}
         accessibilityRole="button"
@@ -32,6 +32,7 @@ export function PreferencesScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, padding: Spacing.three, gap: Spacing.two },
-  button: { marginTop: Spacing.four, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
+  fill: { flex: 1, padding: Spacing.four, gap: Spacing.two },
+  username: { marginTop: 2 },
+  button: { marginTop: Spacing.four, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 14, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
 });
