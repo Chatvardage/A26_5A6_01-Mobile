@@ -21,7 +21,7 @@ describe('apiFetch', () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ erreur: 'interdit' }) });
     const error = await apiFetch('/x').catch((e) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ kind: 'forbidden', status: 403, message: 'interdit' });
+    expect(error).toMatchObject({ kind: 'forbidden', status: 403, message: 'HTTP 403' });
   });
 
   it('donne un message utilisateur propre à chaque cas', () => {

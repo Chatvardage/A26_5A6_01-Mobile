@@ -170,7 +170,7 @@ Routes centralisées dans [`src/navigation/routes.ts`](src/navigation/routes.ts)
 
 ```text
 RootStack (native-stack)
-├── sans session : Login
+├── sans session : Login / Register
 └── avec session : Main (bottom-tabs) ─┬ DirectMessages   liste des messages privés
                                        ├ Servers          liste des serveurs
                                        ├ Search
@@ -198,7 +198,7 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 
 ## Limites connues
 
-- **Session provisoire** : `SessionContext` garde le jeton en mémoire seulement (pas de SecureStore, de restauration au redémarrage ni de renouvellement). Le contrat (`status`, `user`, `signIn`, `signOut`) est celui que la session complète doit respecter.
+- **Session** : SecureStore, validation au démarrage, rotation réelle via Auth-Service/Gateway, refresh partagé et retour Login après échec. Voir ci-dessous.
 - **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
 - **Rejoindre / quitter un serveur** et **ouvrir un nouveau message privé** : non implantés ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
@@ -214,3 +214,79 @@ npx expo lint
 npm test
 npx expo-doctor
 ```
+
+
+## Authentification mobile
+
+Les écrans Login/Register passent par `useSession` et le service Auth existant.
+`SessionManager` porte la machine `loading / signedOut / signedIn`; le Context la
+publie à React. `storage.adapter` conserve uniquement les deux tokens et les
+champs publics de l'utilisateur dans **expo-secure-store ~57.0.4**. Aucun mot de
+passe n'est conservé. iOS utilise `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; le plugin
+SecureStore configure la sauvegarde Android. Android/iOS sont les cibles.
+
+Au lancement, la navigation affiche un indicateur de restauration jusqu'à la
+lecture SecureStore et la validation `/api/auth/me`. Un 401 provoque une rotation
+par `POST /api/auth/refresh`; tout échec termine la restauration en `signedOut`.
+Les appels publics login/register/refresh/logout n'envoient pas le Bearer.
+Les requêtes protégées partagent un seul renouvellement et ne sont reprises
+qu'une fois. Les générations de session empêchent les réponses tardives de
+réactiver une session après déconnexion, y compris en StrictMode.
+
+Logout lance immédiatement le nettoyage local indépendamment du réseau, puis
+révoque la famille via `POST /api/auth/logout`. Si l'API native de suppression
+SecureStore échoue, l'utilisateur et le token HTTP sont effacés et un message
+propose de réessayer le nettoyage; une panne physique du stockage ne peut pas
+être masquée comme une suppression réussie. La persistance est sérialisée pour
+éviter qu'une écriture en cours rétablisse une session après logout.
+
+Le backend émet des accès de 15 minutes et des familles de refresh de 30 jours
+maximum. Les rotations ne prolongent pas ces 30 jours. L'ancien refresh token
+ne peut plus renouveler mais permet encore de révoquer toute sa famille.
+Appliquer les migrations Auth avec le Compose habituel avant d'utiliser ces routes.
+Voir le [contrat central](../A26_5A6_01-Infra/docs/api/authentification.md#sessions-renouvelables--register-login-refresh-et-logout).
+
+### Validation
+
+```bash
+npm install
+npm run typecheck
+npm run lint
+npm test -- --runInBand
+npm test -- --coverage --runInBand
+npx expo-doctor
+npx expo export --platform android
+```
+
+Le moteur de tests `test-renderer` est fixé à 1.2.0 pour React 19.2 (la version
+1.3.0 tire react-reconciler 0.34, qui exige React 19.3).
+
+La couverture inclut toute la source `src/` et le point d'entrée `index.ts`.
+Les seuils Jest exigent 100 % des instructions, branches, fonctions et lignes.
+Les fichiers qui ne contiennent que des types ou réexports n'ont aucune unité
+exécutable à couvrir. Aucun fichier applicatif n'est exclu du calcul.
+
+L'intégration réseau réelle se lance avec `npm run test:auth-e2e` après build du
+Gateway et démarrage d'Auth sur une base **de test** migrée. Fournir
+`AUTH_E2E_SERVICE_URL` et `AUTH_E2E_JWT_SECRET` (clé temporaire de cette instance,
+jamais une clé de production). Ce test utilise le vrai code HTTP/Auth/session
+Mobile avec le vrai Gateway/Auth/PostgreSQL. L'API native SecureStore est remplacée
+par un adaptateur en mémoire sous Node; les tests Jest vérifient séparément son
+contrat. Des JWT expirés sont signés avec la clé temporaire pour exercer la
+restauration et les 401 concurrents sans attendre 15 minutes. Aucun credential
+n'est imprimé. Les interactions natives restent à confirmer sur appareil.
+
+Pour valider également l'image Docker de la Gateway, fournir
+`AUTH_E2E_GATEWAY_URL` avec l'URL de cette instance isolée. Le script utilise
+alors cette Gateway existante au lieu de démarrer une Gateway locale.
+
+### Avis npm en attente de correctif compatible
+
+Au 4 octobre 2026, `npm audit` signale des avis transitifs sur braces <=3.0.3
+(GHSA-vfj7-8cjw-p6xm), node-forge <=1.4.0 (GHSA-86w9-cpqp-85rv) et uuid <11.1.1
+(GHSA-w5hq-g745-h8pq). Les versions npm actuelles de braces/node-forge restent
+concernées. Les corrections automatiques proposées changent des versions majeures
+ou rétrogradent Expo vers SDK 44. Ne pas exécuter `npm audit fix --force` : la
+compatibilité SDK 57 doit être conservée. Réexaminer ces avis dès qu'une version
+corrigée compatible est disponible; Expo Doctor et les tests ne remplacent pas
+cet audit. Les résultats exacts de l'audit sont consignés dans le rapport de tâche.

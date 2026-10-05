@@ -18,6 +18,15 @@ describe('parseConversationId', () => {
 });
 
 describe('parseConversationParams', () => {
+  it('accepte un titre absent et refuse null', () => {
+    expect(parseConversationParams(null)).toBeNull();
+    expect(parseConversationParams({ conversationId: `dm:${UUID}` })).toEqual({
+      conversationId: `dm:${UUID}`,
+      title: undefined,
+    });
+    expect(parseServerParams(null)).toBeNull();
+    expect(parseServerParams({ serverId: UUID })).toEqual({ serverId: UUID, title: undefined });
+  });
   it('valide et conserve le titre', () => {
     expect(parseConversationParams({ conversationId: `dm:${UUID}`, title: 'alice' })).toEqual({
       conversationId: `dm:${UUID}`,
@@ -33,7 +42,10 @@ describe('parseConversationParams', () => {
 
 describe('parseServerParams', () => {
   it('valide un identifiant de serveur et conserve le titre', () => {
-    expect(parseServerParams({ serverId: UUID, title: 'Chatvardage' })).toEqual({ serverId: UUID, title: 'Chatvardage' });
+    expect(parseServerParams({ serverId: UUID, title: 'Chatvardage' })).toEqual({
+      serverId: UUID,
+      title: 'Chatvardage',
+    });
   });
   it('refuse des paramètres absents ou invalides', () => {
     expect(parseServerParams(undefined)).toBeNull();

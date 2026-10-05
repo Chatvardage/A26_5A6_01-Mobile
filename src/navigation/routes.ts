@@ -13,6 +13,7 @@ export type MainTabParamList = {
 /** Pile racine : Login seul sans session ; Main, Server puis Conversation avec session. */
 export type RootStackParamList = {
   Login: undefined;
+  Register: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Server: { serverId: string; title?: string };
   Conversation: { conversationId: string; title?: string };
@@ -20,6 +21,7 @@ export type RootStackParamList = {
 
 export const Routes = {
   Login: 'Login',
+  Register: 'Register',
   Main: 'Main',
   Server: 'Server',
   Conversation: 'Conversation',

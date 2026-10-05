@@ -1,6 +1,16 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Routes, type RootStackParamList } from '@/navigation/routes';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -18,7 +28,7 @@ function loginErrorMessage(error: unknown): string {
   return 'Connexion impossible. Réessayez.';
 }
 
-export function LoginScreen() {
+export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'Login'>) {
   const theme = useTheme();
   const { signIn } = useSession();
   const [identifiant, setIdentifiant] = useState('');
@@ -56,6 +66,7 @@ export function LoginScreen() {
             placeholder="Pseudo ou courriel"
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
+            maxLength={254}
             autoCorrect={false}
             autoComplete="username"
             textContentType="username"
@@ -71,6 +82,7 @@ export function LoginScreen() {
             placeholder="Mot de passe"
             placeholderTextColor={theme.textSecondary}
             secureTextEntry
+            maxLength={128}
             autoCapitalize="none"
             autoComplete="current-password"
             textContentType="password"
@@ -88,9 +100,25 @@ export function LoginScreen() {
             onPress={submit}
             disabled={!canSubmit}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: !canSubmit ? 0.5 : pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: theme.tint, opacity: !canSubmit ? 0.5 : pressed ? 0.7 : 1 },
+            ]}
           >
-            {submitting ? <ActivityIndicator color="#ffffff" /> : <ThemedText type="smallBold" style={styles.buttonText}>Se connecter</ThemedText>}
+            {submitting ? (
+              <ActivityIndicator accessibilityLabel="Connexion en cours" color="#ffffff" />
+            ) : (
+              <ThemedText type="smallBold" style={styles.buttonText}>
+                Se connecter
+              </ThemedText>
+            )}
+          </Pressable>
+          <Pressable
+            disabled={submitting}
+            accessibilityRole="button"
+            onPress={() => navigation.navigate(Routes.Register)}
+          >
+            <ThemedText>Créer un compte</ThemedText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
