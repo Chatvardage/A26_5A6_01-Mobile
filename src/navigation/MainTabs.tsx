@@ -26,17 +26,22 @@ function DiscordTabButton({
   style,
   children,
   selectedColor,
+  unselectedColor,
+  borderColor,
   ref: _ref,
   ...props
-}: BottomTabBarButtonProps & { selectedColor: string }) {
+}: BottomTabBarButtonProps & { selectedColor: string; unselectedColor: string; borderColor: string }) {
   return (
     <Pressable
       {...props}
       accessibilityState={accessibilityState}
       style={[
-        styles.tabButton,
-        accessibilityState?.selected && { backgroundColor: selectedColor },
         style,
+        styles.tabButton,
+        {
+          backgroundColor: accessibilityState?.selected ? selectedColor : unselectedColor,
+          borderColor: accessibilityState?.selected ? selectedColor : borderColor,
+        },
       ]}
     >
       {children}
@@ -72,11 +77,17 @@ export function MainTabs() {
           },
         ],
         tabBarButton: (props) => (
-          <DiscordTabButton {...props} selectedColor={`${colors.accent}29`} />
+          <DiscordTabButton
+            {...props}
+            selectedColor={colors.accent}
+            unselectedColor={colors.panel}
+            borderColor={colors.backgroundSelected}
+          />
         ),
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarLabelPosition: 'below-icon',
         tabBarIconStyle: styles.tabBarIcon,
-        tabBarActiveTintColor: colors.accent,
+        tabBarActiveTintColor: colors.text,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarIcon: ({ color, size }) => (
           <SymbolView name={ICONS[route.name]} tintColor={color} size={size} fallback={null} />
@@ -96,8 +107,7 @@ const styles = StyleSheet.create({
     height: 78,
     marginHorizontal: 12,
     marginBottom: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    padding: 0,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 24,
     elevation: 12,
@@ -108,25 +118,36 @@ const styles = StyleSheet.create({
   },
   tabBarItem: {
     flex: 1,
+    height: '100%',
+    alignSelf: 'stretch',
     marginHorizontal: 2,
+    marginVertical: 0,
+    padding: 0,
     borderRadius: 18,
     overflow: 'hidden',
   },
   tabButton: {
     flex: 1,
+    height: '100%',
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
     borderRadius: 18,
-    paddingHorizontal: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 0,
   },
   tabBarIcon: {
     marginTop: 0,
     marginBottom: 0,
   },
   tabBarLabel: {
+    alignSelf: 'stretch',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.2,
+    lineHeight: 14,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });
