@@ -71,6 +71,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             returnKeyType="next"
             onSubmitEditing={() => courrielRef.current?.focus()}
             placeholder="Pseudo"
+            placeholderTextColor={theme.textSecondary}
             value={pseudo}
             onChangeText={setPseudo}
             autoCapitalize="none"
@@ -88,6 +89,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
             placeholder="Courriel"
+            placeholderTextColor={theme.textSecondary}
             value={courriel}
             onChangeText={setCourriel}
             autoCapitalize="none"
@@ -107,6 +109,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             returnKeyType="next"
             onSubmitEditing={() => confirmationRef.current?.focus()}
             placeholder="Mot de passe"
+            placeholderTextColor={theme.textSecondary}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -124,6 +127,7 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             ref={confirmationRef}
             returnKeyType="go"
             placeholder="Confirmation du mot de passe"
+            placeholderTextColor={theme.textSecondary}
             value={confirmation}
             onChangeText={setConfirmation}
             secureTextEntry
@@ -140,13 +144,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
           ) : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="S’inscrire"
+            accessibilityLabel={submitting ? 'Inscription en cours' : 'S’inscrire'}
+            accessibilityState={{ disabled: submitting, busy: submitting }}
             disabled={submitting}
             onPress={submit}
             style={[styles.button, { backgroundColor: theme.tint }]}
           >
             {submitting ? (
-              <ActivityIndicator accessibilityLabel="Inscription en cours" color="#fff" />
+              <ActivityIndicator accessible={false} importantForAccessibility="no" color="#fff" />
             ) : (
               <ThemedText style={{ color: '#fff' }}>S’inscrire</ThemedText>
             )}

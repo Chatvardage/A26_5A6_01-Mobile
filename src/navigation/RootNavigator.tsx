@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, NavigationContainer, type Theme } from '@react
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, useColorScheme, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { ConversationScreen } from '@/screens/ConversationScreen';
@@ -74,49 +75,58 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer theme={theme}>
-      {error ? (
-        <View>
-          <ThemedText accessibilityRole="alert">{error}</ThemedText>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              void signOut();
-            }}
-          >
-            <ThemedText>Réessayer le nettoyage</ThemedText>
-          </Pressable>
-        </View>
-      ) : null}
-      <Stack.Navigator key={status}>
-        {status === 'signedIn' ? (
-          <>
-            <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
-            <Stack.Screen
-              name={Routes.Server}
-              component={ServerScreen}
-              options={({ route }) => ({
-                title: route.params?.title ?? 'Serveur',
-              })}
-            />
-            <Stack.Screen
-              name={Routes.Conversation}
-              component={ConversationScreen}
-              options={({ route }) => ({
-                title: route.params?.title ?? 'Conversation',
-              })}
-            />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name={Routes.Login} component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen
-              name={Routes.Register}
-              component={RegisterScreen}
-              options={{ headerShown: false }}
-            />
-          </>
-        )}
-      </Stack.Navigator>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        {error ? (
+          <SafeAreaView edges={['top', 'left', 'right']} style={{ backgroundColor: theme.colors.card }}>
+            <View style={{ paddingHorizontal: 20, paddingVertical: 12, gap: 8 }}>
+              <ThemedText accessibilityRole="alert" accessibilityLiveRegion="polite">
+                {error}
+              </ThemedText>
+              <Pressable
+                accessibilityRole="button"
+                style={{ minHeight: 44, justifyContent: 'center' }}
+                onPress={() => {
+                  void signOut();
+                }}
+              >
+                <ThemedText themeColor="tint" type="smallBold">
+                  Réessayer le nettoyage
+                </ThemedText>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        ) : null}
+        <Stack.Navigator key={status}>
+          {status === 'signedIn' ? (
+            <>
+              <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
+              <Stack.Screen
+                name={Routes.Server}
+                component={ServerScreen}
+                options={({ route }) => ({
+                  title: route.params?.title ?? 'Serveur',
+                })}
+              />
+              <Stack.Screen
+                name={Routes.Conversation}
+                component={ConversationScreen}
+                options={({ route }) => ({
+                  title: route.params?.title ?? 'Conversation',
+                })}
+              />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name={Routes.Login} component={LoginScreen} options={{ headerShown: false }} />
+              <Stack.Screen
+                name={Routes.Register}
+                component={RegisterScreen}
+                options={{ headerShown: false }}
+              />
+            </>
+          )}
+        </Stack.Navigator>
+      </View>
     </NavigationContainer>
   );
 }

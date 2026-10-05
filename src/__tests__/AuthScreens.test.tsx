@@ -77,6 +77,10 @@ it('ignores a queued keyboard focus event after unmount', async () => {
 it('rejects an oversized email even when the native input limit is bypassed', async () => {
   await render(<RootNavigator />);
   await registerForm();
+  expect(screen.getByRole('button', { name: 'S’inscrire' }).props.accessibilityState).toMatchObject({
+    busy: false,
+    disabled: false,
+  });
   await change('Courriel', `${'a'.repeat(250)}@example.com`);
   await fireEvent.press(screen.getByText('S’inscrire'));
   expect(screen.getByText('Adresse courriel invalide.')).toBeTruthy();
@@ -184,6 +188,9 @@ it('register displays pending, then navigates to authenticated app', async () =>
     void screen.getByLabelText('Confirmation du mot de passe').props.onSubmitEditing();
   });
   expect(screen.getByLabelText('Inscription en cours')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Inscription en cours' }).props.accessibilityState).toMatchObject(
+    { busy: true, disabled: true },
+  );
   await act(async () => {
     void screen.getByLabelText('Confirmation du mot de passe').props.onSubmitEditing();
   });
@@ -212,6 +219,17 @@ it('shows storage cleanup errors on signed-out navigation', async () => {
   mockSession.error = 'Le stockage sécurisé ne peut pas être effacé.';
   await render(<RootNavigator />);
   expect(screen.getByText(mockSession.error)).toBeTruthy();
+  expect(screen.getByText(mockSession.error).props.accessibilityLiveRegion).toBe('polite');
+});
+
+it('uses the theme placeholder color throughout registration', async () => {
+  await render(<RootNavigator />);
+  await fireEvent.press(screen.getByText('Créer un compte'));
+  for (const label of ['Pseudo', 'Courriel', 'Mot de passe', 'Confirmation du mot de passe']) {
+    const field = screen.getByLabelText(label);
+    expect(field.props.placeholderTextColor).toBeTruthy();
+    expect(field.props.placeholderTextColor).toBe(screen.getByLabelText('Pseudo').props.placeholderTextColor);
+  }
 });
 
 it('can retry secure cleanup from Login', async () => {
