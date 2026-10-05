@@ -30,7 +30,11 @@ export function invalidateHttpRequests() {
 
 type RequestPolicy = { authenticated?: boolean; retryUnauthorized?: boolean };
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}, policy: RequestPolicy = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  policy: RequestPolicy = {},
+): Promise<T> {
   const epoch = generation;
   const authenticated = policy.authenticated !== false;
   const token = authenticated ? tokenProvider() : null;
@@ -82,6 +86,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, policy: 
 
 async function request<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  init.signal?.addEventListener('abort', cancel);
+  if (init.signal?.aborted) cancel();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -94,7 +101,8 @@ async function request<T>(path: string, init: RequestInit, token: string | null)
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
-    if (!response.ok) throw new ApiError(kindFromStatus(response.status), `HTTP ${response.status}`, response.status);
+    if (!response.ok)
+      throw new ApiError(kindFromStatus(response.status), `HTTP ${response.status}`, response.status);
     if (response.status === 204) return undefined as T;
     try {
       return (await response.json()) as T;
@@ -103,10 +111,13 @@ async function request<T>(path: string, init: RequestInit, token: string | null)
       throw new ApiError('invalid_response', 'Réponse invalide');
     }
   } catch (error) {
+    if (init.signal?.aborted) throw error;
     if (error instanceof ApiError) throw error;
-    if (error instanceof Error && error.name === 'AbortError') throw new ApiError('timeout', 'Request timed out');
+    if (error instanceof Error && error.name === 'AbortError')
+      throw new ApiError('timeout', 'Request timed out');
     throw new ApiError('network', 'Network request failed');
   } finally {
     clearTimeout(timer);
+    init.signal?.removeEventListener('abort', cancel);
   }
 }

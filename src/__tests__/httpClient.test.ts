@@ -8,6 +8,28 @@ afterEach(() => {
 });
 
 describe('apiFetch', () => {
+  it.each([false, true])(
+    'honors caller cancellation, including pre-aborted signals %s',
+    async (alreadyAborted) => {
+      const caller = new AbortController();
+      const abort = Object.assign(new Error('cancelled'), {
+        name: 'AbortError',
+      });
+      if (alreadyAborted) caller.abort();
+      global.fetch = jest.fn(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            const signal = init!.signal!;
+            if (signal.aborted) reject(abort);
+            else signal.addEventListener('abort', () => reject(abort));
+          }),
+      );
+      const pending = apiFetch('/x', { signal: caller.signal });
+      const assertion = expect(pending).rejects.toBe(abort);
+      caller.abort();
+      await assertion;
+    },
+  );
   it('distingue un délai dépassé d’une panne réseau', async () => {
     const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
     global.fetch = jest.fn().mockRejectedValue(abort);
@@ -18,10 +40,18 @@ describe('apiFetch', () => {
   });
 
   it('traduit un code HTTP et le message { erreur } de l’API', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({ erreur: 'interdit' }) });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ erreur: 'interdit' }),
+    });
     const error = await apiFetch('/x').catch((e) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ kind: 'forbidden', status: 403, message: 'HTTP 403' });
+    expect(error).toMatchObject({
+      kind: 'forbidden',
+      status: 403,
+      message: 'HTTP 403',
+    });
   });
 
   it('donne un message utilisateur propre à chaque cas', () => {

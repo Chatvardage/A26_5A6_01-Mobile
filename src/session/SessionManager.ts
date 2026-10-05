@@ -1,10 +1,14 @@
 import * as auth from '@/services/authService';
-import { ApiError } from '@/services/ApiError';
+import { ApiError, userMessage } from '@/services/ApiError';
 import { configureHttpClient, invalidateHttpRequests, resetHttpClient } from '@/services/httpClient';
 import { storage } from './storage.adapter';
 
 export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
-export type SessionState = { status: SessionStatus; user: auth.AuthUser | null; error: string | null };
+export type SessionState = {
+  status: SessionStatus;
+  user: auth.AuthUser | null;
+  error: string | null;
+};
 
 /** One session owner, with serialized persistence and cancellation by generation. */
 export class SessionManager {
@@ -55,7 +59,10 @@ export class SessionManager {
     try {
       await this.persist(() => storage.clear());
     } catch {
-      this.update({ ...this.state, error: 'Le stockage sécurisé ne peut pas être effacé. Réessayez la déconnexion.' });
+      this.update({
+        ...this.state,
+        error: 'Le stockage sécurisé ne peut pas être effacé. Réessayez la déconnexion.',
+      });
     }
   }
   private async accept(result: auth.AuthResult, epoch: number) {
@@ -70,7 +77,11 @@ export class SessionManager {
         return;
       }
       this.session = result;
-      this.update({ status: 'signedIn', user: result.utilisateur, error: null });
+      this.update({
+        status: 'signedIn',
+        user: result.utilisateur,
+        error: null,
+      });
     } catch (error) {
       const cleanup = epoch === this.epoch ? this.clear() : Promise.resolve();
       await Promise.all([cleanup, auth.logout(result.refresh_token).catch(() => undefined)]);
@@ -116,6 +127,7 @@ export class SessionManager {
   restoreSession = (): Promise<void> => {
     if (this.restoration) return this.restoration;
     const epoch = this.epoch;
+    this.update({ status: 'loading', user: null, error: null });
     const pending = (async () => {
       try {
         const stored = await this.persistLoad();
@@ -131,13 +143,26 @@ export class SessionManager {
         } catch (error) {
           if (epoch !== this.epoch) return;
           if (error instanceof ApiError && error.status === 401) await this.refreshSession();
-          else throw error;
+          else if (
+            error instanceof ApiError &&
+            ['network', 'timeout', 'server', 'rate_limit'].includes(error.kind)
+          ) {
+            this.session = null;
+            this.update({
+              status: 'loading',
+              user: null,
+              error: userMessage(error),
+            });
+          } else throw error;
         }
       } catch {
         if (epoch === this.epoch) await this.clear();
       }
     })();
     this.restoration = pending;
+    void pending.finally(() => {
+      if (this.restoration === pending) this.restoration = null;
+    });
     return pending;
   };
   private async persistLoad() {

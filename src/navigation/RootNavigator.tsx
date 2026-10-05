@@ -23,22 +23,51 @@ function useNavigationTheme(): Theme {
     const c = Colors[scheme];
     return {
       ...base,
-      colors: { ...base.colors, primary: c.tint, background: c.background, card: c.background, text: c.text },
+      colors: {
+        ...base.colors,
+        primary: c.tint,
+        background: c.background,
+        card: c.background,
+        text: c.text,
+      },
     };
   }, [scheme]);
 }
 
 export function RootNavigator() {
-  const { status, error, signOut } = useSession();
+  const { status, error, signOut, restoreSession } = useSession();
   const theme = useNavigationTheme();
 
   // No authenticated screen is mounted before secure restoration completes.
   if (status === 'loading') {
     return (
       <View
-        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.colors.background,
+        }}
       >
-        <ActivityIndicator accessibilityLabel="Restauration de session" size="large" color={theme.colors.primary} />
+        {error ? (
+          <>
+            <ThemedText accessibilityRole="alert">{error}</ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                void restoreSession();
+              }}
+            >
+              <ThemedText>Réessayer</ThemedText>
+            </Pressable>
+          </>
+        ) : (
+          <ActivityIndicator
+            accessibilityLabel="Restauration de session"
+            size="large"
+            color={theme.colors.primary}
+          />
+        )}
       </View>
     );
   }
@@ -65,18 +94,26 @@ export function RootNavigator() {
             <Stack.Screen
               name={Routes.Server}
               component={ServerScreen}
-              options={({ route }) => ({ title: route.params?.title ?? 'Serveur' })}
+              options={({ route }) => ({
+                title: route.params?.title ?? 'Serveur',
+              })}
             />
             <Stack.Screen
               name={Routes.Conversation}
               component={ConversationScreen}
-              options={({ route }) => ({ title: route.params?.title ?? 'Conversation' })}
+              options={({ route }) => ({
+                title: route.params?.title ?? 'Conversation',
+              })}
             />
           </>
         ) : (
           <>
             <Stack.Screen name={Routes.Login} component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen name={Routes.Register} component={RegisterScreen} options={{ headerShown: false }} />
+            <Stack.Screen
+              name={Routes.Register}
+              component={RegisterScreen}
+              options={{ headerShown: false }}
+            />
           </>
         )}
       </Stack.Navigator>

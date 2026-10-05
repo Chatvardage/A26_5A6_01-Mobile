@@ -2,6 +2,14 @@
 
 Client mobile de clavardage connecté au Serveur-API (Gateway) de Chatvardage.
 
+Au démarrage, une erreur réseau, un timeout, un HTTP 5xx ou un quota temporaire
+pendant la validation `/me` conserve la session dans SecureStore. Un message et
+le bouton « Réessayer » restent visibles ; aucun écran protégé ni credential
+HTTP n'est activé avant la validation. Un 401 déclenche toujours le refresh,
+et un échec de ce refresh nettoie la session. Le client HTTP respecte également
+le signal d'annulation de l'appelant, en conservant son timeout propre ; une
+annulation explicite propage l'erreur d'annulation sans la convertir en timeout.
+
 ## Versions
 
 | Outil | Version |

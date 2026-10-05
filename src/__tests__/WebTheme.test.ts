@@ -1,4 +1,6 @@
 import { BottomTabInset, Fonts } from '@/constants/theme';
+// This platform-only test has no native runtime: avoid Expo's lazy fetch getter during teardown.
+Object.defineProperty(global, 'fetch', { value: jest.fn(), writable: true, configurable: true });
 jest.mock('react-native', () => ({
   Platform: { select: (values: Record<string, unknown>) => values.web ?? values.default },
 }));

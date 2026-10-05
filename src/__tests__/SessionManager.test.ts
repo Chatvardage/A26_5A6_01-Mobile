@@ -4,7 +4,9 @@ import { SessionManager } from '@/session/SessionManager';
 import { ApiError } from '@/services/ApiError';
 import { apiFetch, resetHttpClient } from '@/services/httpClient';
 
-jest.mock('@/session/storage.adapter', () => ({ storage: { save: jest.fn(), load: jest.fn(), clear: jest.fn() } }));
+jest.mock('@/session/storage.adapter', () => ({
+  storage: { save: jest.fn(), load: jest.fn(), clear: jest.fn() },
+}));
 jest.mock('@/services/authService', () => ({
   login: jest.fn(),
   register: jest.fn(),
@@ -12,9 +14,22 @@ jest.mock('@/services/authService', () => ({
   refresh: jest.fn(),
   logout: jest.fn(),
 }));
-const user = { id: 'u', pseudo: 'alice', courriel: 'a@example.com', role: 'utilisateur' };
-const session = { jeton: 'access-fixture', refresh_token: 'refresh-fixture', utilisateur: user };
-const renewed = { ...session, jeton: 'new-access-fixture', refresh_token: 'new-refresh-fixture' };
+const user = {
+  id: 'u',
+  pseudo: 'alice',
+  courriel: 'a@example.com',
+  role: 'utilisateur',
+};
+const session = {
+  jeton: 'access-fixture',
+  refresh_token: 'refresh-fixture',
+  utilisateur: user,
+};
+const renewed = {
+  ...session,
+  jeton: 'new-access-fixture',
+  refresh_token: 'new-refresh-fixture',
+};
 let manager: SessionManager;
 beforeEach(() => {
   jest.resetAllMocks();
@@ -45,7 +60,11 @@ it('starts loading, restores absence to signedOut and notifies subscribers', asy
   const unsubscribe = manager.subscribe(listener);
   expect(manager.state.status).toBe('loading');
   await manager.start();
-  expect(manager.state).toEqual({ status: 'signedOut', user: null, error: null });
+  expect(manager.state).toEqual({
+    status: 'signedOut',
+    user: null,
+    error: null,
+  });
   expect(listener).toHaveBeenCalled();
   unsubscribe();
 });
@@ -60,7 +79,10 @@ it('restores validated profile, persisting the current user', async () => {
   pending.resolve({ ...user, pseudo: 'updated' });
   await restoration;
   expect(manager.state.user?.pseudo).toBe('updated');
-  expect(storage.save).toHaveBeenCalledWith({ ...session, utilisateur: { ...user, pseudo: 'updated' } });
+  expect(storage.save).toHaveBeenCalledWith({
+    ...session,
+    utilisateur: { ...user, pseudo: 'updated' },
+  });
 });
 it('restores expired access by real renewal', async () => {
   jest.mocked(storage.load).mockResolvedValue(session);
@@ -78,7 +100,7 @@ it.each(['refresh', 'validation', 'storage'] as const)('cleans restoration failu
       .mocked(auth.me)
       .mockRejectedValue(
         new ApiError(
-          failure === 'refresh' ? 'unauthorized' : 'network',
+          failure === 'refresh' ? 'unauthorized' : 'invalid_response',
           'failed',
           failure === 'refresh' ? 401 : undefined,
         ),
@@ -89,6 +111,25 @@ it.each(['refresh', 'validation', 'storage'] as const)('cleans restoration failu
   expect(manager.state.user).toBeNull();
   expect(storage.clear).toHaveBeenCalled();
 });
+it.each(['network', 'timeout', 'server', 'rate_limit'] as const)(
+  'preserves storage and retries startup after %s',
+  async (kind) => {
+    jest.mocked(storage.load).mockResolvedValue(session);
+    jest.mocked(auth.me).mockRejectedValueOnce(new ApiError(kind, 'private detail'));
+    await manager.start();
+    expect(manager.state).toMatchObject({ status: 'loading', user: null });
+    expect(manager.state.error).toBeTruthy();
+    expect(manager.state.error).not.toContain('private detail');
+    expect(storage.clear).not.toHaveBeenCalled();
+    expect(storage.save).not.toHaveBeenCalled();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    await apiFetch('/x');
+    expect(jest.mocked(global.fetch).mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
+    await manager.restoreSession();
+    expect(manager.state).toEqual({ status: 'signedIn', user, error: null });
+    expect(auth.me).toHaveBeenCalledTimes(2);
+  },
+);
 it('login and register publish signedIn only after saving', async () => {
   await manager.start();
   const pending = deferred<void>();
@@ -100,7 +141,11 @@ it('login and register publish signedIn only after saving', async () => {
   await login;
   expect(manager.state.status).toBe('signedIn');
   await manager.signOut();
-  await manager.register({ pseudo: 'alice', courriel: user.courriel, mot_de_passe: 'fixture' });
+  await manager.register({
+    pseudo: 'alice',
+    courriel: user.courriel,
+    mot_de_passe: 'fixture',
+  });
   expect(manager.state.status).toBe('signedIn');
 });
 it('bad credentials and register conflict do not trigger logout', async () => {
@@ -200,7 +245,9 @@ it('logout during storage load prevents restoration', async () => {
 });
 it('missing session refresh fails cleanly', async () => {
   await manager.start();
-  await expect(manager.refreshSession()).rejects.toMatchObject({ kind: 'unauthorized' });
+  await expect(manager.refreshSession()).rejects.toMatchObject({
+    kind: 'unauthorized',
+  });
 });
 
 it('restarts a disposed loading manager (StrictMode lifecycle)', async () => {

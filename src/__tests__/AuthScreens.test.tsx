@@ -5,9 +5,14 @@ import { ApiError } from '@/services/ApiError';
 import type { Session } from '@/session/SessionContext';
 
 // Mock officiel avec chargement différé dans la factory Jest.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-jest.mock('@/session/SessionContext', () => ({ useSession: () => mockSession }));
+jest.mock(
+  'react-native-safe-area-context',
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  () => require('react-native-safe-area-context/jest/mock').default,
+);
+jest.mock('@/session/SessionContext', () => ({
+  useSession: () => mockSession,
+}));
 jest.mock('@/navigation/MainTabs', () => ({
   MainTabs: () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -16,6 +21,16 @@ jest.mock('@/navigation/MainTabs', () => ({
   },
 }));
 let mockSession: Session;
+it('keeps protected screens hidden and offers restoration retry when offline', async () => {
+  mockSession.status = 'loading';
+  mockSession.error = 'Impossible de joindre le serveur.';
+  await render(<RootNavigator />);
+  expect(screen.getByText(mockSession.error)).toBeTruthy();
+  expect(screen.queryByLabelText('Restauration de session')).toBeNull();
+  expect(screen.queryByText('Réessayer le nettoyage')).toBeNull();
+  await fireEvent.press(screen.getByText('Réessayer'));
+  expect(mockSession.restoreSession).toHaveBeenCalledTimes(1);
+});
 it('renders Android keyboard behavior on both auth screens', async () => {
   jest.replaceProperty(ReactNative.Platform, 'OS', 'android');
   await render(<RootNavigator />);
