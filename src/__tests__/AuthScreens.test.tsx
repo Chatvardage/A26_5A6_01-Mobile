@@ -21,6 +21,19 @@ jest.mock('@/navigation/MainTabs', () => ({
   },
 }));
 let mockSession: Session;
+it('shows Chatvardage branding and chains registration keyboard fields safely', async () => {
+  const view = await render(<RootNavigator />);
+  expect(screen.getByLabelText('Logo Chatvardage')).toBeTruthy();
+  expect(screen.getByText('Heureux de te revoir !')).toBeTruthy();
+  await fireEvent.press(screen.getByText('Créer un compte'));
+  expect(screen.getByText('Crée ton compte')).toBeTruthy();
+  const callbacks = ['Pseudo', 'Courriel', 'Mot de passe'].map(
+    (label) => screen.getByLabelText(label).props.onSubmitEditing,
+  );
+  for (const callback of callbacks) await act(() => callback());
+  await view.unmount();
+  for (const callback of callbacks) expect(() => callback()).not.toThrow();
+});
 it('keeps protected screens hidden and offers restoration retry when offline', async () => {
   mockSession.status = 'loading';
   mockSession.error = 'Impossible de joindre le serveur.';

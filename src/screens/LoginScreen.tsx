@@ -13,6 +13,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Routes, type RootStackParamList } from '@/navigation/routes';
 
 import { ThemedText } from '@/components/themed-text';
+import { AuthHeader } from '@/components/auth-header';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/services/ApiError';
@@ -59,7 +60,10 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackPara
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">Chatvardage</ThemedText>
+          <AuthHeader title="Heureux de te revoir !" subtitle="Retrouve tes amis et tes conversations." />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            PSEUDO OU COURRIEL
+          </ThemedText>
           <TextInput
             value={identifiant}
             onChangeText={setIdentifiant}
@@ -75,6 +79,9 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackPara
             accessibilityLabel="Pseudo ou courriel"
             style={inputStyle}
           />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            MOT DE PASSE
+          </ThemedText>
           <TextInput
             ref={passwordRef}
             value={motDePasse}
@@ -118,7 +125,16 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackPara
             accessibilityRole="button"
             onPress={() => navigation.navigate(Routes.Register)}
           >
-            <ThemedText>Créer un compte</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', marginTop: 8 }}>
+              Nouveau sur Chatvardage ?
+            </ThemedText>
+            <ThemedText
+              type="smallBold"
+              themeColor="tint"
+              style={{ textAlign: 'center', paddingVertical: 8 }}
+            >
+              Créer un compte
+            </ThemedText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -128,8 +144,31 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackPara
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  form: { flexGrow: 1, justifyContent: 'center', gap: Spacing.three, padding: Spacing.four },
-  input: { borderRadius: 10, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 16 },
-  button: { alignItems: 'center', borderRadius: 10, paddingVertical: Spacing.three },
+  form: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: 40,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
+  input: {
+    borderRadius: 6,
+    minHeight: 52,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  button: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    borderRadius: 6,
+    paddingVertical: Spacing.three,
+    marginTop: 8,
+  },
   buttonText: { color: '#ffffff' },
 });

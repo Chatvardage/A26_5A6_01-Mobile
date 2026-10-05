@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ThemedText } from '@/components/themed-text';
+import { AuthHeader } from '@/components/auth-header';
 import { useTheme } from '@/hooks/use-theme';
 import { Routes, type RootStackParamList } from '@/navigation/routes';
 import { userMessage } from '@/services/ApiError';
@@ -25,6 +26,9 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
   const [confirmation, setConfirmation] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const courrielRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmationRef = useRef<TextInput>(null);
   async function submit() {
     if (submitting) return;
     if (!/^[A-Za-z0-9_-]{3,20}$/.test(pseudo.trim())) {
@@ -58,9 +62,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">Créer un compte</ThemedText>
+          <AuthHeader title="Crée ton compte" subtitle="Tes amis, tes serveurs, tes conversations." />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            PSEUDO
+          </ThemedText>
           <TextInput
             accessibilityLabel="Pseudo"
+            returnKeyType="next"
+            onSubmitEditing={() => courrielRef.current?.focus()}
             placeholder="Pseudo"
             value={pseudo}
             onChangeText={setPseudo}
@@ -70,8 +79,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             editable={!submitting}
             style={input}
           />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            COURRIEL
+          </ThemedText>
           <TextInput
             accessibilityLabel="Courriel"
+            ref={courrielRef}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
             placeholder="Courriel"
             value={courriel}
             onChangeText={setCourriel}
@@ -83,8 +98,14 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             editable={!submitting}
             style={input}
           />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            MOT DE PASSE
+          </ThemedText>
           <TextInput
             accessibilityLabel="Mot de passe"
+            ref={passwordRef}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmationRef.current?.focus()}
             placeholder="Mot de passe"
             value={password}
             onChangeText={setPassword}
@@ -95,8 +116,13 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
             editable={!submitting}
             style={input}
           />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            CONFIRMER LE MOT DE PASSE
+          </ThemedText>
           <TextInput
             accessibilityLabel="Confirmation du mot de passe"
+            ref={confirmationRef}
+            returnKeyType="go"
             placeholder="Confirmation du mot de passe"
             value={confirmation}
             onChangeText={setConfirmation}
@@ -125,8 +151,21 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
               <ThemedText style={{ color: '#fff' }}>S’inscrire</ThemedText>
             )}
           </Pressable>
-          <Pressable accessibilityRole="button" disabled={submitting} onPress={() => navigation.navigate(Routes.Login)}>
-            <ThemedText>Retour à la connexion</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            disabled={submitting}
+            onPress={() => navigation.navigate(Routes.Login)}
+          >
+            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', marginTop: 8 }}>
+              Déjà un compte ?
+            </ThemedText>
+            <ThemedText
+              type="smallBold"
+              themeColor="tint"
+              style={{ textAlign: 'center', paddingVertical: 8 }}
+            >
+              Retour à la connexion
+            </ThemedText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -135,7 +174,30 @@ export function RegisterScreen({ navigation }: NativeStackScreenProps<RootStackP
 }
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  form: { flexGrow: 1, justifyContent: 'center', gap: 16, padding: 24 },
-  input: { borderRadius: 10, padding: 16, fontSize: 16 },
-  button: { borderRadius: 10, padding: 16, alignItems: 'center' },
+  form: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
+  input: {
+    borderRadius: 6,
+    minHeight: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  button: {
+    borderRadius: 6,
+    minHeight: 52,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
 });
