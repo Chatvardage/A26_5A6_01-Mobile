@@ -1,16 +1,18 @@
 import { Image, StyleSheet, View } from 'react-native';
 import { ThemedText } from './themed-text';
+import { useTranslation } from '@/i18n';
 
 export function AuthHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  const { strings } = useTranslation();
   return (
     <View style={styles.header}>
       <View style={styles.brand}>
         <Image
           source={require('../../assets/images/chatvardage-logo.png')}
           style={styles.logo}
-          accessibilityLabel="Logo Chatvardage"
+          accessibilityLabel={strings.accessibility.logo}
         />
-        <ThemedText style={styles.brandName}>Chatvardage</ThemedText>
+        <ThemedText style={styles.brandName}>{strings.brand}</ThemedText>
       </View>
       <ThemedText accessibilityRole="header" style={styles.title}>
         {title}

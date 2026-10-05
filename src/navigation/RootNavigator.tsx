@@ -11,6 +11,7 @@ import { LoginScreen } from '@/screens/LoginScreen';
 import { RegisterScreen } from '@/screens/RegisterScreen';
 import { ThemedText } from '@/components/themed-text';
 import { useSession } from '@/session/SessionContext';
+import { useTranslation } from '@/i18n';
 
 import { MainTabs } from './MainTabs';
 import { Routes, type RootStackParamList } from './routes';
@@ -37,6 +38,7 @@ function useNavigationTheme(): Theme {
 
 export function RootNavigator() {
   const { status, error, signOut, restoreSession } = useSession();
+  const { strings } = useTranslation();
   const theme = useNavigationTheme();
 
   // No authenticated screen is mounted before secure restoration completes.
@@ -59,12 +61,12 @@ export function RootNavigator() {
                 void restoreSession();
               }}
             >
-              <ThemedText>Réessayer</ThemedText>
+              <ThemedText>{strings.navigation.retry}</ThemedText>
             </Pressable>
           </>
         ) : (
           <ActivityIndicator
-            accessibilityLabel="Restauration de session"
+            accessibilityLabel={strings.accessibility.restoreSession}
             size="large"
             color={theme.colors.primary}
           />
@@ -90,7 +92,7 @@ export function RootNavigator() {
                 }}
               >
                 <ThemedText themeColor="tint" type="smallBold">
-                  Réessayer le nettoyage
+                  {strings.navigation.retryCleanup}
                 </ThemedText>
               </Pressable>
             </View>
@@ -104,14 +106,14 @@ export function RootNavigator() {
                 name={Routes.Server}
                 component={ServerScreen}
                 options={({ route }) => ({
-                  title: route.params?.title ?? 'Serveur',
+                  title: route.params?.title ?? strings.navigation.server,
                 })}
               />
               <Stack.Screen
                 name={Routes.Conversation}
                 component={ConversationScreen}
                 options={({ route }) => ({
-                  title: route.params?.title ?? 'Conversation',
+                  title: route.params?.title ?? strings.navigation.conversation,
                 })}
               />
             </>

@@ -10,26 +10,29 @@ import { ThemedView } from '@/components/themed-view';
 import { useConversationHistory } from '@/hooks/useConversationHistory';
 import { parseConversationParams, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
+import { useTranslation } from '@/i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Conversation'>;
 
 export function ConversationScreen({ route }: Props) {
+  const { strings } = useTranslation();
   // Paramètres validés avant tout chargement : un identifiant invalide n'appelle jamais l'API.
   const params = useMemo(() => parseConversationParams(route.params), [route.params]);
-  if (!params) return <ErrorState message="Cette conversation est introuvable." />;
+  if (!params) return <ErrorState message={strings.states.conversationNotFound} />;
   return <ValidConversation conversationId={params.conversationId} />;
 }
 
 function ValidConversation({ conversationId }: { conversationId: string }) {
+  const { strings } = useTranslation();
   const headerHeight = useHeaderHeight();
   const { user } = useSession();
   const { state, retry } = useConversationHistory(conversationId);
   const isRoom = conversationId.startsWith('room:');
 
   let body;
-  if (state.status === 'loading') body = <LoadingState label="Chargement des messages…" />;
+  if (state.status === 'loading') body = <LoadingState label={strings.states.loadingMessages} />;
   else if (state.status === 'error') body = <ErrorState message={state.message} onRetry={retry} />;
-  else if (state.status === 'empty') body = <EmptyState title="Aucun message" hint="Soyez le premier à écrire." />;
+  else if (state.status === 'empty') body = <EmptyState title={strings.states.noMessages} hint={strings.states.firstMessage} />;
   else {
     body = (
       <FlatList

@@ -12,6 +12,7 @@ import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
+import { useTranslation } from '@/i18n';
 
 // Écran d'onglet dont la route « Conversation » vit dans la pile parente : navigate() y remonte seul, typé.
 type Props = CompositeScreenProps<
@@ -21,6 +22,7 @@ type Props = CompositeScreenProps<
 
 export function DirectMessagesScreen({ navigation }: Props) {
   const { user } = useSession();
+  const { strings } = useTranslation();
   const { state, refreshing, retry, refresh } = useDirectMessages();
   useRefreshOnFocus(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
@@ -31,10 +33,10 @@ export function DirectMessagesScreen({ navigation }: Props) {
     [navigation],
   );
 
-  if (state.status === 'loading') return <LoadingState label="Chargement des messages privés…" />;
+  if (state.status === 'loading') return <LoadingState label={strings.states.loadingPrivateMessages} />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} refresh={refreshProps} />;
   if (state.status === 'empty') {
-    return <EmptyState title="Aucun message privé" hint="Écrivez à quelqu'un pour démarrer une conversation." refresh={refreshProps} />;
+    return <EmptyState title={strings.states.noPrivateMessages} hint={strings.states.startConversation} refresh={refreshProps} />;
   }
 
   return (

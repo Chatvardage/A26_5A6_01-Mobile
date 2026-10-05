@@ -5,15 +5,17 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/session/SessionContext';
+import { useTranslation } from '@/i18n';
 
 export function PreferencesScreen() {
   const theme = useTheme();
+  const { strings } = useTranslation();
   const { user, signOut } = useSession();
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]} edges={['left', 'right']}>
       <ThemedText type="smallBold" themeColor="textSecondary">
-        Connecté en tant que
+        {strings.preferences.connectedAs}
       </ThemedText>
       <ThemedText type="subtitle">{user?.pseudo ?? '—'}</ThemedText>
       <Pressable
@@ -22,7 +24,7 @@ export function PreferencesScreen() {
         style={({ pressed }) => [styles.button, { borderColor: theme.danger, opacity: pressed ? 0.6 : 1 }]}
       >
         <ThemedText type="smallBold" style={{ color: theme.danger }}>
-          Se déconnecter
+          {strings.preferences.signOut}
         </ThemedText>
       </Pressable>
     </SafeAreaView>

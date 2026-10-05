@@ -5,22 +5,24 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ChatMessage } from '@/types/conversation';
 import { formatMessageTime } from '@/utils/formatTime';
+import { useTranslation } from '@/i18n';
 
 export function MessageBubble({ message, mine, showAuthor }: { message: ChatMessage; mine: boolean; showAuthor: boolean }) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   const edited = message.updatedAt !== message.createdAt;
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther]}>
       <View style={[styles.bubble, { backgroundColor: mine ? theme.tint : theme.backgroundElement }]}>
         {showAuthor && !mine ? (
           <ThemedText type="smallBold" themeColor="textSecondary">
-            {message.senderName ?? 'Utilisateur inconnu'}
+            {message.senderName ?? strings.conversation.unknownUser}
           </ThemedText>
         ) : null}
         <ThemedText style={mine ? styles.mineText : undefined}>{message.content}</ThemedText>
         <ThemedText type="small" style={[styles.meta, mine ? styles.mineText : { color: theme.textSecondary }]}>
           {formatMessageTime(message.createdAt)}
-          {edited ? ' · modifié' : ''}
+          {edited ? ` · ${strings.conversation.edited}` : ''}
         </ThemedText>
       </View>
     </View>

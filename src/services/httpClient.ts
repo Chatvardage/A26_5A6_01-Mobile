@@ -1,5 +1,6 @@
 import { API_URL } from '@/config/env';
 import { ApiError, kindFromStatus } from './ApiError';
+import { getTranslations } from '@/i18n';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 type TokenProvider = () => string | null;
@@ -108,14 +109,14 @@ async function request<T>(path: string, init: RequestInit, token: string | null)
       return (await response.json()) as T;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw error;
-      throw new ApiError('invalid_response', 'Réponse invalide');
+      throw new ApiError('invalid_response', getTranslations().errors.invalidResponseShort);
     }
   } catch (error) {
     if (init.signal?.aborted) throw error;
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError')
-      throw new ApiError('timeout', 'Request timed out');
-    throw new ApiError('network', 'Network request failed');
+      throw new ApiError('timeout', getTranslations().errors.requestTimedOut);
+    throw new ApiError('network', getTranslations().errors.networkRequestFailed);
   } finally {
     clearTimeout(timer);
     init.signal?.removeEventListener('abort', cancel);
