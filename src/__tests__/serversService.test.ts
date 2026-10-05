@@ -12,6 +12,10 @@ const server = { id: S, nom: 'Chatvardage', nombreMembres: 12, salons: [{ id: C1
 beforeEach(() => apiFetch.mockReset());
 
 describe('fetchServers', () => {
+  it('utilise des compteurs nuls en l’absence de source', async () => {
+    apiFetch.mockResolvedValue([server]);
+    expect((await fetchServers())[0].unreadCount).toBe(0);
+  });
   it('résume chaque serveur et additionne les non-lus de ses salons', async () => {
     apiFetch.mockResolvedValue([server]);
     const [result] = await fetchServers({ getCounts: async () => ({ [`room:${C1}`]: 2, [`room:${C2}`]: 5, [`room:other`]: 9 }) });

@@ -28,6 +28,8 @@ npm test
 npm start             # équivaut à « npx expo start », adapté automatiquement à WSL2
 ```
 
+`npm start` lance la CLI Expo installée dans le projet avec le même exécutable Node, sans appeler `npx`. Cela évite l’erreur `spawn npx ENOENT` sous Windows ou WSL. Si la CLI Expo est absente, exécuter `npm ci` dans ce dépôt.
+
 Scanner le QR code avec Expo Go (Android) ou l'appareil photo (iOS). Le téléphone doit être sur le même réseau que l'ordinateur.
 
 > **Port de Metro** : `.env.development` fixe `RCT_METRO_PORT=8082`, car Adminer (stack Infra) occupe déjà le 8081. Rien à faire, `npm start` et `npx expo start` le prennent en compte.
@@ -94,7 +96,7 @@ Au premier lancement, accepter l'installation de `@expo/ngrok`. `scripts/start.j
 2. ajoute `--tunnel` si aucune option de réseau (`--tunnel`, `--lan`, `--localhost`) n'est passée ;
 3. si `EXPO_PUBLIC_API_URL` n'est définie ni dans l'environnement ni dans `.env`, interroge Windows (`powershell.exe`) pour l'IP Wi-Fi **actuelle** et utilise `http://<cette IP>:3001` ; l'IP peut donc changer d'un jour à l'autre sans rien modifier ;
 4. avertit si la redirection du port 3001 est absente ;
-5. lance `npx expo start` avec les options données (`npm start -- -c` vide le cache).
+5. lance directement la CLI Expo locale avec Node et les options données (`npm start -- -c` vide le cache).
 
 **Vérification** : `http://<IP-Wi-Fi-de-Windows>:3001/api/health` doit répondre dans le navigateur du téléphone (IP visible dans le message `[start] WSL2 : API détectée à …`, ou avec `ipconfig`, ligne « Adresse IPv4 » du Wi-Fi).
 
@@ -212,5 +214,49 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 npx tsc --noEmit
 npx expo lint
 npm test
+npm run test:coverage
+npm run test:dependencies
 npx expo-doctor
 ```
+
+`npm run test:coverage` lance les tests avec couverture, affiche le résumé dans le terminal
+et génère le rapport HTML dans `coverage/lcov-report/index.html`.
+
+La couverture inclut `index.ts` et tous les fichiers TypeScript/TSX de `src`, sauf les tests
+eux-mêmes. La commande exige **100 %** de couverture pour les lignes exécutables,
+les instructions, les branches et les fonctions. Toute régression fait échouer la commande.
+Les fichiers ne contenant que des types ou des réexportations peuvent afficher `0 %` dans
+le tableau Jest : ils ne contiennent aucune ligne exécutable à couvrir. La colonne
+« Uncovered Line #s » doit rester vide pour tous les fichiers : les chemins alternatifs
+sont couverts, pas seulement les lignes du chemin principal.
+
+### Audit des dépendances
+
+```bash
+npm audit
+npm run test:dependencies
+```
+
+`xcode` utilise une surcharge ciblée de `uuid` vers **11.1.1**, qui corrige
+[GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq).
+La surcharge est conservée dans `package.json` et `package-lock.json`.
+`test:dependencies` vérifie la version réellement chargée par `xcode`, la création
+d'identifiants, l'ajout et la suppression de fichiers, et la lecture/écriture d'un
+projet Xcode temporaire. Ce test ne remplace pas une compilation iOS sur macOS.
+Retirer la surcharge lorsque `xcode` adoptera une version corrigée compatible.
+
+Au **4 octobre 2026**, deux avis HIGH restent sans version corrigée publiée :
+
+- [`node-forge` ≤ 1.4.0](https://github.com/advisories/GHSA-86w9-cpqp-85rv) :
+  validation insuffisante des signatures RSA; utilisé par les outils Expo.
+- [`braces` ≤ 3.0.3](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) :
+  déni de service avec des motifs profondément imbriqués; utilisé via `micromatch`
+  dans les chaînes d'outillage Expo/Metro et Jest.
+
+L'audit propage ces avis aux dépendances parentes : le nombre d'alertes n'est pas
+le nombre d'avis distincts. `npm audit` reste donc en échec; les alertes ne sont
+ni masquées ni désactivées. Éviter les motifs et certificats non fiables transmis
+aux outils concernés, sans considérer cette précaution comme un correctif.
+Ne pas utiliser `npm audit fix --force` : la résolution proposée inclut une
+rétrogradation incompatible vers Expo 44. Vérifier les nouveaux correctifs avec
+`npm audit` et `npx expo install --check`, puis refaire les tests avant une mise à jour.

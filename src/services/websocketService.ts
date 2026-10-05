@@ -58,7 +58,10 @@ function requireSocket(): Socket {
     hasBeenReady = true;
     setState('ready');
     for (const handler of readyHandlers) handler();
-    for (const roomId of rooms) startJoin(roomId);
+    if (socket !== current || state !== 'ready') return;
+    for (const roomId of rooms) {
+      void startJoin(roomId, current);
+    }
   });
   current.on('room-message.revoked', (payload: unknown) => {
     if (typeof payload === 'object' && payload !== null && 'roomId' in payload) {
@@ -108,13 +111,11 @@ function emitRoomEvent(roomId: string, event: 'room-message.join' | 'room-messag
   });
 }
 
-function startJoin(roomId: string): Promise<void> {
+function startJoin(roomId: string, owner: Socket): Promise<void> {
   if (joinedRooms.has(roomId)) return Promise.resolve();
   const existing = joiningRooms.get(roomId);
   if (existing) return existing;
 
-  const owner = socket;
-  if (!owner || state !== 'ready') return Promise.reject(new ApiError('timeout', 'Connexion temps réel non prête'));
   const roomEpoch = roomEpochs.get(roomId) ?? 0;
   const pending = emitRoomEvent(roomId, 'room-message.join').then(() => {
     if (socket === owner && state === 'ready' && (roomEpochs.get(roomId) ?? 0) === roomEpoch) joinedRooms.add(roomId);
@@ -176,14 +177,13 @@ export function subscribe(event: string, handler: MessageHandler): () => void {
 
 export async function joinRoom(roomId: string): Promise<void> {
   rooms.add(roomId);
-  requireSocket();
-  if (state === 'ready') return startJoin(roomId);
+  const current = requireSocket();
+  if (state === 'ready') return startJoin(roomId, current);
   return new Promise((resolve, reject) => {
     const waiters = roomWaiters.get(roomId) ?? [];
     const timer = setTimeout(() => {
-      const remaining = (roomWaiters.get(roomId) ?? []).filter((waiter) => waiter.timer !== timer);
-      if (remaining.length) roomWaiters.set(roomId, remaining);
-      else roomWaiters.delete(roomId);
+      waiters.splice(waiters.findIndex((waiter) => waiter.timer === timer), 1);
+      if (!waiters.length) roomWaiters.delete(roomId);
       reject(new ApiError('timeout', 'Connexion temps réel non prête'));
     }, ACK_TIMEOUT_MS);
     waiters.push({ resolve, reject, timer });

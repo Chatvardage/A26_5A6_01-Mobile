@@ -50,6 +50,14 @@ describe('fetchHistory', () => {
     expect(apiFetch.mock.calls[0][0]).toBe(`/api/messages/history/${DM}?limit=25&cursor=id+avec+espaces`);
     expect(apiFetch.mock.calls[1][0]).toBe(`/api/messages/rooms/${ROOM}/history?limit=25&cursor=cursor%2Fid`);
   });
+
+  it('normalise les messages sans auteur résolvable et évite une recherche de pseudo vide', async () => {
+    apiFetch.mockResolvedValueOnce([{ ...msg('sans-auteur', '2026-10-01T10:00:00Z'), authorId: undefined }]);
+    const result = await fetchHistory(`room:${ROOM}`);
+    expect(result[0]).toMatchObject({ id: 'sans-auteur', senderId: '' });
+    expect(result[0].senderName).toBeUndefined();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('sendMessage et editMessage', () => {
@@ -97,6 +105,20 @@ describe('mergeMessages', () => {
     expect(merged[2].updatedAt).toBe('2026-10-01T12:00:00Z');
     expect(merged.filter((message) => message.id === 'same')).toHaveLength(1);
   });
+
+  it('garde le contenu le plus récent même si une ancienne version apporte un pseudo', () => {
+    const recent = { ...baseMessage('one', '2026-10-01T10:00:00Z', '2026-10-02T10:00:00Z'), content: 'corrigé' };
+    const older = { ...baseMessage('one', recent.createdAt), content: 'ancien', senderName: 'Alice' };
+    const merged = mergeMessages([recent], [older]);
+    expect(merged).toEqual([{ ...recent, senderName: 'Alice' }]);
+    expect(mergeMessages(merged, [{ ...older, senderName: 'Autre' }])).toEqual(merged);
+  });
+
+  it('préserve le pseudo connu lorsque REST ne le fournit pas et normalise les dates invalides', () => {
+    const current = { ...baseMessage('one', 'date-invalide'), senderName: 'Alice' };
+    const incoming = { ...current, senderName: undefined, content: 'version reçue' };
+    expect(mergeMessages([current], [incoming])).toEqual([{ ...incoming, senderName: 'Alice' }]);
+  });
 });
 
 describe('belongsTo', () => {
@@ -110,5 +132,7 @@ describe('belongsTo', () => {
     expect(belongsTo(`room:${ROOM}`, ME, { roomId: ROOM })).toBe(true);
     expect(belongsTo(`room:${ROOM}`, ME, { roomId: DM })).toBe(false);
     expect(belongsTo('invalid', ME, {})).toBe(false);
+    expect(belongsTo(`dm:${DM}`, ME, { authorId: DM, recipientId: ME })).toBe(true);
+    expect(belongsTo(`dm:${DM}`, ME, {})).toBe(false);
   });
 });

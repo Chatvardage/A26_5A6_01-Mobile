@@ -67,7 +67,15 @@ if (isWsl()) {
   }
 }
 
-const child = spawn('npx', ['expo', 'start', ...args], { stdio: 'inherit', env });
+let expoCli;
+try {
+  expoCli = require.resolve('expo/bin/cli');
+} catch (err) {
+  console.error(`[start] CLI Expo introuvable : exécuter npm ci dans le dépôt Mobile.\n${err.message}`);
+  process.exit(1);
+}
+
+const child = spawn(process.execPath, [expoCli, 'start', ...args], { stdio: 'inherit', env });
 child.on('error', (err) => {
   console.error(`[start] Impossible de lancer expo : ${err.message}`);
   process.exit(1);

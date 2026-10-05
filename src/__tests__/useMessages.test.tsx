@@ -36,6 +36,15 @@ let mockReadyHandler: (() => void) | null = null;
 const fetchHistory = messageService.fetchHistory as jest.Mock;
 const sendMessage = messageService.sendMessage as jest.Mock;
 const editMessage = messageService.editMessage as jest.Mock;
+const ROOM = '77777777-7777-4777-8777-777777777777';
+const roomConversation = `room:${ROOM}`;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((success, failure) => { resolve = success; reject = failure; });
+  return { promise, resolve, reject };
+}
 
 const message = (id: string, senderId = OTHER, createdAt = '2026-10-01T10:00:00Z') => ({
   id,
@@ -53,6 +62,9 @@ beforeEach(() => {
   sendMessage.mockReset().mockResolvedValue(message('sent', ME));
   editMessage.mockReset().mockResolvedValue({ ...message('first'), content: 'edited', updatedAt: '2026-10-01T11:00:00Z' });
   (lookupPseudos as jest.Mock).mockReset().mockResolvedValue({ [OTHER]: 'Alice' });
+  jest.mocked(realtime.joinRoom).mockReset().mockResolvedValue(undefined);
+  jest.mocked(realtime.leaveRoom).mockReset().mockResolvedValue(undefined);
+  jest.mocked(realtime.hasRealtimeBeenReady).mockReset().mockReturnValue(false);
 });
 
 describe('useMessages', () => {
@@ -217,5 +229,183 @@ describe('useMessages', () => {
     await expect(result.current.edit('first', 'modifié')).rejects.toBe("Vous n'avez pas accès à cette conversation.");
     await act(async () => result.current.edit('first', 'corrigé'));
     expect(result.current.messages.find((item) => item.id === 'first')?.content).toBe('edited');
+  });
+
+  it('résout un auteur inconnu une seule fois et enrichit les événements tamponnés', async () => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    const names = deferred<Record<string, string>>();
+    fetchHistory.mockReturnValueOnce(history.promise);
+    jest.mocked(lookupPseudos).mockReturnValueOnce(names.promise);
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    const raw = { ...message('new', 'unknown'), senderId: undefined, authorId: 'unknown', roomId: ROOM };
+    await act(async () => {
+      mockHandlers.get('room-message.created')?.(raw);
+      mockHandlers.get('room-message.updated')?.({ ...raw, content: 'corrigé', updatedAt: '2026-10-02T10:00:00Z' });
+    });
+    expect(lookupPseudos).toHaveBeenCalledTimes(1);
+    await act(async () => names.resolve({ unknown: 'Bob' }));
+    expect(result.current.messages).toEqual([]);
+    await act(async () => history.resolve([]));
+    expect(result.current.messages[0]).toMatchObject({ id: 'new', content: 'corrigé', senderName: 'Bob' });
+    await act(async () => mockHandlers.get('room-message.created')?.({ ...raw, id: 'second' }));
+    expect(lookupPseudos).toHaveBeenCalledTimes(1);
+    expect(result.current.messages.find((item) => item.id === 'second')?.senderName).toBe('Bob');
+  });
+
+  it('enrichit un message après le chargement et signale un échec de résolution des pseudos', async () => {
+    fetchHistory.mockResolvedValueOnce([]);
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    const raw = { ...message('live', 'unknown'), senderId: undefined, authorId: 'unknown', roomId: ROOM };
+    jest.mocked(lookupPseudos).mockResolvedValueOnce({ unknown: 'Bob' });
+    await act(async () => mockHandlers.get('room-message.created')?.(raw));
+    expect(result.current.messages[0].senderName).toBe('Bob');
+
+    jest.mocked(lookupPseudos).mockRejectedValueOnce(new ApiError('network', 'offline'));
+    await act(async () => mockHandlers.get('room-message.created')?.({ ...raw, id: 'failed', authorId: 'failed' }));
+    expect(result.current.errorMessage).toMatch(/joindre le serveur/);
+    expect(result.current.messages.map((item) => item.id)).toContain('failed');
+    jest.mocked(lookupPseudos).mockResolvedValueOnce({});
+    await act(async () => mockHandlers.get('room-message.created')?.({ ...raw, id: 'anonymous', authorId: 'anonymous' }));
+    expect(result.current.messages.find((item) => item.id === 'anonymous')?.senderName).toBeUndefined();
+  });
+
+  it('ignore les événements malformés et les révocations d’autres salons', async () => {
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    const before = result.current.messages;
+    await act(async () => {
+      const receive = mockHandlers.get('room-message.created')!;
+      receive(null);
+      receive({ roomId: ROOM });
+      receive({ roomId: ROOM, id: 'bad', content: 1 });
+      receive({ roomId: ROOM, id: 'bad', content: 'x' });
+      receive({ roomId: ROOM, id: 'bad', content: 'x', authorId: '' });
+      mockHandlers.get('room-message.revoked')?.(null);
+      mockHandlers.get('room-message.revoked')?.({ roomId: 'another-room' });
+    });
+    expect(result.current.messages).toEqual(before);
+    expect(result.current.errorMessage).toBeNull();
+    expect(lookupPseudos).not.toHaveBeenCalled();
+  });
+
+  it('ignore la première notification prête puis expose un échec de rattrapage sans perdre la liste', async () => {
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await act(async () => mockReadyHandler?.());
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    fetchHistory.mockRejectedValueOnce(new ApiError('network', 'offline'));
+    await act(async () => mockReadyHandler?.());
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+    expect(result.current.errorMessage).toMatch(/joindre le serveur/);
+  });
+
+  it('affiche le refus de rejoindre un salon et désabonne même si leave échoue', async () => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(history.promise);
+    jest.mocked(realtime.joinRoom).mockRejectedValueOnce(new ApiError('forbidden', 'denied'));
+    jest.mocked(realtime.leaveRoom).mockRejectedValueOnce(new ApiError('timeout', 'leave'));
+    const { result, unmount } = await renderHook(() => useMessages(roomConversation, ME));
+    expect(result.current.status).toBe('error');
+    expect(result.current.errorMessage).toBe("Vous n'avez pas accès à cette conversation.");
+    await unmount();
+    await act(async () => history.resolve([]));
+    expect(mockHandlers.size).toBe(0);
+    expect(realtime.leaveRoom).toHaveBeenCalledWith(ROOM);
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignore les réponses REST tardives après changement de conversation (%s)', async (outcome) => {
+    const old = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(old.promise);
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), { initialProps: { id: conversationId } });
+    await rerender({ id: roomConversation });
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+    await act(async () => {
+      if (outcome === 'resolve') old.resolve([message('obsolete')]);
+      else old.reject(new ApiError('network', 'obsolete'));
+    });
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignore les anciens pseudos et demandes de salon après changement (%s)', async (outcome) => {
+    fetchHistory.mockResolvedValueOnce([]);
+    const names = deferred<Record<string, string>>();
+    const joining = deferred<void>();
+    jest.mocked(lookupPseudos).mockReturnValueOnce(names.promise);
+    jest.mocked(realtime.joinRoom).mockReturnValueOnce(joining.promise);
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), { initialProps: { id: roomConversation } });
+    await act(async () => mockHandlers.get('room-message.created')?.({ ...message('obsolete', 'unknown'), authorId: 'unknown', senderId: undefined, roomId: ROOM }));
+    await rerender({ id: conversationId });
+    await act(async () => {
+      if (outcome === 'resolve') {
+        names.resolve({ unknown: 'Bob' });
+        joining.resolve();
+      } else {
+        names.reject(new ApiError('network', 'obsolete'));
+        joining.reject(new ApiError('forbidden', 'obsolete'));
+      }
+    });
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignore une ancienne page terminée dans une autre conversation (%s)', async (outcome) => {
+    const page = Array.from({ length: 50 }, (_, index) => message(`m-${index}`));
+    fetchHistory.mockResolvedValueOnce(page);
+    const older = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(older.promise);
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), { initialProps: { id: conversationId } });
+    let pending!: Promise<void>;
+    await act(async () => { pending = result.current.loadOlder(); });
+    await rerender({ id: roomConversation });
+    await act(async () => {
+      if (outcome === 'resolve') older.resolve([message('obsolete')]);
+      else older.reject(new ApiError('network', 'obsolete'));
+      await pending;
+    });
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+    expect(result.current.olderError).toBeNull();
+    expect(result.current.loadingOlder).toBe(false);
+  });
+
+  it('ignore les retours tardifs d’envoi et de modification', async () => {
+    const sent = deferred<ReturnType<typeof message>>();
+    const edited = deferred<ReturnType<typeof message>>();
+    sendMessage.mockReturnValueOnce(sent.promise);
+    editMessage.mockReturnValueOnce(edited.promise);
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), { initialProps: { id: conversationId } });
+    const pendingSend = result.current.send('old');
+    const pendingEdit = result.current.edit('old', 'old');
+    await rerender({ id: roomConversation });
+    await act(async () => {
+      sent.resolve(message('obsolete-send'));
+      edited.resolve(message('obsolete-edit'));
+      await Promise.all([pendingSend, pendingEdit]);
+    });
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+  });
+
+  it('garde les messages sans pseudo et enrichit les auteurs au fil des pages', async () => {
+    const page = Array.from({ length: 50 }, (_, index) => ({ ...message(`m-${index}`), senderName: undefined }));
+    fetchHistory.mockResolvedValueOnce(page).mockResolvedValueOnce([{ ...message('older'), senderName: undefined }]);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    expect(result.current.messages).toHaveLength(50);
+    await act(async () => result.current.loadOlder());
+    expect(result.current.messages).toHaveLength(51);
+    expect(result.current.hasOlder).toBe(false);
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  it('ignore un ancien déclencheur de pagination lorsque la nouvelle conversation est vide', async () => {
+    fetchHistory.mockResolvedValueOnce(Array.from({ length: 50 }, (_, index) => message(`m-${index}`)));
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), { initialProps: { id: conversationId } });
+    const loadPrevious = result.current.loadOlder;
+    fetchHistory.mockResolvedValueOnce([]);
+    await rerender({ id: roomConversation });
+    expect(result.current.status).toBe('ready');
+    expect(result.current.messages).toEqual([]);
+    await act(async () => loadPrevious());
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    expect(result.current.loadingOlder).toBe(false);
   });
 });

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MessageInput } from '@/components/MessageInput';
+import { ApiError } from '@/services/ApiError';
 
 const frame = { x: 0, y: 0, width: 400, height: 800 };
 const insets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -93,4 +94,43 @@ describe('MessageInput', () => {
     expect(onEdit).toHaveBeenLastCalledWith('message-id', 'nouvelle version');
     expect(onCancelEdit).toHaveBeenCalledTimes(1);
   });
+    it('traduit une erreur typée et conserve le texte non envoyé', async () => {
+      const onSend = jest.fn().mockRejectedValue(new ApiError('rate_limited', 'x'));
+      await renderInput({ conversationId: 'input-typed-error', onSend });
+      await fireEvent.changeText(screen.getByLabelText('Message'), 'brouillon');
+      await userEvent.setup().press(screen.getByRole('button', { name: 'Envoyer' }));
+      expect(screen.getByRole('alert')).toHaveTextContent('Vous envoyez des messages trop rapidement. Réessayez dans un instant.');
+      expect(screen.getByLabelText('Message')).toHaveDisplayValue('brouillon');
+    });
+
+    it.each(['success', 'error'] as const)('termine un envoi après démontage sans perdre le brouillon requis (%s)', async (outcome) => {
+      let resolve!: () => void;
+      let reject!: (error: unknown) => void;
+      const onSend = jest.fn(() => new Promise<void>((success, failure) => { resolve = success; reject = failure; }));
+      const conversationId = `input-unmount-${outcome}`;
+      const view = await renderInput({ conversationId, onSend });
+      await fireEvent.changeText(screen.getByLabelText('Message'), 'texte en attente');
+      await fireEvent.press(screen.getByRole('button', { name: 'Envoyer' }));
+      await view.unmount();
+      await act(async () => {
+        if (outcome === 'success') resolve();
+        else reject(new ApiError('network', 'x'));
+      });
+      await renderInput({ conversationId });
+      expect(screen.getByLabelText('Message')).toHaveDisplayValue(outcome === 'success' ? '' : 'texte en attente');
+    });
+
+    it('ne vide pas un nouveau brouillon saisi dans une autre instance pendant l’envoi', async () => {
+      let resolve!: () => void;
+      const onSend = jest.fn(() => new Promise<void>((done) => { resolve = done; }));
+      const conversationId = 'input-reopened-pending';
+      const view = await renderInput({ conversationId, onSend });
+      await fireEvent.changeText(screen.getByLabelText('Message'), 'ancien texte');
+      await fireEvent.press(screen.getByRole('button', { name: 'Envoyer' }));
+      await view.unmount();
+      await renderInput({ conversationId });
+      await fireEvent.changeText(screen.getByLabelText('Message'), 'nouveau texte');
+      await act(async () => resolve());
+      expect(screen.getByLabelText('Message')).toHaveDisplayValue('nouveau texte');
+    });
 });

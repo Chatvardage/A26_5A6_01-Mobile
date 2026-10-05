@@ -35,4 +35,10 @@ describe('MessageBubble', () => {
     expect(screen.queryByRole('button', { name: 'Contenu' })).toBeNull();
     expect(screen.getByText('Alice')).toBeTruthy();
   });
+
+  it('identifie explicitement un auteur dont le pseudo n’a pas été résolu', async () => {
+    await render(<MessageBubble message={{ ...message, senderName: undefined }} mine={false} showAuthor />);
+    expect(screen.getByText('Utilisateur inconnu')).toBeTruthy();
+    expect(screen.getByText('Contenu')).toBeTruthy();
+  });
 });

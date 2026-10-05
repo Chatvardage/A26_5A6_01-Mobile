@@ -25,10 +25,10 @@ import { parseConversationId } from '@/types/conversationId';
 const PAGE_SIZE = 50;
 type Status = 'loading' | 'error' | 'ready';
 
-function normalizeEvent(raw: RawMessage, senderName?: string): ChatMessage {
+function normalizeEvent(raw: RawMessage, senderId: string, senderName?: string): ChatMessage {
   return {
     id: raw.id,
-    senderId: raw.senderId ?? raw.authorId ?? '',
+    senderId,
     senderName,
     content: raw.content,
     createdAt: raw.createdAt,
@@ -130,7 +130,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       if (typeof message.id !== 'string' || typeof message.content !== 'string') return;
       const senderId = message.senderId ?? message.authorId;
       if (!senderId) return;
-      const incoming = normalizeEvent(message, pseudoCache.current.get(senderId));
+      const incoming = normalizeEvent(message, senderId, pseudoCache.current.get(senderId));
       if (firstLoadDone.current) updateMessages([incoming]);
       else eventBuffer.current = mergeMessages(eventBuffer.current, [incoming]);
 
