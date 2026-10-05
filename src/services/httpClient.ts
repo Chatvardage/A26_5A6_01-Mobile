@@ -1,69 +1,123 @@
 import { API_URL } from '@/config/env';
-
 import { ApiError, kindFromStatus } from './ApiError';
 
 const REQUEST_TIMEOUT_MS = 10_000;
-
 type TokenProvider = () => string | null;
-
-// Configuration volontairement globale : la couche session la branche une seule fois au démarrage
-// (`configureHttpClient`), pour que les services n'aient ni à connaître le jeton ni à le recevoir.
-// Les tests qui l'appellent réinitialisent l'état avec `resetHttpClient()` (afterEach).
 let tokenProvider: TokenProvider = () => null;
-let onUnauthorized: (() => void) | null = null;
+let onUnauthorized: (() => void | Promise<void>) | null = null;
+let refreshSession: (() => Promise<void>) | null = null;
+let renewal: Promise<void> | null = null;
+let generation = 0;
 
-/** Branché par la couche session : le client HTTP ne sait pas où le jeton est stocké. */
-export function configureHttpClient(options: { getToken: TokenProvider; onUnauthorized?: () => void }) {
+export function configureHttpClient(options: {
+  getToken: TokenProvider;
+  onUnauthorized?: () => void | Promise<void>;
+  refreshSession?: () => Promise<void>;
+}) {
+  generation++;
   tokenProvider = options.getToken;
   onUnauthorized = options.onUnauthorized ?? null;
+  refreshSession = options.refreshSession ?? null;
+  renewal = null;
 }
-
-/** Remet la configuration par défaut (aucun jeton). Réservé aux tests, pour les isoler entre eux. */
 export function resetHttpClient() {
-  tokenProvider = () => null;
-  onUnauthorized = null;
+  configureHttpClient({ getToken: () => null });
+}
+export function invalidateHttpRequests() {
+  generation++;
+  renewal = null;
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = tokenProvider();
-  let response: Response;
+type RequestPolicy = { authenticated?: boolean; retryUnauthorized?: boolean };
+
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  policy: RequestPolicy = {},
+): Promise<T> {
+  const epoch = generation;
+  const authenticated = policy.authenticated !== false;
+  const token = authenticated ? tokenProvider() : null;
+  try {
+    return await request<T>(path, init, token);
+  } catch (error) {
+    if (
+      !(error instanceof ApiError) ||
+      error.status !== 401 ||
+      !token ||
+      !authenticated ||
+      policy.retryUnauthorized === false ||
+      epoch !== generation
+    )
+      throw error;
+    if (refreshSession) {
+      // Late responses for the old token reuse an already renewed session.
+      if (tokenProvider() === token) {
+        if (!renewal) {
+          const pending = refreshSession();
+          renewal = pending;
+          void pending
+            .finally(() => {
+              if (renewal === pending) renewal = null;
+            })
+            .catch(() => undefined);
+        }
+        await renewal;
+      }
+      const nextToken = tokenProvider();
+      if (!nextToken || epoch !== generation) throw error;
+      try {
+        return await request<T>(path, init, nextToken);
+      } catch (retryError) {
+        if (
+          retryError instanceof ApiError &&
+          retryError.status === 401 &&
+          epoch === generation &&
+          tokenProvider() === nextToken
+        )
+          await onUnauthorized?.();
+        throw retryError;
+      }
+    }
+    await onUnauthorized?.();
+    throw error;
+  }
+}
+
+async function request<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const controller = new AbortController();
+  const cancel = () => controller.abort();
+  init.signal?.addEventListener('abort', cancel);
+  if (init.signal?.aborted) cancel();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(`${API_URL}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
+    if (!response.ok)
+      throw new ApiError(kindFromStatus(response.status), `HTTP ${response.status}`, response.status);
+    if (response.status === 204) return undefined as T;
+    try {
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') throw error;
+      throw new ApiError('invalid_response', 'Réponse invalide');
+    }
   } catch (error) {
-    // Le délai dépassé (abort du AbortController) est distingué d'une panne réseau.
-    if (error instanceof Error && error.name === 'AbortError') throw new ApiError('timeout', 'Request timed out');
+    if (init.signal?.aborted) throw error;
+    if (error instanceof ApiError) throw error;
+    if (error instanceof Error && error.name === 'AbortError')
+      throw new ApiError('timeout', 'Request timed out');
     throw new ApiError('network', 'Network request failed');
   } finally {
     clearTimeout(timer);
+    init.signal?.removeEventListener('abort', cancel);
   }
-
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
-    try {
-      const body = await response.json();
-      if (typeof body?.erreur === 'string') detail = body.erreur;
-      else if (typeof body?.message === 'string') detail = body.message;
-    } catch {
-      // corps non JSON : on garde le statut
-    }
-    // Sans jeton, un 401 est une réponse normale (ex. mauvais mot de passe à la connexion) :
-    // seule l'expiration d'une session existante déclenche la déconnexion.
-    if (response.status === 401 && token) onUnauthorized?.();
-    throw new ApiError(kindFromStatus(response.status), detail, response.status);
-  }
-
-  // Les réponses 204 n'ont pas de corps : l'appelant doit typer l'appel `apiFetch<void>`.
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
 }

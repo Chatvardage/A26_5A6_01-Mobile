@@ -1,4 +1,16 @@
-export type ApiErrorKind = 'network' | 'timeout' | 'unauthorized' | 'forbidden' | 'not_found' | 'server' | 'unknown';
+export type ApiErrorKind =
+  | 'network'
+  | 'timeout'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'server'
+  | 'unknown'
+  | 'invalid_response'
+  | 'storage'
+  | 'conflict'
+  | 'validation'
+  | 'rate_limit';
 
 export class ApiError extends Error {
   constructor(
@@ -12,6 +24,9 @@ export class ApiError extends Error {
 }
 
 export function kindFromStatus(status: number): ApiErrorKind {
+  if (status === 400) return 'validation';
+  if (status === 409) return 'conflict';
+  if (status === 429) return 'rate_limit';
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
@@ -23,6 +38,16 @@ export function kindFromStatus(status: number): ApiErrorKind {
 export function userMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.kind) {
+      case 'validation':
+        return 'Vérifiez les champs du formulaire.';
+      case 'conflict':
+        return 'Ce pseudo ou ce courriel est déjà utilisé.';
+      case 'rate_limit':
+        return 'Trop de tentatives. Réessayez dans quelques instants.';
+      case 'storage':
+        return 'Le stockage sécurisé est indisponible. Réessayez.';
+      case 'invalid_response':
+        return 'Réponse du serveur invalide. Réessayez.';
       case 'network':
         return 'Impossible de joindre le serveur. Vérifiez votre connexion.';
       case 'timeout':

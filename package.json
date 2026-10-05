@@ -15,6 +15,7 @@
     "expo-glass-effect": "~57.0.4",
     "expo-image": "~57.0.5",
     "expo-linking": "~57.0.11",
+    "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
@@ -38,6 +39,7 @@
     "eslint-config-expo": "~57.0.2",
     "jest": "~29.7.0",
     "jest-expo": "~57.0.5",
+    "test-renderer": "1.2.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -48,12 +50,25 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
+    "test:auth-e2e": "node scripts/auth-e2e.cjs",
     "typecheck": "tsc --noEmit",
     "start:tunnel": "expo start --tunnel"
   },
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "collectCoverageFrom": [
+      "src/**/*.{ts,tsx}",
+      "index.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 100,
+        "branches": 100,
+        "functions": 100,
+        "lines": 100
+      }
+    },
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/src/$1"
     }

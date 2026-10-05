@@ -1,8 +1,19 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Routes, type RootStackParamList } from '@/navigation/routes';
 
 import { ThemedText } from '@/components/themed-text';
+import { AuthHeader } from '@/components/auth-header';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/services/ApiError';
@@ -18,7 +29,7 @@ function loginErrorMessage(error: unknown): string {
   return 'Connexion impossible. Réessayez.';
 }
 
-export function LoginScreen() {
+export function LoginScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'Login'>) {
   const theme = useTheme();
   const { signIn } = useSession();
   const [identifiant, setIdentifiant] = useState('');
@@ -49,13 +60,17 @@ export function LoginScreen() {
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">Chatvardage</ThemedText>
+          <AuthHeader title="Heureux de te revoir !" subtitle="Retrouve tes amis et tes conversations." />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            PSEUDO OU COURRIEL
+          </ThemedText>
           <TextInput
             value={identifiant}
             onChangeText={setIdentifiant}
             placeholder="Pseudo ou courriel"
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
+            maxLength={254}
             autoCorrect={false}
             autoComplete="username"
             textContentType="username"
@@ -64,6 +79,9 @@ export function LoginScreen() {
             accessibilityLabel="Pseudo ou courriel"
             style={inputStyle}
           />
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            MOT DE PASSE
+          </ThemedText>
           <TextInput
             ref={passwordRef}
             value={motDePasse}
@@ -71,6 +89,7 @@ export function LoginScreen() {
             placeholder="Mot de passe"
             placeholderTextColor={theme.textSecondary}
             secureTextEntry
+            maxLength={128}
             autoCapitalize="none"
             autoComplete="current-password"
             textContentType="password"
@@ -88,9 +107,34 @@ export function LoginScreen() {
             onPress={submit}
             disabled={!canSubmit}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.button, { backgroundColor: theme.tint, opacity: !canSubmit ? 0.5 : pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: theme.tint, opacity: !canSubmit ? 0.5 : pressed ? 0.7 : 1 },
+            ]}
           >
-            {submitting ? <ActivityIndicator color="#ffffff" /> : <ThemedText type="smallBold" style={styles.buttonText}>Se connecter</ThemedText>}
+            {submitting ? (
+              <ActivityIndicator accessibilityLabel="Connexion en cours" color="#ffffff" />
+            ) : (
+              <ThemedText type="smallBold" style={styles.buttonText}>
+                Se connecter
+              </ThemedText>
+            )}
+          </Pressable>
+          <Pressable
+            disabled={submitting}
+            accessibilityRole="button"
+            onPress={() => navigation.navigate(Routes.Register)}
+          >
+            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', marginTop: 8 }}>
+              Nouveau sur Chatvardage ?
+            </ThemedText>
+            <ThemedText
+              type="smallBold"
+              themeColor="tint"
+              style={{ textAlign: 'center', paddingVertical: 8 }}
+            >
+              Créer un compte
+            </ThemedText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -100,8 +144,31 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  form: { flexGrow: 1, justifyContent: 'center', gap: Spacing.three, padding: Spacing.four },
-  input: { borderRadius: 10, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 16 },
-  button: { alignItems: 'center', borderRadius: 10, paddingVertical: Spacing.three },
+  form: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: 40,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
+  input: {
+    borderRadius: 6,
+    minHeight: 52,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  button: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    borderRadius: 6,
+    paddingVertical: Spacing.three,
+    marginTop: 8,
+  },
   buttonText: { color: '#ffffff' },
 });
