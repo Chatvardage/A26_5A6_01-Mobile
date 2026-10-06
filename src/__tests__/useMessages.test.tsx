@@ -196,7 +196,14 @@ describe('useMessages', () => {
       mockHandlers.get('room-message.revoked')?.({ roomId });
       await Promise.resolve();
     });
-    await waitFor(() => expect(result.current.errorMessage).toBe("Vous n'avez pas accès à cette conversation."));
+    await waitFor(() => expect(result.current.accessError).toBe("Vous n'avez pas accès à cette conversation."));
+    expect(result.current.status).toBe('ready');
+    expect(result.current.messages.map((item) => item.id)).toContain('room-message');
+
+    // Une reconnexion retente l'abonnement au salon révoqué.
+    await act(async () => mockReadyHandler?.());
+    expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.accessError).toBeNull());
   });
 
   it('rattrape les messages après reconnexion sans vider les pages chargées et quitte les salons', async () => {
@@ -305,12 +312,55 @@ describe('useMessages', () => {
     jest.mocked(realtime.joinRoom).mockRejectedValueOnce(new ApiError('forbidden', 'denied'));
     jest.mocked(realtime.leaveRoom).mockRejectedValueOnce(new ApiError('timeout', 'leave'));
     const { result, unmount } = await renderHook(() => useMessages(roomConversation, ME));
-    expect(result.current.status).toBe('error');
-    expect(result.current.errorMessage).toBe("Vous n'avez pas accès à cette conversation.");
+    expect(result.current.accessError).toBe("Vous n'avez pas accès à cette conversation.");
+    expect(result.current.status).toBe('loading');
     await unmount();
     await act(async () => history.resolve([]));
     expect(mockHandlers.size).toBe(0);
     expect(realtime.leaveRoom).toHaveBeenCalledWith(ROOM);
+  });
+
+  it('garde le refus du salon visible même si l’historique REST arrive ensuite', async () => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(history.promise);
+    jest.mocked(realtime.joinRoom).mockRejectedValueOnce(new ApiError('forbidden', 'denied'));
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    await waitFor(() => expect(result.current.accessError).not.toBeNull());
+    await act(async () => history.resolve([message('first')]));
+    expect(result.current.status).toBe('ready');
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.accessError).toBe("Vous n'avez pas accès à cette conversation.");
+  });
+
+  it('retente l’abonnement expiré à la première connexion prête sans bloquer l’écran', async () => {
+    jest.mocked(realtime.joinRoom).mockRejectedValueOnce(new ApiError('timeout', 'Connexion temps réel non prête'));
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.accessError).toMatch(/trop de temps/);
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+
+    await act(async () => mockReadyHandler?.());
+    expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
+    // Première connexion prête : l'historique vient d'être chargé, pas de rattrapage REST.
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.accessError).toBeNull());
+    await act(async () => mockReadyHandler?.());
+    expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignore un échec d’abonnement retenté après changement de conversation', async () => {
+    jest.mocked(realtime.joinRoom).mockRejectedValueOnce(new ApiError('timeout', 'expiré'));
+    const retried = deferred<void>();
+    jest.mocked(realtime.joinRoom).mockReturnValueOnce(retried.promise);
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), {
+      initialProps: { id: roomConversation },
+    });
+    await waitFor(() => expect(result.current.accessError).not.toBeNull());
+    const oldReady = mockReadyHandler;
+    await act(async () => oldReady?.());
+    await rerender({ id: conversationId });
+    await act(async () => retried.reject(new ApiError('forbidden', 'obsolète')));
+    expect(result.current.accessError).toBeNull();
   });
 
   it.each(['resolve', 'reject'] as const)('ignore les réponses REST tardives après changement de conversation (%s)', async (outcome) => {

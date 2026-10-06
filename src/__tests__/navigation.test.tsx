@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { NewDirectMessageButton } from '@/components/NewDirectMessageButton';
 import { MainTabs } from '@/navigation/MainTabs';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { Colors } from '@/constants/theme';
@@ -91,10 +92,11 @@ describe('RootNavigator', () => {
     (useSession as jest.Mock).mockReturnValue({ status: 'signedIn' });
     jest.mocked(useColorScheme).mockReturnValue('dark');
     await render(<RootNavigator />);
-    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'Server', 'Conversation']);
+    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'Server', 'Conversation', 'NewDirectMessage']);
     expect(mockTheme.colors.background).toBe(Colors.dark.background);
     expect(mockTheme.colors.primary).toBe(Colors.dark.tint);
-    for (const route of mockStackScreens.slice(1)) {
+    expect(mockStackScreens[3].options).toEqual({ title: 'Nouveau message', presentation: 'modal' });
+    for (const route of mockStackScreens.slice(1, 3)) {
       if (typeof route.options !== 'function') throw new Error('Options dynamiques attendues');
       expect(route.options({ route: {} }).title).toBe(route.name === 'Server' ? 'Serveur' : 'Conversation');
       expect(route.options({ route: { params: { title: 'Titre transmis' } } }).title).toBe('Titre transmis');
@@ -108,7 +110,7 @@ it('configure les quatre onglets, leurs titres et leurs icônes', async () => {
   expect(mockTabProps.backBehavior).toBe('firstRoute');
   expect(mockTabScreens.map((route) => route.name)).toEqual(['DirectMessages', 'Servers', 'Search', 'Preferences']);
   expect(mockTabScreens.map((route) => route.options)).toEqual([
-    { title: 'Messages privés' }, { title: 'Serveurs' }, { title: 'Recherche' }, { title: 'Préférences' },
+    { title: 'Messages privés', headerRight: NewDirectMessageButton }, { title: 'Serveurs' }, { title: 'Recherche' }, { title: 'Préférences' },
   ]);
   const icons = [
     ['DirectMessages', 'bubble.left'], ['Servers', 'server.rack'], ['Search', 'magnifyingglass'], ['Preferences', 'gearshape'],

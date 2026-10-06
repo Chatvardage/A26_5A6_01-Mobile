@@ -34,7 +34,7 @@ export function DirectMessagesScreen({ navigation }: Props) {
   if (state.status === 'loading') return <LoadingState label="Chargement des messages privés…" />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} refresh={refreshProps} />;
   if (state.status === 'empty') {
-    return <EmptyState title="Aucun message privé" hint="Écrivez à quelqu'un pour démarrer une conversation." refresh={refreshProps} />;
+    return <EmptyState title="Aucun message privé" hint="Touchez « Nouveau » pour écrire à quelqu'un." refresh={refreshProps} />;
   }
 
   return (

@@ -28,7 +28,7 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
   const headerHeight = useHeaderHeight();
   const { user } = useSession();
   const theme = useTheme();
-  const { messages, status, errorMessage, loadingOlder, olderError, connection, retry, loadOlder, send, edit } =
+  const { messages, status, errorMessage, accessError, loadingOlder, olderError, connection, retry, loadOlder, send, edit } =
     useMessages(conversationId, user?.id ?? '');
   const isRoom = conversationId.startsWith('room:');
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
@@ -92,6 +92,11 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
               {connection === 'connecting' ? 'Connexion au service de messages…' : 'Hors connexion — reconnexion en cours'}
             </ThemedText>
           </View>
+        ) : null}
+        {accessError && status !== 'error' && accessError !== errorMessage ? (
+          <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
+            {accessError}
+          </ThemedText>
         ) : null}
         {errorMessage && status === 'ready' ? (
           <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>

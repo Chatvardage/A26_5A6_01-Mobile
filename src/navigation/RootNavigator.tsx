@@ -5,6 +5,7 @@ import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { ConversationScreen } from '@/screens/ConversationScreen';
+import { NewDirectMessageScreen } from '@/screens/NewDirectMessageScreen';
 import { ServerScreen } from '@/screens/ServerScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { useSession } from '@/session/SessionContext';
@@ -55,6 +56,11 @@ export function RootNavigator() {
               name={Routes.Conversation}
               component={ConversationScreen}
               options={({ route }) => ({ title: route.params?.title ?? 'Conversation' })}
+            />
+            <Stack.Screen
+              name={Routes.NewDirectMessage}
+              component={NewDirectMessageScreen}
+              options={{ title: 'Nouveau message', presentation: 'modal' }}
             />
           </>
         ) : (

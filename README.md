@@ -64,7 +64,26 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 npm start
 ```
 
-Aucune configuration. Metro et le backend sont joignables par l'adresse locale de l'ordinateur ; l'app la déduit et utilise le port 3000.
+Si le backend est joignable par l'adresse locale de l'ordinateur, l'app la déduit et utilise le port 3000.
+
+**Avec la stack Docker Infra**, le Gateway est volontairement publié sur `127.0.0.1:3000` : le PC peut le joindre, mais pas le téléphone. Sous Windows, créer une redirection dédiée, sans modifier les ports des microservices. Dans **PowerShell administrateur**, remplacer l'adresse d'exemple par l'IPv4 Wi-Fi du PC :
+
+```powershell
+$ip = "192.168.0.10"
+netsh interface portproxy add v4tov4 listenport=3006 listenaddress=$ip connectport=3000 connectaddress=127.0.0.1
+New-NetFirewallRule -DisplayName "Chatvardage API mobile 3006" -Direction Inbound -Protocol TCP -LocalAddress $ip -LocalPort 3006 -RemoteAddress LocalSubnet -Action Allow -Profile Any
+```
+
+Le port 3006 évite le port 3001, déjà utilisé localement par Auth-Service. Dans le fichier `.env` personnel de ce dépôt, définir `EXPO_PUBLIC_API_URL=http://192.168.0.10:3006` avec la même IP, puis relancer `npm start -- -c`. Cette URL explicite fonctionne aussi si Expo tourne dans WSL ou utilise un tunnel.
+
+Tester `http://192.168.0.10:3006/api/health` dans le navigateur du téléphone : la réponse doit contenir `"status":"ok"`. Le téléphone doit être sur le même Wi-Fi ; un réseau invité ou scolaire peut isoler les appareils. Si l'IP du PC change, mettre à jour la redirection, la règle de pare-feu et `.env`.
+
+Pour retirer cet accès (PowerShell administrateur, avec l'IP utilisée lors de sa création) :
+
+```powershell
+netsh interface portproxy delete v4tov4 listenport=3006 listenaddress=192.168.0.10
+Remove-NetFirewallRule -DisplayName "Chatvardage API mobile 3006"
+```
 
 ### Cas B : WSL2 avec tunnel (configuration standard)
 
@@ -179,10 +198,12 @@ RootStack (native-stack)
                                        └ Preferences
                    Server        { serverId: string, title?: string }        salons d'un serveur
                    Conversation  { conversationId: string, title?: string }  messages d'un DM ou d'un salon
+                   NewDirectMessage                                          choix du destinataire d'un nouveau DM (modale)
 ```
 
-Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Conversation`.
+Parcours : `DirectMessages` → `Conversation` ; `DirectMessages` → « Nouveau » → `NewDirectMessage` → `Conversation` ; `Servers` → `Server` → `Conversation`.
 
+- **Nouveau message privé** : le bouton « Nouveau » de l'en-tête des Messages privés ouvre, comme sur le desktop, des suggestions (interlocuteurs connus et 20 premiers membres de chaque serveur, via `/api/messages/conversations`, `/api/servers` et `/api/servers/:id/members`) puis, dès qu'on tape, une recherche par début de pseudo (`GET /api/users/search`, 20 caractères et 20 résultats au plus, 250 ms après la dernière frappe). Choisir quelqu'un ouvre `Conversation` sur `dm:<id>` ; la conversation n'apparaît dans la liste qu'après le premier message envoyé.
 - `conversationId` vaut `dm:<uuid de l'interlocuteur>` ou `room:<uuid du salon>` ; `serverId` est un UUID. Les deux sont validés avant tout appel API (`parseConversationParams`, `parseServerParams`) : un identifiant invalide affiche une erreur, sans requête.
 - Chaque liste a ses propres états (chargement, vide, erreur) : la panne d'une source n'empêche pas l'autre de s'afficher.
 - Un serveur n'affiche que les salons que l'API autorise pour l'utilisateur ; la pastille d'un serveur est la somme des non-lus de ses salons.
@@ -203,7 +224,7 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 - **Session provisoire** : `SessionContext` garde le jeton en mémoire seulement (pas de SecureStore, de restauration au redémarrage ni de renouvellement). Le contrat (`status`, `user`, `signIn`, `signOut`) est celui que la session complète doit respecter.
 - **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
-- **Rejoindre / quitter un serveur** et **ouvrir un nouveau message privé** : non implantés ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
+- **Rejoindre / quitter un serveur** : non implanté ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
 - **Écran Conversation** : historique REST, envoi/modification, réception temps réel Socket.IO et pagination sont branchés pour les DM et les salons. Les scénarios de coupure réseau, d'arrière-plan et de stabilité du défilement restent à confirmer sur appareil avec le backend.
 - Notifications : non implantées.
 - Comportement clavier / retour Android : vérifié par bundle Android et tests unitaires; à confirmer sur émulateur ou appareil.

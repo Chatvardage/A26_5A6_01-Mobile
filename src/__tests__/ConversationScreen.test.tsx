@@ -15,6 +15,7 @@ const baseState = {
   messages: [],
   status: 'ready',
   errorMessage: null,
+  accessError: null,
   hasOlder: false,
   loadingOlder: false,
   olderError: null,
@@ -87,6 +88,27 @@ describe('ConversationScreen', () => {
     await renderScreen('dm:not-a-uuid');
     expect(screen.getByText('Cette conversation est introuvable.')).toBeTruthy();
     expect(useMessages).not.toHaveBeenCalled();
+  });
+
+  it('affiche l’erreur d’abonnement au salon avec la liste, pendant le chargement et sans doublon', async () => {
+    const own = { id: 'mine', senderId: 'user-id', content: 'Mon message', createdAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z' };
+    (useMessages as jest.Mock).mockReturnValueOnce({ ...baseState, messages: [own], accessError: 'Accès refusé' });
+    const view = await renderScreen(`room:${DM}`);
+    expect(screen.getByRole('alert')).toHaveTextContent('Accès refusé');
+    expect(screen.getByText('Mon message')).toBeTruthy();
+
+    (useMessages as jest.Mock).mockReturnValueOnce({ ...baseState, status: 'loading', accessError: 'Accès refusé' });
+    await view.rerender(withSafeArea(screenElement(`room:${DM}`)));
+    expect(screen.getByRole('alert')).toHaveTextContent('Accès refusé');
+
+    (useMessages as jest.Mock).mockReturnValueOnce({ ...baseState, messages: [own], errorMessage: 'Accès refusé', accessError: 'Accès refusé' });
+    await view.rerender(withSafeArea(screenElement(`room:${DM}`)));
+    expect(screen.getAllByText('Accès refusé')).toHaveLength(1);
+
+    (useMessages as jest.Mock).mockReturnValueOnce({ ...baseState, status: 'error', errorMessage: 'Serveur indisponible', accessError: 'Accès refusé' });
+    await view.rerender(withSafeArea(screenElement(`room:${DM}`)));
+    expect(screen.getByText('Serveur indisponible')).toBeTruthy();
+    expect(screen.queryByText('Accès refusé')).toBeNull();
   });
 
   it('permet de réessayer la pagination et de modifier uniquement son propre message', async () => {

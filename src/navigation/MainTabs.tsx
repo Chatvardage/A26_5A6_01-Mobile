@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SymbolView } from 'expo-symbols';
 
+import { NewDirectMessageButton } from '@/components/NewDirectMessageButton';
 import { DirectMessagesScreen } from '@/screens/DirectMessagesScreen';
 import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import { SearchScreen } from '@/screens/SearchScreen';
@@ -29,7 +30,11 @@ export function MainTabs() {
         ),
       })}
     >
-      <Tab.Screen name={Routes.DirectMessages} component={DirectMessagesScreen} options={{ title: 'Messages privés' }} />
+      <Tab.Screen
+        name={Routes.DirectMessages}
+        component={DirectMessagesScreen}
+        options={{ title: 'Messages privés', headerRight: NewDirectMessageButton }}
+      />
       <Tab.Screen name={Routes.Servers} component={ServersScreen} options={{ title: 'Serveurs' }} />
       <Tab.Screen name={Routes.Search} component={SearchScreen} options={{ title: 'Recherche' }} />
       <Tab.Screen name={Routes.Preferences} component={PreferencesScreen} options={{ title: 'Préférences' }} />

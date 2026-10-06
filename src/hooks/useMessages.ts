@@ -40,6 +40,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Erreur d'abonnement temps réel au salon, indépendante du chargement REST.
+  const [accessError, setAccessError] = useState<string | null>(null);
   const [hasOlder, setHasOlder] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [olderError, setOlderError] = useState<string | null>(null);
@@ -103,6 +105,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     setMessages([]);
     updateStatus('loading');
     setErrorMessage(null);
+    setAccessError(null);
     setHasOlder(false);
     setLoadingOlder(false);
     setOlderError(null);
@@ -157,13 +160,32 @@ export function useMessages(conversationId: string, currentUserId: string) {
         'roomId' in raw &&
         (raw as { roomId?: unknown }).roomId === ref?.targetId
       ) {
-        setErrorMessage(userMessage(new ApiError('forbidden', 'Accès au salon révoqué')));
+        joinFailed = true;
+        setAccessError(userMessage(new ApiError('forbidden', 'Accès au salon révoqué')));
       }
+    };
+
+    let joinFailed = false;
+    const join = () => {
+      if (ref?.kind !== 'room') return;
+      joinFailed = false;
+      joinRoom(ref.targetId).then(
+        () => {
+          if (currentGeneration === generation.current) setAccessError(null);
+        },
+        (error: unknown) => {
+          if (currentGeneration !== generation.current) return;
+          joinFailed = true;
+          setAccessError(userMessage(error));
+        },
+      );
     };
 
     const unsubscribeEvents = events.map(([event, handler]) => subscribe(event, handler));
     const unsubscribeState = onConnectionState(setConnection);
     const unsubscribeReady = onReady(() => {
+      // Un abonnement expiré avant la première connexion, refusé ou révoqué est retenté à chaque connexion prête.
+      if (joinFailed) join();
       if (firstReadyIsInitial) {
         firstReadyIsInitial = false;
         return;
@@ -171,14 +193,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       void loadRecent();
     });
     setConnection(getRealtimeState());
-    if (ref?.kind === 'room') {
-      void joinRoom(ref.targetId).catch((error: unknown) => {
-        if (currentGeneration === generation.current) {
-          setErrorMessage(userMessage(error));
-          updateStatus('error');
-        }
-      });
-    }
+    join();
     void loadRecent();
 
     return () => {
@@ -248,5 +263,5 @@ export function useMessages(conversationId: string, currentUserId: string) {
     [conversationId, updateMessages],
   );
 
-  return { messages, status, errorMessage, hasOlder, loadingOlder, olderError, connection, retry, loadOlder, send, edit };
+  return { messages, status, errorMessage, accessError, hasOlder, loadingOlder, olderError, connection, retry, loadOlder, send, edit };
 }
