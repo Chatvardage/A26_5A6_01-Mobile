@@ -36,6 +36,18 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Alice')).toBeTruthy();
   });
 
+  it('limite la largeur sur l’enfant direct de la ligne pour ne pas couper les mots', async () => {
+    const sentence = 'Bonjour, voici une phrase complète qui doit se couper entre les mots.';
+    const { rerender } = await render(
+      <MessageBubble message={{ ...message, content: sentence }} mine showAuthor={false} onLongPress={jest.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: sentence })).toHaveStyle({ maxWidth: '80%', flexShrink: 1 });
+    expect(screen.getByTestId('message-bubble')).not.toHaveStyle({ maxWidth: '80%' });
+
+    await rerender(<MessageBubble message={{ ...message, content: sentence }} mine={false} showAuthor={false} />);
+    expect(screen.getByTestId('message-bubble')).toHaveStyle({ maxWidth: '80%', flexShrink: 1 });
+  });
+
   it('identifie explicitement un auteur dont le pseudo n’a pas été résolu', async () => {
     await render(<MessageBubble message={{ ...message, senderName: undefined }} mine={false} showAuthor />);
     expect(screen.getByText('Utilisateur inconnu')).toBeTruthy();
