@@ -14,17 +14,20 @@ import { useSession } from '@/session/SessionContext';
 import type { ChatMessage } from '@/types/conversation';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation } from '@/i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Conversation'>;
 
 export function ConversationScreen({ route }: Props) {
+  const { strings } = useTranslation();
   // Paramètres validés avant tout chargement : un identifiant invalide n'appelle jamais l'API.
   const params = useMemo(() => parseConversationParams(route.params), [route.params]);
-  if (!params) return <ErrorState message="Cette conversation est introuvable." />;
+  if (!params) return <ErrorState message={strings.states.conversationNotFound} />;
   return <ValidConversation key={params.conversationId} conversationId={params.conversationId} />;
 }
 
 function ValidConversation({ conversationId }: { conversationId: string }) {
+  const { strings } = useTranslation();
   const headerHeight = useHeaderHeight();
   const { user } = useSession();
   const theme = useTheme();
@@ -34,10 +37,12 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
 
   let body;
-  if (status === 'loading') body = <LoadingState label="Chargement des messages…" />;
+  if (status === 'loading') body = <LoadingState label={strings.states.loadingMessages} />;
   else if (status === 'error' && messages.length === 0) {
-    body = <ErrorState message={errorMessage ?? 'Une erreur est survenue.'} onRetry={retry} />;
-  } else if (messages.length === 0) body = <EmptyState title="Aucun message" hint="Soyez le premier à écrire." />;
+    body = <ErrorState message={errorMessage ?? strings.errors.generic} onRetry={retry} />;
+  } else if (messages.length === 0) {
+    body = <EmptyState title={strings.states.noMessages} hint={strings.states.firstMessage} />;
+  }
   else {
     body = (
       <FlatList

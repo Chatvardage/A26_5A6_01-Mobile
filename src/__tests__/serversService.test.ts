@@ -7,7 +7,15 @@ const apiFetch = http.apiFetch as jest.Mock;
 const S = '44444444-4444-4444-8444-444444444444';
 const C1 = '55555555-5555-4555-8555-555555555555';
 const C2 = '66666666-6666-4666-8666-666666666666';
-const server = { id: S, nom: 'Chatvardage', nombreMembres: 12, salons: [{ id: C1, nom: 'annonces' }, { id: C2, nom: 'general' }] };
+const server = {
+  id: S,
+  nom: 'Chatvardage',
+  nombreMembres: 12,
+  salons: [
+    { id: C1, nom: 'annonces' },
+    { id: C2, nom: 'general' },
+  ],
+};
 
 beforeEach(() => apiFetch.mockReset());
 
@@ -18,7 +26,9 @@ describe('fetchServers', () => {
   });
   it('résume chaque serveur et additionne les non-lus de ses salons', async () => {
     apiFetch.mockResolvedValue([server]);
-    const [result] = await fetchServers({ getCounts: async () => ({ [`room:${C1}`]: 2, [`room:${C2}`]: 5, [`room:other`]: 9 }) });
+    const [result] = await fetchServers({
+      getCounts: async () => ({ [`room:${C1}`]: 2, [`room:${C2}`]: 5, [`room:other`]: 9 }),
+    });
     expect(result).toEqual({ id: S, name: 'Chatvardage', memberCount: 12, channelIds: [C1, C2], unreadCount: 7 });
   });
 

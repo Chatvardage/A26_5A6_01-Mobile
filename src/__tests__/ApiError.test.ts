@@ -8,11 +8,12 @@ it.each([
 });
 
 const cases: [ApiErrorKind, string][] = [
+  ['validation', 'Vérifiez les champs du formulaire.'],
   ['network', 'Impossible de joindre le serveur. Vérifiez votre connexion.'],
   ['timeout', 'Le serveur met trop de temps à répondre. Réessayez.'],
   ['bad_request', 'Le message est invalide. Vérifiez son contenu.'],
   ['unauthorized', 'Votre session a expiré. Reconnectez-vous.'],
-  ['forbidden', "Vous n'avez pas accès à cette conversation."],
+  ['forbidden', 'Vous n’avez pas accès à cette conversation.'],
   ['not_found', 'Conversation introuvable.'],
   ['rate_limited', 'Vous envoyez des messages trop rapidement. Réessayez dans un instant.'],
   ['server', 'Le serveur rencontre un problème. Réessayez plus tard.'],

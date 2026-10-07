@@ -5,6 +5,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ChatMessage } from '@/types/conversation';
 import { formatMessageTime } from '@/utils/formatTime';
+import { useTranslation } from '@/i18n';
 
 export function MessageBubble({
   message,
@@ -18,6 +19,7 @@ export function MessageBubble({
   onLongPress?: () => void;
 }) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   const edited = new Date(message.updatedAt).getTime() !== new Date(message.createdAt).getTime();
   const pressable = mine && onLongPress !== undefined;
   // La largeur maximale s'applique à l'enfant direct de la ligne : un pourcentage sur la bulle
@@ -30,17 +32,17 @@ export function MessageBubble({
     >
       {showAuthor && !mine ? (
         <ThemedText type="smallBold" themeColor="textSecondary">
-          {message.senderName ?? 'Utilisateur inconnu'}
+          {message.senderName ?? strings.conversation.unknownUser}
         </ThemedText>
       ) : null}
       <ThemedText style={mine ? styles.mineText : undefined}>{message.content}</ThemedText>
       <ThemedText
         type="small"
-        accessibilityLabel={`${formatMessageTime(message.createdAt)}${edited ? ', modifié' : ''}`}
+        accessibilityLabel={`${formatMessageTime(message.createdAt)}${edited ? `, ${strings.conversation.edited}` : ''}`}
         style={[styles.meta, mine ? styles.mineText : { color: theme.textSecondary }]}
       >
         {formatMessageTime(message.createdAt)}
-        {edited ? ' · modifié' : ''}
+        {edited ? ` · ${strings.conversation.edited}` : ''}
       </ThemedText>
     </View>
   );

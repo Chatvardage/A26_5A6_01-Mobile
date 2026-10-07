@@ -4,6 +4,7 @@ import { parseConversationId } from '@/types/conversationId';
 import { ApiError } from './ApiError';
 import { apiFetch } from './httpClient';
 import { lookupPseudos } from './usersService';
+import { getTranslations } from '@/i18n';
 
 export type RawMessage = {
   id: string;
@@ -68,7 +69,7 @@ export function belongsTo(conversationId: string, currentUserId: string, rawMess
 
 function routeFor(conversationId: string) {
   const ref = parseConversationId(conversationId);
-  if (!ref) throw new ApiError('not_found', 'Identifiant de conversation invalide');
+  if (!ref) throw new ApiError('not_found', getTranslations().errors.invalidConversationId);
   return ref;
 }
 
@@ -92,7 +93,7 @@ export async function fetchHistory(conversationId: string, limit = 50, cursor?: 
 
   // Messages privés : `senderId` ; messages de salon : `authorId` (les deux existent toujours côté API).
   const senderIds = raw.map((m) => m.senderId ?? m.authorId ?? '');
-  const names = await lookupPseudos(senderIds.filter(Boolean));
+  const names = await lookupPseudos(senderIds.filter(Boolean)).catch((): Record<string, string> => ({}));
 
   return [...raw]
     .reverse()

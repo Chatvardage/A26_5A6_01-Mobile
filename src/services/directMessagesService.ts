@@ -4,6 +4,7 @@ import { toConversationId } from '@/types/conversationId';
 import { apiFetch } from './httpClient';
 import { getCountsSafe, noUnreadSource, type UnreadSource } from './unreadSource';
 import { lookupPseudos } from './usersService';
+import { getTranslations } from '@/i18n';
 
 type DmItem = {
   otherUserId: string;
@@ -26,7 +27,7 @@ export async function fetchDirectMessages(unread: UnreadSource = noUnreadSource)
       return {
         id,
         kind: 'dm',
-        title: pseudos[item.otherUserId] ?? 'Utilisateur inconnu',
+        title: pseudos[item.otherUserId] ?? getTranslations().conversation.unknownUser,
         lastMessage: item.lastMessage,
         unreadCount: Math.max(0, counts[id] ?? 0),
       };

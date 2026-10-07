@@ -1,60 +1,37 @@
-/**
- * Session PROVISOIRE (en mémoire seulement) : elle fournit le contrat dont la
- * navigation a besoin (`status`, `user`, `signIn`, `signOut`).
- * La session complète (SecureStore, restauration, renouvellement, effacement
- * de l'état de navigation) remplacera ce fichier sans toucher aux écrans.
- */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-
-import { login, type AuthUser } from '@/services/authService';
-import { configureHttpClient } from '@/services/httpClient';
-import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
-
-export type SessionStatus = 'loading' | 'signedIn' | 'signedOut';
-
-export type Session = {
-  status: SessionStatus;
-  user: AuthUser | null;
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import type { Registration } from '@/services/authService';
+import { SessionManager, type SessionState } from './SessionManager';
+export type { SessionStatus } from './SessionManager';
+export type Session = SessionState & {
   signIn: (identifiant: string, motDePasse: string) => Promise<void>;
-  signOut: () => void;
+  register: (input: Registration) => Promise<void>;
+  signOut: () => Promise<void>;
+  restoreSession: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 };
-
 const SessionContext = createContext<Session | null>(null);
-
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [auth, setAuth] = useState<{ token: string; user: AuthUser } | null>(null);
-  // TODO(session) : provisoire. Le jeton reste en mémoire et se perd à chaque redémarrage. La session
-  // complète le stockera avec expo-secure-store et le restaurera au démarrage (status « loading »).
-  const tokenRef = useRef<string | null>(null);
-
-  const signOut = useCallback(() => {
-    disconnectRealtime();
-    tokenRef.current = null;
-    setAuth(null);
-  }, []);
-
-  // Aucune requête authentifiée ne peut partir avant cet effet : sans jeton, seul Login est monté.
-  // TODO(session) : avec la restauration au démarrage, brancher le jeton avant le premier rendu
-  // (accesseur au niveau du module) pour qu'aucun écran enfant ne devance cet effet.
+  const [manager] = useState(() => new SessionManager());
+  const state = useSyncExternalStore(manager.subscribe, manager.snapshot, manager.snapshot);
   useEffect(() => {
-    configureHttpClient({ getToken: () => tokenRef.current, onUnauthorized: signOut });
-    configureRealtime({ getToken: () => tokenRef.current, onUnauthorized: signOut });
-  }, [signOut]);
-
-  const signIn = useCallback(async (identifiant: string, motDePasse: string) => {
-    const result = await login(identifiant, motDePasse);
-    tokenRef.current = result.jeton;
-    setAuth({ token: result.jeton, user: result.utilisateur });
-  }, []);
-
-  const value = useMemo<Session>(
-    () => ({ status: auth ? 'signedIn' : 'signedOut', user: auth?.user ?? null, signIn, signOut }),
-    [auth, signIn, signOut],
+    void manager.start();
+    return () => manager.dispose();
+  }, [manager]);
+  return (
+    <SessionContext.Provider
+      value={{
+        ...state,
+        signIn: manager.signIn,
+        register: manager.register,
+        signOut: manager.signOut,
+        restoreSession: manager.restoreSession,
+        refreshSession: manager.refreshSession,
+      }}
+    >
+      {children}
+    </SessionContext.Provider>
   );
-
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
-
 export function useSession(): Session {
   const ctx = useContext(SessionContext);
   if (!ctx) throw new Error('useSession doit être utilisé dans un SessionProvider');

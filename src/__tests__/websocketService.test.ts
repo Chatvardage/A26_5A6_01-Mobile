@@ -17,6 +17,7 @@ jest.mock('socket.io-client', () => ({ io: (...args: unknown[]) => mockIo(...arg
 type Listener = (...args: unknown[]) => void;
 const listeners = new Map<string, Listener[]>();
 const mockSocket: {
+  auth: { token: string };
   connected: boolean;
   on: jest.Mock;
   off: jest.Mock;
@@ -25,6 +26,7 @@ const mockSocket: {
   connect: jest.Mock;
   removeAllListeners: jest.Mock;
 } = {
+  auth: { token: 'test-token' },
   connected: false,
   on: jest.fn(),
   off: jest.fn(),
@@ -62,6 +64,7 @@ mockSocket.removeAllListeners.mockImplementation(() => listeners.clear());
 
 beforeEach(() => {
   listeners.clear();
+  mockSocket.auth = { token: 'test-token' };
   mockSocket.connected = false;
   mockIo.mockReset().mockReturnValue(mockSocket);
   mockSocket.on.mockClear();
@@ -87,6 +90,37 @@ afterEach(() => {
 });
 
 describe('websocketService', () => {
+  it('renouvelle le handshake sans perdre les abonnements ni émettre avant connexion.prete', async () => {
+    const handler = jest.fn();
+    const ready = jest.fn();
+    subscribe('private-message.created', handler);
+    onReady(ready);
+    trigger('connexion.prete');
+    await joinRoom('room-id');
+    mockSocket.emit.mockClear();
+
+    configureRealtime({ getToken: () => 'renewed-token', onUnauthorized: jest.fn() });
+
+    expect(mockSocket.auth).toEqual({ token: 'renewed-token' });
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1);
+    expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+    expect(getRealtimeState()).not.toBe('ready');
+    trigger('connexion.prete');
+    expect(ready).toHaveBeenCalledTimes(2);
+    expect(mockSocket.emit).toHaveBeenCalledWith('room-message.join', { roomId: 'room-id' }, expect.any(Function));
+    trigger('private-message.created', { id: 'message' });
+    expect(handler).toHaveBeenCalledWith({ id: 'message' });
+  });
+
+  it('ne reconnecte pas un socket dont le jeton est inchangé', () => {
+    subscribe('private-message.created', jest.fn());
+    configureRealtime({ getToken: () => 'test-token', onUnauthorized: jest.fn() });
+    expect(mockSocket.disconnect).not.toHaveBeenCalled();
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
   it('crée un socket unique sur le namespace /messages avec le jeton en auth', () => {
     const unsubscribe = subscribe('private-message.created', jest.fn());
     expect(mockIo).toHaveBeenCalledTimes(1);

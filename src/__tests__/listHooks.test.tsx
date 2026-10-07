@@ -29,7 +29,7 @@ describe.each([
     await act(async () => result.current.refresh());
     expect(result.current.state).toEqual({ status: 'empty' });
     await act(async () => result.current.retry());
-    expect(result.current.state).toEqual({ status: 'error', message: "Vous n'avez pas accès à cette conversation." });
+    expect(result.current.state).toEqual({ status: 'error', message: 'Vous n’avez pas accès à cette conversation.' });
   });
 });
 

@@ -26,6 +26,14 @@ function mockApi(routes: Record<string, unknown>) {
 beforeEach(() => apiFetch.mockReset());
 
 describe('fetchDirectMessages', () => {
+  it('tolère une activité absente ou malformée sans fausser le tri', async () => {
+    mockApi({
+      '/api/messages/conversations': [{ otherUserId: A, lastMessage: null }, dm(B, 'invalid')],
+      '/api/users/lookup': [],
+    });
+    const result = await fetchDirectMessages();
+    expect(result.map((c) => c.id)).toEqual([`dm:${A}`, `dm:${B}`]);
+  });
   it('résout les pseudos, trie par activité récente et applique les non-lus', async () => {
     mockApi({
       '/api/messages/conversations': [dm(A, '2026-10-01T10:00:00Z'), dm(B, '2026-10-02T10:00:00Z')],
@@ -40,7 +48,7 @@ describe('fetchDirectMessages', () => {
     expect(result.find((c) => c.title === 'bob')?.unreadCount).toBe(0);
   });
 
-  it("garde la liste si la résolution des pseudos échoue", async () => {
+  it('garde la liste si la résolution des pseudos échoue', async () => {
     mockApi({ '/api/messages/conversations': [dm(A, '2026-10-01T10:00:00Z')], '/api/users/lookup': new Error('503') });
     const [only] = await fetchDirectMessages();
     expect(only.title).toBe('Utilisateur inconnu');

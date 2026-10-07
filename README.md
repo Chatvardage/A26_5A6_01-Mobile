@@ -2,6 +2,17 @@
 
 Client mobile de clavardage connecté au Serveur-API (Gateway) de Chatvardage.
 
+Au démarrage, une erreur réseau, un timeout, un HTTP 5xx ou un quota temporaire
+pendant la validation `/me` conserve la session dans SecureStore. Un message et
+le bouton « Réessayer » restent visibles ; aucun écran protégé ni credential
+HTTP n'est activé avant la validation. Un 401 déclenche toujours le refresh,
+et un échec de ce refresh nettoie la session.
+Une erreur de lecture SecureStore affiche également « Réessayer » et préserve
+les données stockées ; aucune session n'est activée avant une lecture et une validation réussies.
+Le client HTTP respecte également
+le signal d'annulation de l'appelant, en conservant son timeout propre ; une
+annulation explicite propage l'erreur d'annulation sans la convertir en timeout.
+
 ## Versions
 
 | Outil | Version |
@@ -34,6 +45,12 @@ Scanner le QR code avec Expo Go (Android) ou l'appareil photo (iOS). Le téléph
 
 > **Port de Metro** : `.env.development` fixe `RCT_METRO_PORT=8082`, car Adminer (stack Infra) occupe déjà le 8081. Rien à faire, `npm start` et `npx expo start` le prennent en compte.
 
+### Fichiers locaux et secrets
+
+Git ignore les fichiers `.env` personnels, les identifiants locaux (`credentials.json`, `.npmrc`), les clés de signature, les journaux, les rapports de couverture et les caches générés. Seuls `.env.example` (modèle sans valeur réelle) et `.env.development` (port Metro partagé uniquement) sont versionnés parmi les fichiers `.env`.
+
+Ne jamais placer de secret dans une variable `EXPO_PUBLIC_*` : sa valeur est intégrée à l'application et accessible au client. Une règle `.gitignore` ne protège pas un fichier déjà suivi ni l'historique Git ; un secret déjà publié doit être révoqué, même après suppression du fichier.
+
 ### Quelle commande utiliser ?
 
 | Votre situation | Commande | `.env` | Détails |
@@ -53,7 +70,7 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 1. `EXPO_PUBLIC_API_URL` dans l'environnement du shell ;
 2. `EXPO_PUBLIC_API_URL` dans le fichier `.env` personnel (ignoré par git, créé avec `cp .env.example .env`) ;
 3. sous WSL2 seulement, `npm start` fournit l'URL détectée (voir cas B) ;
-4. l'adresse de la machine qui exécute Metro, sur le port 3000 ;
+4. l'adresse de la machine qui exécute Metro, sur le port mobile 3006 ;
 5. `http://localhost:3000`.
 
 À l'étape 4, seule une adresse locale (`localhost`, `*.local`, IP privée `10.x`, `172.16-31.x`, `192.168.x`) est retenue : un tunnel (exp.direct, ngrok, Cloudflare…) ne donne pas accès au backend et est ignoré. Après toute modification de `.env`, relancer avec le cache vidé (`npm start -- -c`).
@@ -64,7 +81,7 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 npm start
 ```
 
-Si le backend est joignable par l'adresse locale de l'ordinateur, l'app la déduit et utilise le port 3000.
+Si le backend est joignable depuis le téléphone par l'adresse locale de l'ordinateur, l'app la déduit et utilise le port 3006. Ce port doit être redirigé vers le Gateway local (port 3000), comme dans les cas A et B.
 
 **Avec la stack Docker Infra**, le Gateway est volontairement publié sur `127.0.0.1:3000` : le PC peut le joindre, mais pas le téléphone. Sous Windows, créer une seule fois une redirection dédiée, sans modifier les ports des microservices. Dans **PowerShell administrateur** :
 
@@ -93,13 +110,13 @@ Sous WSL2, Metro et le backend vivent dans un réseau interne que le téléphone
 | Problème | Solution | Qui la fournit |
 |---|---|---|
 | Le téléphone n'atteint pas **Metro** (Expo Go tourne en rond) | Tunnel `--tunnel` (ngrok) | `npm start` l'ajoute seul |
-| Le téléphone n'atteint pas **l'API** (le Gateway n'écoute que sur `127.0.0.1` dans WSL) | Redirection Windows du port 3001 vers `localhost:3000` | **Une fois, à la main** (ci-dessous) |
+| Le téléphone n'atteint pas **l'API** (le Gateway n'écoute que sur `127.0.0.1` dans WSL) | Redirection Windows du port 3006 vers `localhost:3000` | **Une fois, à la main** (ci-dessous) |
 
 **Configuration, une seule fois** — dans **PowerShell administrateur** (clic droit, « Exécuter en tant qu'administrateur ») :
 
 ```powershell
-netsh interface portproxy add v4tov4 listenport=3001 listenaddress=0.0.0.0 connectport=3000 connectaddress=127.0.0.1
-New-NetFirewallRule -DisplayName "Chatvardage API 3001" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow -Profile Any
+netsh interface portproxy add v4tov4 listenport=3006 listenaddress=0.0.0.0 connectport=3000 connectaddress=127.0.0.1
+New-NetFirewallRule -DisplayName "Chatvardage API 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -RemoteAddress LocalSubnet -Action Allow -Profile Any
 ```
 
 La redirection survit au redémarrage de Windows. Pour la vérifier : `netsh interface portproxy show v4tov4`.
@@ -114,17 +131,17 @@ Au premier lancement, accepter l'installation de `@expo/ngrok`. `scripts/start.j
 
 1. détecte WSL2 ;
 2. ajoute `--tunnel` si aucune option de réseau (`--tunnel`, `--lan`, `--localhost`) n'est passée ;
-3. si `EXPO_PUBLIC_API_URL` n'est définie ni dans l'environnement ni dans `.env`, interroge Windows (`powershell.exe`) pour l'IP Wi-Fi **actuelle** et utilise `http://<cette IP>:3001` ; l'IP peut donc changer d'un jour à l'autre sans rien modifier ;
-4. avertit si la redirection du port 3001 est absente ;
+3. si `EXPO_PUBLIC_API_URL` n'est définie ni dans l'environnement ni dans `.env`, interroge Windows (`powershell.exe`) pour l'IP Wi-Fi **actuelle** et utilise `http://<cette IP>:3006` ; l'IP peut donc changer d'un jour à l'autre sans rien modifier ;
+4. avertit si la redirection du port 3006 est absente ;
 5. lance directement la CLI Expo locale avec Node et les options données (`npm start -- -c` vide le cache).
 
-**Vérification** : `http://<IP-Wi-Fi-de-Windows>:3001/api/health` doit répondre dans le navigateur du téléphone (IP visible dans le message `[start] WSL2 : API détectée à …`, ou avec `ipconfig`, ligne « Adresse IPv4 » du Wi-Fi).
+**Vérification** : `http://<IP-Wi-Fi-de-Windows>:3006/api/health` doit répondre dans le navigateur du téléphone (IP visible dans le message `[start] WSL2 : API détectée à …`, ou avec `ipconfig`, ligne « Adresse IPv4 » du Wi-Fi).
 
 **Limites du script :**
 
 - il ne peut pas créer la redirection ni la règle de pare-feu (droits administrateur) ;
 - il suppose que le téléphone est sur le même Wi-Fi que l'ordinateur pour joindre l'API (le tunnel, lui, passe par Internet) ;
-- si `powershell.exe` est inaccessible depuis WSL, il affiche un avertissement : définir alors `EXPO_PUBLIC_API_URL` dans `.env` à la main (`http://<IP-Wi-Fi>:3001`) ;
+- si `powershell.exe` est inaccessible depuis WSL, il affiche un avertissement : définir alors `EXPO_PUBLIC_API_URL` dans `.env` à la main (`http://<IP-Wi-Fi>:3006`) ;
 - plusieurs cartes réseau (VPN, VirtualBox, Hyper-V) : il choisit la carte de la route par défaut ; si l'IP détectée est mauvaise, forcer l'URL dans `.env`.
 
 ### Cas C : WSL2 en mode miroir (alternative durable)
@@ -147,7 +164,7 @@ Le mode miroir rend WSL directement joignable depuis le réseau : ni tunnel ni r
    npx expo start
    ```
 
-Utiliser `npx expo start` et **non** `npm start` : le script ajouterait le tunnel et le port 3001, inutiles en mode miroir. L'app déduit l'adresse du poste, port 3000. Si le test `curl.exe http://<IP-Wi-Fi>:3000/api/health` échoue dans PowerShell, c'est le pare-feu.
+Utiliser `npx expo start` et **non** `npm start` : le script ajouterait le tunnel et le port 3006, inutiles en mode miroir. Comme le mode miroir expose le Gateway directement sur le port 3000, définir `EXPO_PUBLIC_API_URL=http://<IP-Wi-Fi>:3000` dans `.env`, puis relancer Expo avec `-c`. Si le test `curl.exe http://<IP-Wi-Fi>:3000/api/health` échoue dans PowerShell, c'est le pare-feu.
 
 Prérequis : Windows 11 22H2 ou plus récent et WSL à jour (`wsl --update`).
 
@@ -157,7 +174,7 @@ Prérequis : Windows 11 22H2 ou plus récent et WSL à jour (`wsl --update`).
 npm start      # puis « a » dans le terminal
 ```
 
-Dans un émulateur, `localhost` désigne l'émulateur lui-même. Si la connexion échoue, définir dans `.env` : `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` (alias de l'ordinateur hôte). Sous WSL2, l'émulateur tourne côté Windows : voir aussi le cas B pour joindre l'API.
+Dans un émulateur Android Studio, `localhost` désigne l'émulateur lui-même. Définir dans `.env` `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` : `10.0.2.2` est l'alias de l'ordinateur hôte et le port 3000 est celui du Gateway local. Après toute modification, arrêter puis relancer Expo avec `npm start -- -c`. Cette adresse remplace celle du port 3006, réservée aux connexions depuis le réseau Wi-Fi / un téléphone physique. Sous WSL2, l'émulateur tourne côté Windows : voir aussi le cas B pour joindre l'API.
 
 ### Cas E : backend sur une autre machine
 
@@ -177,7 +194,7 @@ Puis `npm start -- -c`. Cette machine doit autoriser le port 3000 dans son pare-
 | Expo Go tourne en rond, puis page d'erreur bleue | Le téléphone n'atteint pas Metro | Sous WSL2, utiliser `npm start` (tunnel) ou le mode miroir ; sinon vérifier le Wi-Fi commun |
 | « Impossible de joindre le serveur » à la connexion | Le téléphone n'atteint pas l'API | Tester `/api/health` dans le navigateur du téléphone (cas B) ; vérifier la redirection `netsh`, le pare-feu, l'URL affichée par `npm start` |
 | Le bouton de connexion tourne puis erreur après 10 s | Délai de requête dépassé (API injoignable) | Idem ci-dessus |
-| `[start] Aucune redirection du port 3001…` | La redirection `netsh` du cas B manque | La créer (PowerShell administrateur) |
+| `[start] Aucune redirection du port 3006…` | La redirection `netsh` du cas B manque | La créer (PowerShell administrateur) |
 | `[start] IP Windows introuvable…` | `powershell.exe` inaccessible | Définir `EXPO_PUBLIC_API_URL` dans `.env` |
 | L'IP a changé (autre réseau, redémarrage du routeur) | — | Avec `npm start` : rien à faire. Avec un `.env` fixe : le mettre à jour, puis `npm start -- -c` |
 | Avertissement jaune « Cannot connect to Expo CLI » | Rechargement à chaud perdu (fréquent en tunnel) | Sans gravité : secouer le téléphone, puis *Reload* |
@@ -192,7 +209,7 @@ Routes centralisées dans [`src/navigation/routes.ts`](src/navigation/routes.ts)
 
 ```text
 RootStack (native-stack)
-├── sans session : Login
+├── sans session : Login / Register
 └── avec session : Main (bottom-tabs) ─┬ DirectMessages   liste des messages privés
                                        ├ Servers          liste des serveurs
                                        ├ Search
@@ -220,9 +237,43 @@ Parcours : `DirectMessages` → `Conversation` ; `DirectMessages` → « Nouveau
 | Services | `src/services` | Client HTTP, erreurs (`ApiError`), messages REST et socket unique `/messages`, utilisateurs, serveurs et salons |
 | Session | `src/session` | Contrat `useSession` (voir limites) |
 
+## Conversation et messagerie
+
+Les messages privés (`dm:<uuid>`) et les salons (`room:<uuid>`) utilisent le même écran et la même logique. Les fichiers du dépôt se nomment `messagesService.ts` et `websocketService.ts` (équivalents de `messages.service` et `websocket.service` dans l'énoncé).
+
+| Livraison | Comportement implanté | Zone principale |
+|---|---|---|
+| Écran Conversation | Liste inversée, saisie multiligne, adaptation au clavier, validation des paramètres avant chargement | `ConversationScreen` |
+| Historique REST | Chargement initial de 50 messages, normalisation des auteurs et ordre du plus récent au plus ancien | `messagesService`, `useMessages` |
+| Envoi | Requête POST pour un DM ou un salon, insertion de la réponse REST, refus du texte vide, bouton désactivé pendant l'envoi | `MessageInput`, `messagesService` |
+| Connexion WebSocket | Socket unique sur `/messages`, chemin `/socket.io`, jeton dans `auth.token`, abonnement aux salons après `connexion.prete` | `websocketService`, `SessionManager` |
+| Réception temps réel | Événements `private-message.created` et `room-message.created`, filtrage par conversation et tampon pendant le chargement initial | `useMessages` |
+| Modification | Appui long uniquement sur son propre message, préremplissage, enregistrement PATCH et annulation ; l'API reste responsable des permissions | `MessageBubble`, `MessageInput`, `messagesService` |
+| Réception des modifications | Événements `private-message.updated` et `room-message.updated`, remplacement du contenu sans ajouter de ligne | `useMessages` |
+| Mention « modifié » | Affichée lorsque les instants `updatedAt` et `createdAt` diffèrent | `MessageBubble` |
+| Pagination | Chargement en fin de liste par pages de 50 avec le curseur du plus ancien message ; demandes simultanées bloquées, erreur réessayable sans perdre la liste | `ConversationScreen`, `useMessages` |
+| Suppression des doublons | Fusion par identifiant entre historique, pagination, réponses POST/PATCH et événements ; conservation de la version au `updatedAt` le plus récent | `mergeMessages` |
+| Texte non envoyé | Brouillon par conversation, restauré après navigation et passage en modification ; conservé sur erreur ou si le texte change pendant l'envoi, effacé après succès seulement | `MessageInput` |
+| Chargement et erreurs | États initial/vide/erreur avec nouvelle tentative, indicateur de pagination, erreurs d'envoi/modification et bandeau de connexion | `ConversationScreen`, `MessageInput`, `useMessages` |
+
+Le temps réel est configuré avant de publier une session connectée. Un renouvellement du jeton reconnecte le socket sans supprimer les abonnements ; une déconnexion ou révocation ferme le socket. Après reconnexion, l'historique récent est rechargé et fusionné sans vider les pages déjà chargées.
+
+**Limites à connaître** : les brouillons restent uniquement en mémoire du processus, sans stockage sur disque ni garantie après fermeture/rechargement de l'app. Le rattrapage après reconnexion recharge une seule page récente de 50 messages, pas toute une interruption prolongée. La validation sur appareil avec deux sessions backend réelles reste nécessaire pour confirmer le défilement, le clavier et les transitions arrière-plan/réseau.
+
+### Parcours de validation sur appareil
+
+Avec le Gateway et les services réels démarrés depuis Infra, connecter deux comptes dans deux clients :
+
+1. Ouvrir un DM puis un salon accessible : vérifier l'historique ou l'état vide.
+2. Envoyer depuis chaque client : vérifier la réception sans rechargement et une seule ligne par message, y compris chez l'expéditeur.
+3. Modifier son message par appui long : vérifier le contenu et la mention « modifié » sur les deux clients ; aucun appui long de modification ne doit être proposé sur un message d'autrui.
+4. Ouvrir une conversation contenant plus de 50 messages et remonter : vérifier les pages anciennes, l'absence de doublons et la conservation de la position.
+5. Saisir un brouillon, changer de conversation puis revenir ; ouvrir et annuler une modification : vérifier que le brouillon de composition reste présent.
+6. Couper puis rétablir le réseau : vérifier les erreurs, le texte conservé après échec d'envoi, la reconnexion et le rattrapage récent ; vérifier aussi le retour depuis l'arrière-plan.
+
 ## Limites connues
 
-- **Session provisoire** : `SessionContext` garde le jeton en mémoire seulement (pas de SecureStore, de restauration au redémarrage ni de renouvellement). Le contrat (`status`, `user`, `signIn`, `signOut`) est celui que la session complète doit respecter.
+- **Session** : SecureStore, validation au démarrage, rotation réelle via Auth-Service/Gateway, refresh partagé et retour Login après échec du renouvellement. HTTP utilise `Authorization: Bearer` et Socket.IO `auth.token` ; aucun identifiant utilisateur n'est fourni dans le handshake.
 - **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
 - **Rejoindre / quitter un serveur** : non implanté ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.

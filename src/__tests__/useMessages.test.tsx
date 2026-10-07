@@ -68,6 +68,48 @@ beforeEach(() => {
 });
 
 describe('useMessages', () => {
+  it('fusionne l’écho temps réel avec la réponse REST d’un envoi sans doublon', async () => {
+    const sent = { ...message('sent', ME), recipientId: OTHER, content: 'bonjour' };
+    const pending = deferred<ReturnType<typeof message>>();
+    sendMessage.mockReturnValueOnce(pending.promise);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    await act(async () => {
+      const sending = result.current.send('bonjour');
+      mockHandlers.get('private-message.created')?.(sent);
+      pending.resolve(sent);
+      await sending;
+    });
+    expect(sendMessage).toHaveBeenCalledWith(conversationId, 'bonjour');
+    expect(result.current.messages.filter((item) => item.id === 'sent')).toHaveLength(1);
+    expect(result.current.messages.find((item) => item.id === 'sent')?.content).toBe('bonjour');
+  });
+
+  it('garde une modification de salon reçue pendant la pagination malgré une ancienne version REST', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      message(`page-${index}`, OTHER, new Date(Date.UTC(2026, 9, 2, 23 - index)).toISOString()),
+    );
+    const oldest = firstPage[firstPage.length - 1];
+    const pending = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockResolvedValueOnce(firstPage).mockReturnValueOnce(pending.promise);
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    await act(async () => {
+      const loading = result.current.loadOlder();
+      mockHandlers.get('room-message.updated')?.({
+        ...oldest, roomId: ROOM, content: 'version corrigée', updatedAt: '2026-10-03T10:00:00Z',
+      });
+      pending.resolve([oldest, message('older', OTHER, '2026-09-20T10:00:00Z')]);
+      await loading;
+    });
+    expect(fetchHistory).toHaveBeenLastCalledWith(roomConversation, 50, oldest.id);
+    expect(result.current.messages).toHaveLength(51);
+    expect(result.current.messages.filter((item) => item.id === oldest.id)).toHaveLength(1);
+    expect(result.current.messages.find((item) => item.id === oldest.id)?.content).toBe('version corrigée');
+    expect(result.current.messages.at(-1)?.id).toBe('older');
+    expect(result.current.hasOlder).toBe(false);
+  });
+
   it('charge, expose une conversation vide et permet de réessayer une erreur initiale', async () => {
     const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), {
       initialProps: { id: conversationId },
@@ -196,7 +238,7 @@ describe('useMessages', () => {
       mockHandlers.get('room-message.revoked')?.({ roomId });
       await Promise.resolve();
     });
-    await waitFor(() => expect(result.current.accessError).toBe("Vous n'avez pas accès à cette conversation."));
+    await waitFor(() => expect(result.current.accessError).toBe('Vous n’avez pas accès à cette conversation.'));
     expect(result.current.status).toBe('ready');
     expect(result.current.messages.map((item) => item.id)).toContain('room-message');
 
@@ -233,7 +275,7 @@ describe('useMessages', () => {
     await act(async () => result.current.send('message envoyé'));
     expect(result.current.messages.some((item) => item.id === 'sent')).toBe(true);
     editMessage.mockRejectedValueOnce(new ApiError('forbidden', 'forbidden'));
-    await expect(result.current.edit('first', 'modifié')).rejects.toBe("Vous n'avez pas accès à cette conversation.");
+    await expect(result.current.edit('first', 'modifié')).rejects.toBe('Vous n’avez pas accès à cette conversation.');
     await act(async () => result.current.edit('first', 'corrigé'));
     expect(result.current.messages.find((item) => item.id === 'first')?.content).toBe('edited');
   });
@@ -312,7 +354,7 @@ describe('useMessages', () => {
     jest.mocked(realtime.joinRoom).mockRejectedValueOnce(new ApiError('forbidden', 'denied'));
     jest.mocked(realtime.leaveRoom).mockRejectedValueOnce(new ApiError('timeout', 'leave'));
     const { result, unmount } = await renderHook(() => useMessages(roomConversation, ME));
-    expect(result.current.accessError).toBe("Vous n'avez pas accès à cette conversation.");
+    expect(result.current.accessError).toBe('Vous n’avez pas accès à cette conversation.');
     expect(result.current.status).toBe('loading');
     await unmount();
     await act(async () => history.resolve([]));
@@ -329,7 +371,7 @@ describe('useMessages', () => {
     await act(async () => history.resolve([message('first')]));
     expect(result.current.status).toBe('ready');
     expect(result.current.errorMessage).toBeNull();
-    expect(result.current.accessError).toBe("Vous n'avez pas accès à cette conversation.");
+    expect(result.current.accessError).toBe('Vous n’avez pas accès à cette conversation.');
   });
 
   it('retente l’abonnement expiré à la première connexion prête sans bloquer l’écran', async () => {

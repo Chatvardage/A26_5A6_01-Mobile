@@ -6,20 +6,20 @@ import { UnreadBadge } from '@/components/UnreadBadge';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ServerSummary } from '@/types/server';
+import { useTranslation } from '@/i18n';
 
 type Props = { server: ServerSummary; onPress: (server: ServerSummary) => void };
 
-const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
-
 function ServerItemBase({ server, onPress }: Props) {
   const theme = useTheme();
-  const details = `${plural(server.memberCount, 'membre', 'membres')} · ${plural(server.channelIds.length, 'salon', 'salons')}`;
+  const { strings } = useTranslation();
+  const details = `${server.memberCount} ${server.memberCount > 1 ? strings.server.members : strings.server.member} · ${server.channelIds.length} ${server.channelIds.length > 1 ? strings.server.channels : strings.server.channel}`;
 
   return (
     <Pressable
       onPress={() => onPress(server)}
       accessibilityRole="button"
-      accessibilityLabel={`${server.name}, ${details}${server.unreadCount > 0 ? `, ${server.unreadCount} non lu${server.unreadCount > 1 ? 's' : ''}` : ''}`}
+      accessibilityLabel={`${server.name}, ${details}${server.unreadCount > 0 ? `, ${strings.server.unread(server.unreadCount)}` : ''}`}
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >

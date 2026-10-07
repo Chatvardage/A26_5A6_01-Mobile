@@ -5,13 +5,13 @@
  * - Hors WSL2 : équivaut à `npx expo start`.
  * - Sous WSL2 : ajoute `--tunnel` (le téléphone n'atteint pas Metro autrement) et, si
  *   EXPO_PUBLIC_API_URL n'est définie ni dans l'environnement ni dans `.env`, la déduit de
- *   l'IP Wi-Fi actuelle de Windows (port 3001 : voir la redirection « netsh » du README).
+ *   l'IP Wi-Fi actuelle de Windows (port 3006 : voir la redirection « netsh » du README).
  */
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const WSL_API_PORT = 3001;
+const WSL_API_PORT = 3006;
 const args = process.argv.slice(2);
 const env = { ...process.env };
 

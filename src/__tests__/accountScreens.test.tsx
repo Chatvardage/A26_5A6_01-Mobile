@@ -1,14 +1,18 @@
 import { act, fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 import { Platform, TextInput } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { LoginScreen } from '@/screens/LoginScreen';
 import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import { SearchScreen } from '@/screens/SearchScreen';
+import type { RootStackParamList } from '@/navigation/routes';
 import { ApiError } from '@/services/ApiError';
 import { useSession } from '@/session/SessionContext';
 
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const signIn = jest.fn();
 const signOut = jest.fn();
 beforeEach(() => {
@@ -22,9 +26,19 @@ async function fillLogin() {
   await fireEvent.changeText(screen.getByLabelText('Mot de passe'), 'secret-test');
 }
 
+async function renderLogin() {
+  return render(
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+      </Stack.Navigator>
+    </NavigationContainer>,
+  );
+}
+
 describe('LoginScreen', () => {
   it('refuse les champs vides et transmet les identifiants sans espaces superflus', async () => {
-    await render(<LoginScreen />);
+    await renderLogin();
     await fireEvent(screen.getByLabelText('Mot de passe'), 'submitEditing');
     expect(signIn).not.toHaveBeenCalled();
     const focus = jest.spyOn(TextInput.prototype, 'focus');
@@ -47,7 +61,7 @@ describe('LoginScreen', () => {
     [new Error('x'), 'Connexion impossible. Réessayez.'],
   ])('affiche une erreur adaptée puis permet une nouvelle tentative (%s)', async (error, expected) => {
     signIn.mockRejectedValueOnce(error);
-    await render(<LoginScreen />);
+    await renderLogin();
     await fillLogin();
     await fireEvent.press(screen.getByRole('button', { name: 'Se connecter' }));
     expect(screen.getByRole('alert')).toHaveTextContent(expected);
@@ -59,7 +73,7 @@ describe('LoginScreen', () => {
   it('empêche un second envoi pendant la connexion et affiche un indicateur', async () => {
     let resolve!: () => void;
     signIn.mockReturnValueOnce(new Promise<void>((done) => { resolve = done; }));
-    await render(<LoginScreen />);
+    await renderLogin();
     await fillLogin();
     await act(async () => { void screen.getByLabelText('Mot de passe').props.onSubmitEditing(); });
     expect(screen.queryByText('Se connecter')).toBeNull();
@@ -93,7 +107,7 @@ it('conserve la saisie de recherche et indique la disponibilité du service', as
 it('adapte le clavier à Android', async () => {
   const os = jest.replaceProperty(Platform, 'OS', 'android');
   try {
-    await render(<LoginScreen />);
+    await renderLogin();
     expect(screen.getByLabelText('Mot de passe')).toBeTruthy();
   } finally {
     os.restore();

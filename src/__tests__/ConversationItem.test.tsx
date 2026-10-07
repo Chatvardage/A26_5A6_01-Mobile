@@ -13,6 +13,13 @@ const base: ConversationSummary = {
 };
 
 describe('ConversationItem', () => {
+  it('affiche un sous-titre et le feedback pendant un appui réel', async () => {
+    const onPress = jest.fn();
+    await render(<ConversationItem conversation={{ ...base, subtitle: 'Salon public' }} onPress={onPress} />);
+    expect(screen.getByText('Salon public')).toBeTruthy();
+    await userEvent.setup().press(screen.getByRole('button'));
+    expect(onPress).toHaveBeenCalledWith(expect.objectContaining({ subtitle: 'Salon public' }));
+  });
   it('affiche le dernier message sans pastille quand tout est lu', async () => {
     await render(<ConversationItem conversation={base} onPress={jest.fn()} />);
     expect(screen.getByText('salut')).toBeTruthy();
@@ -56,7 +63,7 @@ describe('ConversationItem accessibilité', () => {
   it.each([
     [1, '1 non lu.'],
     [3, '3 non lus.'],
-  ])("accorde « non lu » pour %i message(s)", async (unreadCount, expected) => {
+  ])('accorde « non lu » pour %i message(s)', async (unreadCount, expected) => {
     await render(<ConversationItem conversation={{ ...base, unreadCount }} onPress={jest.fn()} />);
     expect(screen.getByRole('button').props.accessibilityLabel).toContain(expected);
   });

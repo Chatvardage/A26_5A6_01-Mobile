@@ -147,6 +147,17 @@ function settleRoomWaiters(roomId: string, error?: Error) {
 
 export function configureRealtime(configuration: RealtimeOptions) {
   options = configuration;
+  if (socket && typeof socket.auth === 'object') {
+    const token = configuration.getToken();
+    if (token && socket.auth.token !== token) {
+      socket.auth = { token };
+      joinedRooms.clear();
+      joiningRooms.clear();
+      setState('connecting');
+      socket.disconnect();
+      socket.connect();
+    }
+  }
 }
 
 export function getRealtimeState(): RealtimeState {

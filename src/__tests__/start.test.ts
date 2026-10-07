@@ -17,7 +17,9 @@ function runStart({
   const child = { on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
     handlers[event] = handler;
   }) };
-  const spawn = jest.fn(() => child);
+  const spawn = jest.fn(
+    (_command: string, _args: string[], _options: { stdio: string; env: Record<string, string | undefined> }) => child,
+  );
   const spawnSync = jest.fn();
   const exit = jest.fn(() => { throw new Error('process.exit'); });
   const consoleMock = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
@@ -62,6 +64,18 @@ test.each([
     ['/project/node_modules/expo/bin/cli', 'start', ...expected],
     { stdio: 'inherit', env: { EXPO_PUBLIC_API_URL: 'http://192.168.1.10:3001' } }]);
   expect(launcher.spawnSync).not.toHaveBeenCalled();
+});
+
+test('déduit le port mobile documenté lorsque WSL fournit automatiquement l’adresse Windows', () => {
+  const launcher = runStart({ platform: 'linux' });
+  launcher.spawnSync
+    .mockReturnValueOnce({ status: 0, stdout: '192.168.1.10\r\n' })
+    .mockReturnValueOnce({ status: 0, stdout: '0.0.0.0 3006 127.0.0.1 3000' });
+
+  launcher.run();
+
+  expect(launcher.spawn.mock.calls[0][2].env.EXPO_PUBLIC_API_URL).toBe('http://192.168.1.10:3006');
+  expect(launcher.consoleMock.warn).not.toHaveBeenCalled();
 });
 
 test('signale une CLI absente et ne lance aucun processus', () => {

@@ -73,9 +73,9 @@ beforeEach(() => {
 });
 
 describe('RootNavigator', () => {
-  it('n’enregistre que Login sans session et utilise le thème clair', async () => {
+  it('n’enregistre que les routes d’authentification sans session et utilise le thème clair', async () => {
     await render(<RootNavigator />);
-    expect(mockStackScreens.map((route) => route.name)).toEqual(['Login']);
+    expect(mockStackScreens.map((route) => route.name)).toEqual(['Login', 'Register']);
     expect(mockStackScreens[0].options).toEqual({ headerShown: false });
     expect(mockTheme.colors.background).toBe(Colors.light.background);
   });
