@@ -33,6 +33,7 @@
         }
       ],
       "expo-secure-store",
+      ["expo-notifications", { "color": "#208AEF", "defaultChannel": "messages" }],
       "expo-localization"
     ],
     "experiments": {

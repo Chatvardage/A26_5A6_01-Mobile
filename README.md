@@ -210,12 +210,30 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 ## Limites connues
 
 - **Session** : SecureStore, validation au démarrage, rotation réelle via Auth-Service/Gateway, refresh partagé et retour Login après échec. Voir ci-dessous.
-- **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
+- **Non-lus** : les listes et les badges d'onglets utilisent `GET /api/messages/unread` (état de lecture en base, donc juste après un redémarrage). Les compteurs se rechargent au démarrage, à chaque reconnexion du canal temps réel et au retour au premier plan.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
 - **Rejoindre / quitter un serveur** et **ouvrir un nouveau message privé** : non implantés ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
-- **Écran Conversation** : historique en lecture seule; l'envoi, le temps réel, la pagination et la modification ne sont pas branchés. L'écran Recherche n'a pas encore de service de recherche.
-- Notifications : non implantées.
+- **Écran Conversation** : historique en lecture seule; l'envoi, le temps réel, la pagination et la modification ne sont pas branchés. La recherche est décrite ci-dessous ; un résultat d'une recherche dans une conversation ramène à la conversation sans défiler jusqu'au message.
+- **Notifications** : locales seulement (voir ci-dessous). Aucune notification push : le jeton d'appareil n'est pas enregistré côté API.
 - Comportement clavier / retour Android : vérifié par bundle Android et tests unitaires; à confirmer sur émulateur ou appareil.
+
+## Recherche, réseau et notifications
+
+**Recherche** (`GET /api/messages/search`, 2 à 100 caractères, 20 résultats par page, curseur `nextCursor`)
+- Onglet **Recherche** : toutes les conversations accessibles ; toucher un résultat ouvre `Conversation` avec son `conversationId`.
+- Bouton loupe dans l'en-tête d'une **conversation** (message privé ou salon) : route `ConversationSearch { conversationId, title? }`, recherche limitée à cette conversation (`conversationId=` côté API), comme sur le client Web. Les deux interlocuteurs d'un message privé peuvent chacun chercher dans leurs anciens messages ; dans un salon, la recherche porte sur le salon affiché. Le droit de lecture est vérifié par l'API (403 / 404).
+- `useSearch` : délai de frappe de 350 ms, annulation de la requête précédente, pagination sans doublon (`Plus de résultats` ou fin de liste).
+
+**Réseau** : `network.adapter` (NetInfo) + état du canal temps réel → `useConnection` (`online`, `reconnecting`, `offline`) → bandeau `ConnectionStatus` affiché au-dessus de l'application avec une session ouverte. Le canal Socket.IO se reconnecte seul ; à chaque `connexion.prete`, les compteurs de non-lus sont rechargés par l'API et l'historique de la conversation ouverte est rechargé (fusion sans doublon).
+
+**Texte non envoyé** : `drafts.adapter` (AsyncStorage) conserve un brouillon par conversation, restauré à la réouverture et après un redémarrage. Un envoi qui échoue laisse le texte dans le champ. Les brouillons sont effacés à la déconnexion. Ils ne contiennent aucun jeton (les jetons restent dans SecureStore).
+
+**Notifications** (`notifications.adapter`, expo-notifications)
+- Notification **locale** quand un message arrive dans une conversation qui n'est pas affichée (ou quand l'application est en arrière-plan). Elle contient le pseudo et « Nouveau message », jamais le texte ; son seul payload est `conversationId`, validé avant d'ouvrir `Conversation` (toucher pendant que l'application tourne, ou lancement à froid).
+- Permission : `granted`, `denied`, `undetermined` ou `unavailable` (web, module absent). Demandée une seule fois au premier lancement ; l'état et un bouton « Activer » / « Ouvrir les réglages » sont dans Préférences.
+- Le **badge** (onglets Messages privés et Serveurs, listes) reste fonctionnel sans permission. Le badge de l'icône n'est mis à jour que si la permission est accordée.
+
+Limites : le canal temps réel est coupé par le système peu après le passage en arrière-plan, donc aucune notification n'arrive application fermée (il faudrait du push, hors périmètre). **Expo Go sur Android (SDK 53+)** : le simple chargement d'`expo-notifications` y lève une erreur. L'adaptateur ne charge donc pas le module dans ce cas : l'application démarre, les notifications sont « indisponibles » (affiché dans Préférences) et seul le badge dans l'application fonctionne. Pour tester les notifications locales sur Android, utiliser une development build (`npx expo run:android` ou `eas build --profile development`). Sur iOS, Expo Go permet de les tester. Les salons sont rejoints pour les alertes après chaque changement de conversation (délai de 0,8 s) car l'écran d'un salon quitte sa room en se fermant.
 
 ## Vérifications
 

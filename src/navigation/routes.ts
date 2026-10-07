@@ -16,7 +16,8 @@ export type RootStackParamList = {
   Register: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Server: { serverId: string; title?: string };
-  Conversation: { conversationId: string; title?: string };
+  Conversation: { conversationId: string; title?: string; messageId?: string; focusToken?: number };
+  ConversationSearch: { conversationId: string; title?: string };
 };
 
 export const Routes = {
@@ -25,22 +26,31 @@ export const Routes = {
   Main: 'Main',
   Server: 'Server',
   Conversation: 'Conversation',
+  ConversationSearch: 'ConversationSearch',
   DirectMessages: 'DirectMessages',
   Servers: 'Servers',
   Search: 'Search',
   Preferences: 'Preferences',
 } as const;
 
-export type ConversationParams = { conversationId: string; title?: string };
+/**
+ * `messageId` : message à atteindre (résultat de recherche) ; `focusToken` change à chaque demande pour
+ * pouvoir revenir au même message une seconde fois.
+ */
+export type ConversationParams = { conversationId: string; title?: string; messageId?: string; focusToken?: number };
 
 /** Valide les paramètres de la route Conversation avant tout chargement ; `null` si invalides. */
 export function parseConversationParams(params: unknown): ConversationParams | null {
   if (typeof params !== 'object' || params === null) return null;
   const { conversationId, title } = params as Record<string, unknown>;
   if (!parseConversationId(conversationId)) return null;
+  const { messageId, focusToken } = params as Record<string, unknown>;
   return {
     conversationId: conversationId as string,
     title: typeof title === 'string' ? title : undefined,
+    // Un identifiant de message invalide est ignoré : la conversation s'ouvre normalement.
+    messageId: typeof messageId === 'string' && isUuid(messageId) ? messageId : undefined,
+    focusToken: typeof focusToken === 'number' ? focusToken : undefined,
   };
 }
 

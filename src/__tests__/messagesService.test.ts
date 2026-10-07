@@ -49,3 +49,13 @@ describe('fetchHistory', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 });
+
+describe('fetchHistory avec curseur', () => {
+  it('demande la page précédente du message privé ou du salon', async () => {
+    apiFetch.mockResolvedValue([]);
+    await fetchHistory(`dm:${ROOM}`, 50, 'm-ancien');
+    expect(apiFetch).toHaveBeenLastCalledWith(`/api/messages/history/${ROOM}?limit=50&cursor=m-ancien`);
+    await fetchHistory(`room:${ROOM}`, 20, 'a b');
+    expect(apiFetch).toHaveBeenLastCalledWith(`/api/messages/rooms/${ROOM}/history?limit=20&cursor=a%20b`);
+  });
+});

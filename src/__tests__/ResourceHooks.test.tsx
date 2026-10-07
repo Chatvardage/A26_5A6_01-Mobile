@@ -8,10 +8,13 @@ import { useLoadable } from '@/hooks/useLoadable';
 import { fetchDirectMessages } from '@/services/directMessagesService';
 import { fetchServers, fetchServerChannels } from '@/services/serversService';
 import { fetchHistory } from '@/services/messagesService';
+import { apiUnreadSource } from '@/services/unreadService';
+import { hasRealtimeBeenReady, onReady } from '@/services/websocketService';
 
 jest.mock('@/services/directMessagesService');
 jest.mock('@/services/serversService');
 jest.mock('@/services/messagesService');
+jest.mock('@/services/websocketService');
 let mockFocus: () => void;
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void) => {
@@ -30,8 +33,8 @@ it.each([false, true])('charge les privés et serveurs, résultat vide=%s', asyn
   const servers = await renderHook(() => useServers());
   await waitFor(() => expect(dm.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
   await waitFor(() => expect(servers.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
-  expect(fetchDirectMessages).toHaveBeenCalledWith(undefined);
-  expect(fetchServers).toHaveBeenCalledWith(undefined);
+  expect(fetchDirectMessages).toHaveBeenCalledWith(apiUnreadSource);
+  expect(fetchServers).toHaveBeenCalledWith(apiUnreadSource);
 });
 it.each([false, true])('charge historique et salons, résultat vide=%s', async (empty) => {
   jest
@@ -48,7 +51,7 @@ it.each([false, true])('charge historique et salons, résultat vide=%s', async (
   await waitFor(() => expect(history.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
   await waitFor(() => expect(channels.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
   expect(fetchHistory).toHaveBeenCalledWith('dm:a');
-  expect(fetchServerChannels).toHaveBeenCalledWith('s', undefined);
+  expect(fetchServerChannels).toHaveBeenCalledWith('s', apiUnreadSource);
 });
 it('ne rafraîchit pas au premier focus puis rafraîchit au retour', async () => {
   const refresh = jest.fn();
@@ -77,4 +80,43 @@ it('ignore une ancienne erreur et affiche une erreur de refresh sur résultat vi
     await view.result.current.refresh();
   });
   expect(view.result.current.state.status).toBe('error');
+});
+
+describe('historique et reprise du canal temps réel', () => {
+  let ready: () => void;
+  beforeEach(() => {
+    jest.mocked(fetchHistory).mockResolvedValue([
+      { id: 'm1', senderId: 'u', content: 'a', createdAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z' },
+    ]);
+    jest.mocked(onReady).mockImplementation((handler) => {
+      ready = handler;
+      return jest.fn();
+    });
+  });
+
+  it("recharge l'historique à chaque reconnexion, sauf le premier signal de la connexion initiale", async () => {
+    jest.mocked(hasRealtimeBeenReady).mockReturnValue(false);
+    const hook = await renderHook(() => useConversationHistory('dm:a'));
+    await waitFor(() => expect(hook.result.current.state.status).toBe('ready'));
+    await act(async () => ready());
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    await act(async () => ready());
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+  });
+
+  it('recharge dès la prochaine reconnexion quand le canal avait déjà été prêt', async () => {
+    jest.mocked(hasRealtimeBeenReady).mockReturnValue(true);
+    const hook = await renderHook(() => useConversationHistory('dm:a'));
+    await waitFor(() => expect(hook.result.current.state.status).toBe('ready'));
+    await act(async () => ready());
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+  });
+
+  it("n'échoue pas si le canal temps réel n'est pas configuré", async () => {
+    jest.mocked(onReady).mockImplementation(() => {
+      throw new Error('Session absente');
+    });
+    const hook = await renderHook(() => useConversationHistory('dm:a'));
+    await waitFor(() => expect(hook.result.current.state.status).toBe('ready'));
+  });
 });

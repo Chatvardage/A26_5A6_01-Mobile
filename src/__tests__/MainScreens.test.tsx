@@ -3,12 +3,14 @@ import { ServersScreen } from '@/screens/ServersScreen';
 import { DirectMessagesScreen } from '@/screens/DirectMessagesScreen';
 import { ServerScreen } from '@/screens/ServerScreen';
 import { ConversationScreen } from '@/screens/ConversationScreen';
-import { SearchScreen } from '@/screens/SearchScreen';
 import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import type { LoadState } from '@/hooks/useLoadable';
 import type { ConversationSummary, ChatMessage } from '@/types/conversation';
 import type { ServerSummary } from '@/types/server';
 
+jest.mock('@/hooks/useNotificationPermission', () => ({
+  useNotificationPermission: () => ({ permission: 'granted', request: jest.fn(), openSettings: jest.fn() }),
+}));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 40 }));
@@ -120,13 +122,6 @@ it.each([true, false])('affiche les messages inversés, utilisateur présent=%s'
   expect(screen.getByText('Salut')).toBeTruthy();
   expect(screen.getByText('Bonjour')).toBeTruthy();
   expect(screen.getByLabelText('Message')).toBeTruthy();
-});
-it('affiche la recherche et conserve la saisie', async () => {
-  await render(<SearchScreen />);
-  expect(screen.getByText('Recherchez un message')).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText('Recherche'), 'bonjour');
-  expect(screen.getByText('Recherche non disponible')).toBeTruthy();
-  expect(screen.getByLabelText('Recherche').props.value).toBe('bonjour');
 });
 it.each([true, false])('déconnecte depuis Préférences, utilisateur présent=%s', async (present) => {
   if (!present) mockUser = null;

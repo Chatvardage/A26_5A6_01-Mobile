@@ -1,6 +1,8 @@
 import * as auth from '@/services/authService';
 import { ApiError, userMessage } from '@/services/ApiError';
 import { configureHttpClient, invalidateHttpRequests, resetHttpClient } from '@/services/httpClient';
+import { clearAllDrafts } from '@/adapters/drafts.adapter';
+import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
 import { storage } from './storage.adapter';
 import { getTranslations } from '@/i18n';
 
@@ -50,12 +52,16 @@ export class SessionManager {
     this.restoration = null;
     this.renewal = null;
     resetHttpClient();
+    disconnectRealtime();
   }
   private async clear(): Promise<void> {
     this.epoch++;
     invalidateHttpRequests();
     this.renewal = null;
     this.session = null;
+    disconnectRealtime();
+    // Les brouillons de messages sont des données de l'utilisateur : ils partent avec la session.
+    void clearAllDrafts();
     this.update({ status: 'signedOut', user: null, error: null });
     try {
       await this.persist(() => storage.clear());
@@ -78,6 +84,8 @@ export class SessionManager {
         return;
       }
       this.session = result;
+      // Le canal temps réel utilise toujours le jeton courant (renouvelé par refreshSession).
+      configureRealtime({ getToken: () => this.session?.jeton ?? null, onUnauthorized: () => void this.clear() });
       this.update({
         status: 'signedIn',
         user: result.utilisateur,

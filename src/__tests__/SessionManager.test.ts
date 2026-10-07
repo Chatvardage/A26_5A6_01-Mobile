@@ -3,10 +3,14 @@ import { storage } from '@/session/storage.adapter';
 import { SessionManager } from '@/session/SessionManager';
 import { ApiError } from '@/services/ApiError';
 import { apiFetch, resetHttpClient } from '@/services/httpClient';
+import { clearAllDrafts } from '@/adapters/drafts.adapter';
+import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
 
 jest.mock('@/session/storage.adapter', () => ({
   storage: { save: jest.fn(), load: jest.fn(), clear: jest.fn() },
 }));
+jest.mock('@/adapters/drafts.adapter');
+jest.mock('@/services/websocketService');
 jest.mock('@/services/authService', () => ({
   login: jest.fn(),
   register: jest.fn(),
@@ -397,4 +401,35 @@ it('a failed save after a concurrent logout does not change session state', asyn
   reject(new Error('save failed'));
   await Promise.all([assertion, logout]);
   expect(manager.state.status).toBe('signedOut');
+});
+
+describe('canal temps réel et brouillons', () => {
+  it('configure le canal avec le jeton courant à chaque session acceptée, y compris après renouvellement', async () => {
+    await manager.signIn('alice', 'secret-fixture');
+    expect(configureRealtime).toHaveBeenCalledTimes(1);
+    const options = jest.mocked(configureRealtime).mock.calls[0][0];
+    expect(options.getToken()).toBe('access-fixture');
+    await manager.refreshSession();
+    expect(options.getToken()).toBe('new-access-fixture');
+  });
+
+  it('rend un jeton nul après la déconnexion et ferme le canal', async () => {
+    await manager.signIn('alice', 'secret-fixture');
+    const options = jest.mocked(configureRealtime).mock.calls[0][0];
+    await manager.signOut();
+    expect(options.getToken()).toBeNull();
+    expect(disconnectRealtime).toHaveBeenCalled();
+    expect(clearAllDrafts).toHaveBeenCalled();
+  });
+
+  it('déconnecte le canal quand le jeton est refusé par le serveur, et à la fin du cycle de vie', async () => {
+    await manager.signIn('alice', 'secret-fixture');
+    const options = jest.mocked(configureRealtime).mock.calls[0][0];
+    options.onUnauthorized();
+    await Promise.resolve();
+    expect(disconnectRealtime).toHaveBeenCalledTimes(1);
+    jest.mocked(disconnectRealtime).mockClear();
+    manager.dispose();
+    expect(disconnectRealtime).toHaveBeenCalledTimes(1);
+  });
 });

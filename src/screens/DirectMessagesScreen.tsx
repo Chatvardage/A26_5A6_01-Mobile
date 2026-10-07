@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useDirectMessages } from '@/hooks/useDirectMessages';
+import { useLiveConversations } from '@/unread/liveUnread';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
@@ -20,12 +21,15 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
+const NONE: ConversationSummary[] = [];
+
 export function DirectMessagesScreen({ navigation }: Props) {
   const { user } = useSession();
   const { strings } = useTranslation();
   const { state, refreshing, retry, refresh } = useDirectMessages();
   useRefreshOnFocus(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
+  const conversations = useLiveConversations(state.status === 'ready' ? state.data : NONE);
 
   const open = useCallback(
     (conversation: ConversationSummary) =>
@@ -42,7 +46,7 @@ export function DirectMessagesScreen({ navigation }: Props) {
   return (
     <ThemedView style={styles.fill}>
       <FlatList
-        data={state.data}
+        data={conversations}
         keyExtractor={(c) => c.id}
         renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
         ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}

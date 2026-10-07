@@ -1,0 +1,94 @@
+import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
+
+import { getPermission, showMessageNotification } from '@/adapters/notifications.adapter';
+import { useTranslation } from '@/i18n';
+import { markConversationRead } from '@/services/unreadService';
+import { lookupPseudos } from '@/services/usersService';
+import { subscribe } from '@/services/websocketService';
+import { toConversationId } from '@/types/conversationId';
+import { useUnread } from '@/unread/UnreadContext';
+
+type Incoming = { conversationId: string; senderId: string } | null;
+
+function str(value: unknown): string | null {
+  return typeof value === 'string' && value ? value : null;
+}
+
+/** Conversation et expéditeur d'un événement temps réel, ou `null` pour un message de soi-même ou invalide. */
+export function parseIncoming(kind: 'dm' | 'room', raw: unknown, userId: string): Incoming {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const message = raw as Record<string, unknown>;
+  if (kind === 'dm') {
+    const senderId = str(message.senderId);
+    if (!senderId || senderId === userId || message.recipientId !== userId) return null;
+    return { conversationId: toConversationId({ kind: 'dm', targetId: senderId }), senderId };
+  }
+  const roomId = str(message.roomId);
+  const senderId = str(message.authorId);
+  if (!roomId || !senderId || senderId === userId) return null;
+  return { conversationId: toConversationId({ kind: 'room', targetId: roomId }), senderId };
+}
+
+/**
+ * Nouveau message reçu en temps réel :
+ * - conversation affichée au premier plan : on la marque lue, aucun compteur ni notification ;
+ * - sinon : le compteur de non-lus augmente (badge) et, si la permission est accordée, une notification
+ *   locale s'affiche. Elle ne contient que le pseudo ; le texte du message n'y figure jamais.
+ */
+export function useMessageAlerts(userId: string, activeConversationId: string | null) {
+  const unread = useUnread();
+  const { strings } = useTranslation();
+  const active = useRef(activeConversationId);
+  const unreadRef = useRef(unread);
+  const titles = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    active.current = activeConversationId;
+    unreadRef.current = unread;
+  });
+
+  // Ouvrir une conversation la marque lue (état en base, partagé avec les autres appareils).
+  useEffect(() => {
+    if (!activeConversationId) return;
+    unreadRef.current.clear(activeConversationId);
+    void markConversationRead(activeConversationId).catch(() => undefined);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    const notify = async (conversationId: string, senderId: string) => {
+      if ((await getPermission()) !== 'granted') return;
+      if (!titles.current.has(senderId)) {
+        const names = await lookupPseudos([senderId]).catch(() => ({}) as Record<string, string>);
+        if (names[senderId]) titles.current.set(senderId, names[senderId]);
+      }
+      await showMessageNotification({
+        conversationId,
+        title: titles.current.get(senderId) ?? strings.brand,
+        body: strings.notifications.newMessage,
+      });
+    };
+
+    const handle = (kind: 'dm' | 'room') => (raw: unknown) => {
+      const incoming = parseIncoming(kind, raw, userId);
+      if (!incoming) return;
+      if (active.current === incoming.conversationId && AppState.currentState === 'active') {
+        void markConversationRead(incoming.conversationId).catch(() => undefined);
+        return;
+      }
+      unreadRef.current.increment(incoming.conversationId);
+      void notify(incoming.conversationId, incoming.senderId);
+    };
+
+    try {
+      const offDm = subscribe('private-message.created', handle('dm'));
+      const offRoom = subscribe('room-message.created', handle('room'));
+      return () => {
+        offDm();
+        offRoom();
+      };
+    } catch {
+      return undefined;
+    }
+  }, [userId, strings]);
+}

@@ -7,13 +7,28 @@ import type { ChatMessage } from '@/types/conversation';
 import { formatMessageTime } from '@/utils/formatTime';
 import { useTranslation } from '@/i18n';
 
-export function MessageBubble({ message, mine, showAuthor }: { message: ChatMessage; mine: boolean; showAuthor: boolean }) {
+type Props = {
+  message: ChatMessage;
+  mine: boolean;
+  showAuthor: boolean;
+  /** Message atteint depuis la recherche : entouré quelques secondes, comme `.message-cible` sur le Web. */
+  highlighted?: boolean;
+};
+
+export function MessageBubble({ message, mine, showAuthor, highlighted = false }: Props) {
   const theme = useTheme();
   const { strings } = useTranslation();
   const edited = message.updatedAt !== message.createdAt;
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther]}>
-      <View style={[styles.bubble, { backgroundColor: mine ? theme.tint : theme.backgroundElement }]}>
+      <View
+        testID={highlighted ? 'message-highlighted' : undefined}
+        style={[
+          styles.bubble,
+          { backgroundColor: mine ? theme.tint : theme.backgroundElement },
+          highlighted && { borderWidth: 2, borderColor: theme.accent },
+        ]}
+      >
         {showAuthor && !mine ? (
           <ThemedText type="smallBold" themeColor="textSecondary">
             {message.senderName ?? strings.conversation.unknownUser}

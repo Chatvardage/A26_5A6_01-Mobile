@@ -8,7 +8,9 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { ServerItem } from '@/components/ServerItem';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
+import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
 import { useServers } from '@/hooks/useServers';
+import { useLiveServers } from '@/unread/liveUnread';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import type { ServerSummary } from '@/types/server';
 import { useTranslation } from '@/i18n';
@@ -18,11 +20,15 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
+const NONE: ServerSummary[] = [];
+
 export function ServersScreen({ navigation }: Props) {
   const { strings } = useTranslation();
   const { state, refreshing, retry, refresh } = useServers();
   useRefreshOnFocus(refresh);
+  useRefreshOnServerChange(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
+  const servers = useLiveServers(state.status === 'ready' ? state.data : NONE);
 
   const open = useCallback(
     (server: ServerSummary) => navigation.navigate(Routes.Server, { serverId: server.id, title: server.name }),
@@ -38,7 +44,7 @@ export function ServersScreen({ navigation }: Props) {
   return (
     <ThemedView style={styles.fill}>
       <FlatList
-        data={state.data}
+        data={servers}
         keyExtractor={(s) => s.id}
         renderItem={({ item }) => <ServerItem server={item} onPress={open} />}
         ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}

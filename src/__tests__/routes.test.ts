@@ -54,3 +54,21 @@ describe('parseServerParams', () => {
     expect(parseServerParams({ serverId: `dm:${UUID}` })).toBeNull();
   });
 });
+
+describe('message à atteindre', () => {
+  const MESSAGE = '44444444-4444-4444-8444-444444444444';
+  it('conserve un identifiant de message valide et le jeton de focus', () => {
+    expect(parseConversationParams({ conversationId: `dm:${UUID}`, messageId: MESSAGE, focusToken: 7 })).toEqual({
+      conversationId: `dm:${UUID}`,
+      title: undefined,
+      messageId: MESSAGE,
+      focusToken: 7,
+    });
+  });
+  it.each([42, '', 'pas-un-uuid', null])('ignore le message invalide %p sans refuser la conversation', (messageId) => {
+    const params = parseConversationParams({ conversationId: `dm:${UUID}`, messageId, focusToken: 'x' });
+    expect(params?.conversationId).toBe(`dm:${UUID}`);
+    expect(params?.messageId).toBeUndefined();
+    expect(params?.focusToken).toBeUndefined();
+  });
+});

@@ -1,0 +1,328 @@
+import {
+  configureRealtime,
+  disconnectRealtime,
+  getRealtimeState,
+  joinRoom,
+  leaveRoom,
+  onConnectionState,
+  hasRealtimeBeenReady,
+  onReady,
+  subscribe,
+} from '@/services/websocketService';
+import { AppState, type AppStateStatus } from 'react-native';
+
+const mockIo = jest.fn();
+jest.mock('socket.io-client', () => ({ io: (...args: unknown[]) => mockIo(...args) }));
+
+type Listener = (...args: unknown[]) => void;
+const listeners = new Map<string, Listener[]>();
+const mockSocket: {
+  connected: boolean;
+  on: jest.Mock;
+  off: jest.Mock;
+  emit: jest.Mock;
+  disconnect: jest.Mock;
+  connect: jest.Mock;
+  removeAllListeners: jest.Mock;
+} = {
+  connected: false,
+  on: jest.fn(),
+  off: jest.fn(),
+  emit: jest.fn(),
+  disconnect: jest.fn(),
+  connect: jest.fn(),
+  removeAllListeners: jest.fn(),
+};
+
+let appStateListener: ((next: AppStateStatus) => void) | null = null;
+const trigger = (event: string, payload?: unknown) => {
+  for (const handler of listeners.get(event) ?? []) handler(payload);
+};
+
+mockSocket.on.mockImplementation((event: string, handler: Listener) => {
+  listeners.set(event, [...(listeners.get(event) ?? []), handler]);
+  return mockSocket;
+});
+mockSocket.off.mockImplementation((event: string, handler: Listener) => {
+  listeners.set(event, (listeners.get(event) ?? []).filter((registered) => registered !== handler));
+  return mockSocket;
+});
+mockSocket.emit.mockImplementation((event: string, _payload: unknown, ack?: (response: unknown) => void) => {
+  if (event === 'room-message.join') ack?.({ joined: true });
+  else if (event === 'room-message.leave') ack?.({ left: true });
+});
+mockSocket.disconnect.mockImplementation(() => {
+  mockSocket.connected = false;
+  trigger('disconnect');
+});
+mockSocket.connect.mockImplementation(() => {
+  mockSocket.connected = true;
+});
+mockSocket.removeAllListeners.mockImplementation(() => listeners.clear());
+
+beforeEach(() => {
+  listeners.clear();
+  mockSocket.connected = false;
+  mockIo.mockReset().mockReturnValue(mockSocket);
+  mockSocket.on.mockClear();
+  mockSocket.off.mockClear();
+  mockSocket.emit.mockReset().mockImplementation((event: string, _payload: unknown, ack?: (response: unknown) => void) => {
+    ack?.(event === 'room-message.join' ? { joined: true } : { left: true });
+  });
+  mockSocket.disconnect.mockClear();
+  mockSocket.connect.mockClear();
+  mockSocket.removeAllListeners.mockClear();
+  appStateListener = null;
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, handler) => {
+    appStateListener = handler as (next: AppStateStatus) => void;
+    return { remove: jest.fn() } as ReturnType<typeof AppState.addEventListener>;
+  });
+  configureRealtime({ getToken: () => 'test-token', onUnauthorized: jest.fn() });
+});
+
+afterEach(() => {
+  disconnectRealtime();
+  jest.restoreAllMocks();
+  jest.useRealTimers();
+});
+
+describe('websocketService', () => {
+  it('crée un socket unique sur le namespace /messages avec le jeton en auth', () => {
+    const unsubscribe = subscribe('private-message.created', jest.fn());
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockIo).toHaveBeenCalledWith(
+      expect.stringMatching(/\/messages$/),
+      expect.objectContaining({ path: '/socket.io', auth: { token: 'test-token' }, transports: ['websocket'] }),
+    );
+    unsubscribe();
+  });
+
+  it('attend connexion.prete avant de joindre un salon et attend l’accusé', async () => {
+    const joining = joinRoom('room-id');
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+    trigger('connexion.prete');
+    await expect(joining).resolves.toBeUndefined();
+    expect(mockSocket.emit).toHaveBeenCalledWith('room-message.join', { roomId: 'room-id' }, expect.any(Function));
+    expect(getRealtimeState()).toBe('ready');
+  });
+
+  it('notifie chaque connexion prête et rejoint de nouveau les salons après reconnexion', async () => {
+    const ready = jest.fn();
+    onReady(ready);
+    trigger('connexion.prete');
+    await joinRoom('room-id');
+    mockSocket.emit.mockClear();
+
+    trigger('disconnect');
+    trigger('connexion.prete');
+
+    expect(ready).toHaveBeenCalledTimes(2);
+    expect(mockSocket.emit).toHaveBeenCalledWith('room-message.join', { roomId: 'room-id' }, expect.any(Function));
+  });
+
+  it('oublie un salon révoqué et transmet la révocation de session', () => {
+    const onUnauthorized = jest.fn();
+    configureRealtime({ getToken: () => 'test-token', onUnauthorized });
+    onReady(jest.fn());
+    trigger('connexion.prete');
+    trigger('room-message.revoked', { roomId: 'room-id' });
+    mockSocket.emit.mockClear();
+    trigger('connexion.prete');
+    expect(mockSocket.emit).not.toHaveBeenCalledWith('room-message.join', { roomId: 'room-id' }, expect.any(Function));
+
+    trigger('session.revoquee');
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(getRealtimeState()).toBe('disconnected');
+  });
+
+  it('désabonne les événements et ferme le socket', () => {
+    const handler = jest.fn();
+    const unsubscribe = subscribe('custom-event', handler);
+    trigger('custom-event', {});
+    unsubscribe();
+    trigger('custom-event', {});
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    disconnectRealtime();
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1);
+    expect(getRealtimeState()).toBe('disconnected');
+  });
+
+  it('quitte un salon déjà rejoint et reconnecte au retour à active', async () => {
+    subscribe('ready-event', jest.fn());
+    trigger('connexion.prete');
+    await joinRoom('room-id');
+    await leaveRoom('room-id');
+    expect(mockSocket.emit).toHaveBeenCalledWith('room-message.leave', { roomId: 'room-id' }, expect.any(Function));
+
+    mockSocket.connected = false;
+    appStateListener?.('active');
+    expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('publie les états de connexion et permet de désabonner les notifications', () => {
+    const changed = jest.fn();
+    const unsubscribeState = onConnectionState(changed);
+    const ready = jest.fn();
+    const unsubscribeReady = onReady(ready);
+    expect(changed).toHaveBeenLastCalledWith('connecting');
+    trigger('connect');
+    trigger('connect_error');
+    trigger('connexion.prete');
+    expect(hasRealtimeBeenReady()).toBe(true);
+    expect(changed).toHaveBeenLastCalledWith('ready');
+    unsubscribeReady();
+    unsubscribeState();
+    changed.mockClear();
+    trigger('disconnect');
+    trigger('connexion.prete');
+    expect(changed).not.toHaveBeenCalled();
+    expect(ready).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuse un service non configuré ou une session sans jeton', () => {
+    disconnectRealtime();
+    expect(() => subscribe('event', jest.fn())).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
+    configureRealtime({ getToken: () => null, onUnauthorized: jest.fn() });
+    expect(() => subscribe('event', jest.fn())).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
+    expect(mockIo).not.toHaveBeenCalled();
+  });
+
+  it('rejette un refus de salon sans masquer son erreur', async () => {
+    mockSocket.emit.mockImplementationOnce((_event: string, _payload: unknown, ack: (response: unknown) => void) => ack({ joined: false }));
+    const joining = joinRoom('denied');
+    const assertion = expect(joining).rejects.toMatchObject({ kind: 'forbidden' });
+    trigger('connexion.prete');
+    await assertion;
+  });
+
+  it('déduplique les demandes simultanées et ne rejoint pas deux fois un salon déjà rejoint', async () => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    let acknowledge!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event: string, _payload: unknown, ack: (response: unknown) => void) => { acknowledge = ack; });
+    const first = joinRoom('room');
+    const second = joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+    acknowledge({ joined: true });
+    await Promise.all([first, second]);
+    await joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejette l’accusé absent après le délai et ignore un accusé tardif', async () => {
+    jest.useFakeTimers();
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    let acknowledge!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event: string, _payload: unknown, ack: (response: unknown) => void) => { acknowledge = ack; });
+    const pending = joinRoom('timeout');
+    const assertion = expect(pending).rejects.toMatchObject({ kind: 'timeout' });
+    await jest.advanceTimersByTimeAsync(5_000);
+    await assertion;
+    acknowledge({ joined: true });
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('expire les demandes avant connexion.prete, y compris plusieurs demandes du même salon', async () => {
+    jest.useFakeTimers();
+    const first = joinRoom('room');
+    const second = joinRoom('room');
+    const firstAssertion = expect(first).rejects.toMatchObject({ kind: 'timeout' });
+    const secondAssertion = expect(second).rejects.toMatchObject({ kind: 'timeout' });
+    await jest.advanceTimersByTimeAsync(5_000);
+    await Promise.all([firstAssertion, secondAssertion]);
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('annule l’attente si l’écran quitte le salon avant la connexion et ferme les autres attentes à signOut', async () => {
+    const joining = joinRoom('cancelled');
+    const assertion = expect(joining).rejects.toMatchObject({ kind: 'timeout' });
+    await leaveRoom('cancelled');
+    await assertion;
+    const remaining = joinRoom('remaining');
+    const remainingAssertion = expect(remaining).rejects.toMatchObject({ kind: 'unauthorized' });
+    disconnectRealtime();
+    await remainingAssertion;
+  });
+
+  it('attend une adhésion en cours avant de quitter le salon', async () => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    let acknowledge!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event: string, _payload: unknown, ack: (response: unknown) => void) => { acknowledge = ack; });
+    const joined = joinRoom('room');
+    const leaving = leaveRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+    acknowledge({ joined: true });
+    await Promise.all([joined, leaving]);
+    expect(mockSocket.emit).toHaveBeenLastCalledWith('room-message.leave', { roomId: 'room' }, expect.any(Function));
+  });
+
+  it('rejette les attentes révoquées et ignore les notifications de révocation invalides', async () => {
+    const joining = joinRoom('revoked');
+    const assertion = expect(joining).rejects.toMatchObject({ kind: 'forbidden' });
+    trigger('room-message.revoked', null);
+    trigger('room-message.revoked', {});
+    trigger('room-message.revoked', { roomId: 123 });
+    trigger('room-message.revoked', { roomId: 'revoked' });
+    await assertion;
+    trigger('connexion.prete');
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+  });
+
+  it('ne reconnecte pas une connexion encore active ni au passage en arrière-plan', () => {
+    subscribe('event', jest.fn());
+    mockSocket.connected = true;
+    appStateListener?.('active');
+    appStateListener?.('background');
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
+  it.each(['disconnect', 'revoked', 'signOut'] as const)('ignore un accusé tardif après %s et n’émet pas leave sur un salon perdu', async (outcome) => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    let acknowledge!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event: string, _payload: unknown, ack: (response: unknown) => void) => { acknowledge = ack; });
+    const joining = joinRoom('room');
+    const leaving = leaveRoom('room');
+    if (outcome === 'disconnect') trigger('disconnect');
+    else if (outcome === 'revoked') trigger('room-message.revoked', { roomId: 'room' });
+    else disconnectRealtime();
+    acknowledge({ joined: true });
+    await Promise.all([joining, leaving]);
+    expect(mockSocket.emit).not.toHaveBeenCalledWith('room-message.leave', { roomId: 'room' }, expect.any(Function));
+  });
+
+  it('ignore un échec tardif après déconnexion et permet le nouvel abonnement', async () => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    let acknowledge!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event: string, _payload: unknown, ack: (response: unknown) => void) => { acknowledge = ack; });
+    const old = joinRoom('room');
+    const assertion = expect(old).rejects.toMatchObject({ kind: 'forbidden' });
+    trigger('disconnect');
+    trigger('connexion.prete');
+    acknowledge({ joined: false });
+    await assertion;
+    await joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['disconnect', 'signOut'] as const)('n’émet pas de join si un observateur interrompt la connexion prête (%s)', async (outcome) => {
+    jest.useFakeTimers();
+    const unsubscribe = onReady(() => {
+      if (outcome === 'disconnect') trigger('disconnect');
+      else disconnectRealtime();
+    });
+    const joining = joinRoom('pending-room');
+    const assertion = expect(joining).rejects.toMatchObject({ kind: outcome === 'disconnect' ? 'timeout' : 'unauthorized' });
+    trigger('connexion.prete');
+    unsubscribe();
+    await jest.advanceTimersByTimeAsync(5000);
+    await assertion;
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+    expect(getRealtimeState()).toBe('disconnected');
+  });
+});
