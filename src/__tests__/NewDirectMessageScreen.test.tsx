@@ -7,11 +7,6 @@ import { useSession } from '@/session/SessionContext';
 
 jest.mock('@/hooks/useNewDirectMessage', () => ({ useNewDirectMessage: jest.fn() }));
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn(() => ({ user: { id: 'me' } })) }));
-const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ navigate: mockNavigate }),
-}));
 
 const NEW_ID = '11111111-1111-4111-8111-111111111111';
 const OLD_ID = '22222222-2222-4222-8222-222222222222';
@@ -89,8 +84,11 @@ describe('NewDirectMessageScreen', () => {
   });
 });
 
-it('le bouton d’en-tête ouvre le choix du destinataire', async () => {
-  await render(<NewDirectMessageButton />);
+it('la carte plus déclenche son action sans afficher le texte Nouveau', async () => {
+  const onPress = jest.fn();
+  await render(<NewDirectMessageButton onPress={onPress} />);
+  expect(screen.queryByText('Nouveau')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Nouveau message privé' })).toHaveStyle({ minHeight: 64, borderRadius: 12 });
   await userEvent.setup().press(screen.getByRole('button', { name: 'Nouveau message privé' }));
-  expect(mockNavigate).toHaveBeenCalledWith('NewDirectMessage');
+  expect(onPress).toHaveBeenCalledTimes(1);
 });

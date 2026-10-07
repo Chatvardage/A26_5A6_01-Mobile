@@ -1,31 +1,38 @@
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { Routes, type RootStackParamList } from '@/navigation/routes';
 
-/** Bouton d'en-tête de l'onglet Messages privés : ouvre le choix d'un destinataire. */
-export function NewDirectMessageButton() {
+export function NewDirectMessageButton({ onPress }: { onPress: () => void }) {
   const theme = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <Pressable
-      onPress={() => navigation.navigate(Routes.NewDirectMessage)}
+      onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Nouveau message privé"
-      hitSlop={8}
-      style={({ pressed }) => [styles.button, { opacity: pressed ? 0.6 : 1 }]}
+      accessibilityHint="Choisir un destinataire"
+      style={({ pressed }) => [
+        styles.button,
+        { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement },
+      ]}
     >
-      <ThemedText type="smallBold" style={{ color: theme.tint }}>
-        Nouveau
-      </ThemedText>
+      <View style={styles.icon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <View style={[styles.horizontal, { backgroundColor: theme.tint }]} />
+        <View style={[styles.vertical, { backgroundColor: theme.tint }]} />
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },
+  button: {
+    margin: Spacing.three,
+    minHeight: Spacing.six,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  icon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  horizontal: { position: 'absolute', width: 24, height: 3, borderRadius: 2 },
+  vertical: { position: 'absolute', width: 3, height: 24, borderRadius: 2 },
 });

@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { NewDirectMessageButton } from '@/components/NewDirectMessageButton';
 import { MainTabs } from '@/navigation/MainTabs';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { Colors } from '@/constants/theme';
@@ -110,7 +109,7 @@ it('configure les quatre onglets, leurs titres et leurs icônes', async () => {
   expect(mockTabProps.backBehavior).toBe('firstRoute');
   expect(mockTabScreens.map((route) => route.name)).toEqual(['DirectMessages', 'Servers', 'Search', 'Preferences']);
   expect(mockTabScreens.map((route) => route.options)).toEqual([
-    { title: 'Messages privés', headerRight: NewDirectMessageButton }, { title: 'Serveurs' }, { title: 'Recherche' }, { title: 'Préférences' },
+    { title: 'Messages privés' }, { title: 'Serveurs' }, { title: 'Recherche' }, { title: 'Préférences' },
   ]);
   const icons = [
     ['DirectMessages', 'bubble.left'], ['Servers', 'server.rack'], ['Search', 'magnifyingglass'], ['Preferences', 'gearshape'],

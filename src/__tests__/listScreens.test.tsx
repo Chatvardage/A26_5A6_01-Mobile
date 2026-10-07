@@ -85,3 +85,23 @@ it('refuse un serveur invalide avant d’appeler le hook', async () => {
   expect(screen.getByText('Ce serveur est introuvable.')).toBeTruthy();
   expect(useServerChannels).not.toHaveBeenCalled();
 });
+
+describe('Carte de nouveau message privé', () => {
+  it.each<ReturnType<typeof useDirectMessages>['state']>([
+    { status: 'loading' },
+    { status: 'error', message: 'Service indisponible' },
+    { status: 'empty' },
+    { status: 'ready', data: [conversation] },
+  ])('reste accessible dans l’état $status et ouvre le choix du destinataire', async (state) => {
+    jest.mocked(useDirectMessages).mockReturnValue({ state, refreshing: false, retry, refresh });
+    await render(targets[0].element());
+    const button = screen.getByRole('button', { name: 'Nouveau message privé' });
+    expect(screen.queryByText('Nouveau')).toBeNull();
+    if (state.status === 'ready') {
+      expect(screen.getAllByRole('button')[0]).toBe(button);
+      expect(screen.getByRole('button', { name: /Alice/ })).toBeTruthy();
+    }
+    await fireEvent.press(button);
+    expect(navigate).toHaveBeenCalledWith('NewDirectMessage');
+  });
+});

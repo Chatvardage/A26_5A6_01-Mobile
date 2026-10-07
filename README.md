@@ -66,22 +66,23 @@ npm start
 
 Si le backend est joignable par l'adresse locale de l'ordinateur, l'app la déduit et utilise le port 3000.
 
-**Avec la stack Docker Infra**, le Gateway est volontairement publié sur `127.0.0.1:3000` : le PC peut le joindre, mais pas le téléphone. Sous Windows, créer une redirection dédiée, sans modifier les ports des microservices. Dans **PowerShell administrateur**, remplacer l'adresse d'exemple par l'IPv4 Wi-Fi du PC :
+**Avec la stack Docker Infra**, le Gateway est volontairement publié sur `127.0.0.1:3000` : le PC peut le joindre, mais pas le téléphone. Sous Windows, créer une seule fois une redirection dédiée, sans modifier les ports des microservices. Dans **PowerShell administrateur** :
 
 ```powershell
-$ip = "192.168.0.10"
-netsh interface portproxy add v4tov4 listenport=3006 listenaddress=$ip connectport=3000 connectaddress=127.0.0.1
-New-NetFirewallRule -DisplayName "Chatvardage API mobile 3006" -Direction Inbound -Protocol TCP -LocalAddress $ip -LocalPort 3006 -RemoteAddress LocalSubnet -Action Allow -Profile Any
+netsh interface portproxy add v4tov4 listenport=3006 listenaddress=0.0.0.0 connectport=3000 connectaddress=127.0.0.1
+New-NetFirewallRule -DisplayName "Chatvardage API mobile 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -RemoteAddress LocalSubnet -Action Allow -Profile Any
 ```
 
-Le port 3006 évite le port 3001, déjà utilisé localement par Auth-Service. Dans le fichier `.env` personnel de ce dépôt, définir `EXPO_PUBLIC_API_URL=http://192.168.0.10:3006` avec la même IP, puis relancer `npm start -- -c`. Cette URL explicite fonctionne aussi si Expo tourne dans WSL ou utilise un tunnel.
+La redirection et la règle ne dépendent pas de l'IP du PC : elles restent valides après un changement de réseau. Le port 3006 évite le port 3001, déjà utilisé localement par Auth-Service.
 
-Tester `http://192.168.0.10:3006/api/health` dans le navigateur du téléphone : la réponse doit contenir `"status":"ok"`. Le téléphone doit être sur le même Wi-Fi ; un réseau invité ou scolaire peut isoler les appareils. Si l'IP du PC change, mettre à jour la redirection, la règle de pare-feu et `.env`.
+Dans le fichier `.env` personnel de ce dépôt, définir `EXPO_PUBLIC_API_URL=http://<IPv4-Wi-Fi-du-PC>:3006` (ligne « Adresse IPv4 » du Wi-Fi dans `ipconfig`), puis relancer `npm start -- -c`. Cette URL explicite fonctionne aussi si Expo tourne dans WSL ou utilise un tunnel. **Si l'IP du PC change** (autre réseau, nouveau jour sur un Wi-Fi scolaire), mettre à jour seulement `.env`, puis relancer `npm start -- -c`.
 
-Pour retirer cet accès (PowerShell administrateur, avec l'IP utilisée lors de sa création) :
+Tester `http://<IPv4-Wi-Fi-du-PC>:3006/api/health` dans le navigateur du téléphone : la réponse doit contenir `"status":"ok"`. Le téléphone doit être sur le même Wi-Fi ; un réseau invité ou scolaire peut isoler les appareils.
+
+Pour retirer cet accès (PowerShell administrateur) :
 
 ```powershell
-netsh interface portproxy delete v4tov4 listenport=3006 listenaddress=192.168.0.10
+netsh interface portproxy delete v4tov4 listenport=3006 listenaddress=0.0.0.0
 Remove-NetFirewallRule -DisplayName "Chatvardage API mobile 3006"
 ```
 
