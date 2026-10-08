@@ -72,14 +72,14 @@ describe('notifications', () => {
     await expect(adapter.configureNotifications()).resolves.toBeUndefined();
   });
 
-  it("ne charge pas expo-notifications dans Expo Go sur Android : tout est indisponible", async () => {
+  it("ne charge pas expo-notifications dans Expo Go sur Android", async () => {
     setPlatform('android');
     jest.replaceProperty(Constants, 'executionEnvironment', 'storeClient' as never);
     await adapter.configureNotifications();
     expect(N.setNotificationHandler).not.toHaveBeenCalled();
     expect(await adapter.getPermission()).toBe('unavailable');
     expect(await adapter.requestPermission()).toBe('unavailable');
-    expect(await adapter.showMessageNotification({ conversationId: 'dm:a', title: 't', body: 'b' })).toBe(false);
+    expect(await adapter.showMessageNotification({conversationId:'dm:a',title:'t',body:'b'})).toBe(false);
     expect(adapter.onNotificationOpened(jest.fn())()).toBeUndefined();
     expect(await adapter.getLaunchTap()).toBeNull();
     await expect(adapter.setAppBadge(1)).resolves.toBeUndefined();

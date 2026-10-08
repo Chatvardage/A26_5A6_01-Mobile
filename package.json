@@ -11,10 +11,13 @@
     "@react-navigation/native-stack": "^7.20.0",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",
+    "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-glass-effect": "~57.0.4",
     "expo-image": "~57.0.5",
+    "expo-image-manipulator": "~57.0.21",
+    "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-localization": "~57.0.2",
     "expo-notifications": "~57.0.22",
@@ -53,8 +56,8 @@
   },
   "scripts": {
     "start": "node scripts/start.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
@@ -62,7 +65,9 @@
     "test:dependencies": "node scripts/check-xcode.js",
     "test:auth-e2e": "node scripts/auth-e2e.cjs",
     "typecheck": "tsc --noEmit",
-    "start:tunnel": "expo start --tunnel"
+    "start:tunnel": "expo start --tunnel",
+    "test:controle3-e2e": "node scripts/controle3-e2e.cjs",
+    "start:dev": "expo start --dev-client"
   },
   "private": true,
   "jest": {

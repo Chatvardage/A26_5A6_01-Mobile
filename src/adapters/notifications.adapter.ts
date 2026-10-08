@@ -38,9 +38,9 @@ export function openSystemSettings(): Promise<void> {
 
 /**
  * Crée l'adaptateur autour d'une fonction de chargement du module `expo-notifications`. Le module n'est chargé
- * qu'à la première utilisation, jamais dans Expo Go sur Android (SDK 53+) où son simple import lève une erreur
- * (le push y a été retiré) : les notifications sont alors `unavailable`. Une development build est nécessaire
- * pour les tester sur Android. La fonction de chargement est un paramètre pour pouvoir simuler un module absent.
+ * qu'à la première utilisation, hors Expo Go sur Android : le chargement du package peut déclencher
+ * l'erreur du module push absent. Les notifications système nécessitent une build de développement
+ * dans cet environnement. Les badges de l'application restent disponibles.
  */
 export function createNotificationsAdapter(loadModule: () => Notifications = defaultLoader) {
   let cached: Notifications | null | undefined;
