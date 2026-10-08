@@ -64,6 +64,5 @@ try {
   assert.ok(!xcode.project(projectPath).parseSync().hasFile('Smoke.swift'));
   console.log('Compatibilité xcode / uuid 11.1.1 : identifiants, ajout, suppression et sérialisation validés.');
 } finally {
-  if (fs.existsSync(projectPath)) fs.unlinkSync(projectPath);
-  fs.rmdirSync(directory);
+  fs.rmSync(directory, { recursive: true, force: true });
 }

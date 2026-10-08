@@ -68,6 +68,81 @@ beforeEach(() => {
 });
 
 describe('useMessages', () => {
+  it.each(['first-event', 'second-event', 'third-event', 'state', 'ready'] as const)(
+    'nettoie les abonnements partiels après un échec %s et les recrée au réessai',
+    async (step) => {
+      const unsubscribers: jest.Mock[] = [];
+      const subscribe = jest.mocked(realtime.subscribe);
+      const state = jest.mocked(realtime.onConnectionState);
+      const ready = jest.mocked(realtime.onReady);
+      const originalSubscribe = subscribe.getMockImplementation()!;
+      const originalState = state.getMockImplementation()!;
+      const originalReady = ready.getMockImplementation()!;
+      const failure = new ApiError('unauthorized', 'Session absente');
+      const failAt = ['first-event', 'second-event', 'third-event'].indexOf(step);
+      let subscriptions = 0;
+      subscribe.mockImplementation((event, handler) => {
+        if (subscriptions++ === failAt) throw failure;
+        const remove = originalSubscribe(event, handler);
+        const unsubscribe = jest.fn(remove);
+        unsubscribers.push(unsubscribe);
+        return unsubscribe;
+      });
+      state.mockImplementation((handler) => {
+        if (step === 'state') throw failure;
+        const unsubscribe = jest.fn(originalState(handler));
+        unsubscribers.push(unsubscribe);
+        return unsubscribe;
+      });
+      ready.mockImplementation(() => { throw failure; });
+      try {
+        const { result, unmount } = await renderHook(() => useMessages(roomConversation, ME));
+        expect(result.current.status).toBe('error');
+        expect(result.current.errorMessage).toBe('Votre session a expiré. Reconnectez-vous.');
+        expect(mockHandlers.size).toBe(0);
+        expect(fetchHistory).not.toHaveBeenCalled();
+        expect(realtime.joinRoom).not.toHaveBeenCalled();
+        expect(unsubscribers).toHaveLength(failAt >= 0 ? failAt : step === 'state' ? 3 : 4);
+        for (const unsubscribe of unsubscribers) expect(unsubscribe).toHaveBeenCalledTimes(1);
+
+        subscribe.mockImplementation(originalSubscribe);
+        state.mockImplementation(originalState);
+        ready.mockImplementation(originalReady);
+        await act(async () => result.current.retry());
+        expect(result.current.status).toBe('ready');
+        expect(result.current.errorMessage).toBeNull();
+        expect(result.current.messages).toEqual([message('first')]);
+        expect(mockHandlers.size).toBe(3);
+        expect(fetchHistory).toHaveBeenCalledTimes(1);
+        expect(realtime.joinRoom).toHaveBeenCalledWith(ROOM);
+        await unmount();
+        expect(mockHandlers.size).toBe(0);
+        expect(realtime.leaveRoom).toHaveBeenCalledWith(ROOM);
+        for (const unsubscribe of unsubscribers) expect(unsubscribe).toHaveBeenCalledTimes(1);
+      } finally {
+        subscribe.mockImplementation(originalSubscribe);
+        state.mockImplementation(originalState);
+        ready.mockImplementation(originalReady);
+      }
+    },
+  );
+
+  it('nettoie les abonnements puis propage une exception inattendue à l’initialisation', async () => {
+    const subscribe = jest.mocked(realtime.subscribe);
+    const original = subscribe.getMockImplementation()!;
+    const unsubscribe = jest.fn();
+    const failure = new Error('Exception inattendue');
+    subscribe.mockImplementationOnce(() => unsubscribe).mockImplementationOnce(() => { throw failure; });
+    try {
+      await expect(renderHook(() => useMessages(conversationId, ME))).rejects.toBe(failure);
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      expect(fetchHistory).not.toHaveBeenCalled();
+      expect(realtime.joinRoom).not.toHaveBeenCalled();
+    } finally {
+      subscribe.mockImplementation(original);
+    }
+  });
+
   it.each(
     (['loading', 'ready'] as const).flatMap((status) => [
       { status, error: new Error('Erreur de fusion inattendue'), label: 'non typée' },

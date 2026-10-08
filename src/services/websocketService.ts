@@ -158,6 +158,7 @@ export function configureRealtime(configuration: RealtimeOptions) {
       setState('connecting');
       refreshingToken = true;
       try {
+        // Socket.IO émet « disconnect » synchroniquement, uniquement si le socket est connecté.
         socket.disconnect();
         socket.connect();
       } finally {

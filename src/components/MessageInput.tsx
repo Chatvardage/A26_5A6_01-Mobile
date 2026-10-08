@@ -18,6 +18,17 @@ type Props = {
 };
 
 const drafts = new Map<string, string>();
+const MAX_DRAFTS = 100;
+
+function storeDraft(store: Map<string, string>, conversationId: string, value: string) {
+  store.delete(conversationId);
+  if (!value.trim()) return;
+  store.set(conversationId, value);
+  for (const oldestId of store.keys()) {
+    if (store.size <= MAX_DRAFTS) break;
+    store.delete(oldestId);
+  }
+}
 
 export function MessageInput(props: Props) {
   const editingKey = props.editingMessage ? `edit:${props.editingMessage.id}` : 'compose';
@@ -34,6 +45,12 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
   const mounted = useRef(true);
 
   useEffect(() => {
+    if (editingMessage) return;
+    const saved = draftStore.get(conversationId);
+    if (saved !== undefined) storeDraft(draftStore, conversationId, saved);
+  }, [conversationId, draftStore, editingMessage]);
+
+  useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
@@ -43,7 +60,7 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
   const changeText = (value: string) => {
     textRef.current = value;
     setText(value);
-    if (!editingMessage) draftStore.set(conversationId, value);
+    if (!editingMessage) storeDraft(draftStore, conversationId, value);
     setError(null);
   };
 
@@ -60,7 +77,8 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
         onCancelEdit();
       } else {
         await onSend(trimmed);
-        if (textRef.current === submittedText && draftStore.get(conversationId) === submittedText) {
+        const savedDraft = draftStore.get(conversationId);
+        if (textRef.current === submittedText && (savedDraft === undefined || savedDraft === submittedText)) {
           draftStore.delete(conversationId);
           if (mounted.current) {
             textRef.current = '';

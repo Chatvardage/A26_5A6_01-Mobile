@@ -54,6 +54,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const pseudoCache = useRef(new Map<string, string>());
   const pseudoLookups = useRef(new Set<string>());
   const olderRequest = useRef(false);
+  const subscriptionFailed = useRef(false);
+  const [subscriptionAttempt, setSubscriptionAttempt] = useState(0);
 
   const updateStatus = useCallback((next: Status) => {
     statusRef.current = next;
@@ -186,17 +188,28 @@ export function useMessages(conversationId: string, currentUserId: string) {
       );
     };
 
-    const unsubscribeEvents = events.map(([event, handler]) => subscribe(event, handler));
-    const unsubscribeState = onConnectionState(setConnection);
-    const unsubscribeReady = onReady(() => {
-      // Un abonnement expiré avant la première connexion, refusé ou révoqué est retenté à chaque connexion prête.
-      if (joinFailed) join();
-      if (firstReadyIsInitial) {
-        firstReadyIsInitial = false;
-        return;
-      }
-      void loadRecent();
-    });
+    const unsubscribers: (() => void)[] = [];
+    try {
+      for (const [event, handler] of events) unsubscribers.push(subscribe(event, handler));
+      unsubscribers.push(onConnectionState(setConnection));
+      unsubscribers.push(onReady(() => {
+        // Un abonnement expiré avant la première connexion, refusé ou révoqué est retenté à chaque connexion prête.
+        if (joinFailed) join();
+        if (firstReadyIsInitial) {
+          firstReadyIsInitial = false;
+          return;
+        }
+        void loadRecent();
+      }));
+    } catch (error) {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      if (!(error instanceof ApiError)) throw error;
+      subscriptionFailed.current = true;
+      setErrorMessage(userMessage(error));
+      updateStatus('error');
+      return;
+    }
+    subscriptionFailed.current = false;
     setConnection(getRealtimeState());
     join();
     void loadRecent();
@@ -205,15 +218,14 @@ export function useMessages(conversationId: string, currentUserId: string) {
       // Invalide les réponses REST et les résolutions de pseudos de cette conversation.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       generation.current++;
-      unsubscribeEvents.forEach((unsubscribe) => unsubscribe());
-      unsubscribeState();
-      unsubscribeReady();
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
       if (ref?.kind === 'room') void leaveRoom(ref.targetId).catch(() => undefined);
     };
-  }, [conversationId, currentUserId, loadRecent, updateMessages, updateStatus]);
+  }, [conversationId, currentUserId, loadRecent, subscriptionAttempt, updateMessages, updateStatus]);
 
   const retry = useCallback(() => {
-    void loadRecent();
+    if (subscriptionFailed.current) setSubscriptionAttempt((attempt) => attempt + 1);
+    else void loadRecent();
   }, [loadRecent]);
 
   const loadOlder = useCallback(async () => {

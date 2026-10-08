@@ -258,7 +258,7 @@ Les messages privés (`dm:<uuid>`) et les salons (`room:<uuid>`) utilisent le m�
 
 Le temps réel est configuré avant de publier une session connectée. Un renouvellement du jeton reconnecte le socket sans supprimer les abonnements ; une déconnexion ou révocation ferme le socket. Après reconnexion, l'historique récent est rechargé et fusionné sans vider les pages déjà chargées.
 
-**Limites à connaître** : les brouillons restent uniquement en mémoire du processus, sans stockage sur disque ni garantie après fermeture/rechargement de l'app. Le rattrapage après reconnexion recharge une seule page récente de 50 messages, pas toute une interruption prolongée. La validation sur appareil avec deux sessions backend réelles reste nécessaire pour confirmer le défilement, le clavier et les transitions arrière-plan/réseau.
+**Limites à connaître** : les brouillons restent uniquement en mémoire du processus, sans stockage sur disque ni garantie après fermeture/rechargement de l'app. Au maximum 100 brouillons non vides sont conservés : au-delà, le moins récemment ouvert ou modifié est supprimé (LRU). Un champ vidé ou composé uniquement d'espaces ne conserve pas d'entrée. Le rattrapage après reconnexion recharge une seule page récente de 50 messages, pas toute une interruption prolongée. La validation sur appareil avec deux sessions backend réelles reste nécessaire pour confirmer le défilement, le clavier et les transitions arrière-plan/réseau.
 
 Les dates `createdAt` et `updatedAt` des messages doivent être valides. Une réponse REST ou un événement temps réel contenant une date invalide est signalé comme une réponse serveur invalide, sans remplacer la liste déjà affichée.
 

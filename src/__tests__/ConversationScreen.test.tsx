@@ -124,7 +124,7 @@ describe('ConversationScreen', () => {
     expect(screen.getByText('Alice')).toBeTruthy();
     expect(screen.getByText('Connexion au service de messages…')).toBeTruthy();
     expect(screen.getByRole('alert')).toHaveTextContent('Rattrapage impossible');
-    await fireEvent.press(screen.getByRole('button', { name: 'Réessayer' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Réessayer le chargement des messages précédents' }));
     expect(loadOlder).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Autre message' })).toBeNull();
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');

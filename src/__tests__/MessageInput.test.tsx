@@ -26,6 +26,67 @@ const renderInput = async (props: Partial<React.ComponentProps<typeof MessageInp
   );
 
 describe('MessageInput', () => {
+  it('vide le champ après un envoi réussi même si son brouillon a été évincé entre-temps', async () => {
+    let resolve!: () => void;
+    const onSend = jest.fn(() => new Promise<void>((done) => { resolve = done; }));
+    await renderInput({ conversationId: 'evicted-pending', onSend });
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'texte envoyé');
+    await fireEvent.press(screen.getByRole('button', { name: 'Envoyer' }));
+    draftStore.delete('evicted-pending');
+    await act(async () => resolve());
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('');
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith('texte envoyé');
+    expect(draftStore.has('evicted-pending')).toBe(false);
+  });
+
+  it('limite les brouillons à 100 et protège celui récemment rouvert contre l’éviction', async () => {
+    for (let index = 0; index < 100; index++) draftStore.set(`draft-${index}`, `texte-${index}`);
+    const reopened = await renderInput({ conversationId: 'draft-0' });
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('texte-0');
+    expect(draftStore.size).toBe(100);
+    expect([...draftStore.keys()].at(-1)).toBe('draft-0');
+    await reopened.unmount();
+
+    const added = await renderInput({ conversationId: 'draft-100' });
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'nouveau brouillon');
+    expect(draftStore.size).toBe(100);
+    expect(draftStore.has('draft-1')).toBe(false);
+    expect(draftStore.get('draft-0')).toBe('texte-0');
+    expect(draftStore.get('draft-100')).toBe('nouveau brouillon');
+    await added.unmount();
+    await renderInput({ conversationId: 'draft-1' });
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('');
+  });
+
+  it('actualise la priorité à la modification et supprime les brouillons vides ou uniquement composés d’espaces', async () => {
+    for (let index = 0; index < 100; index++) draftStore.set(`draft-${index}`, `texte-${index}`);
+    const edited = await renderInput({ conversationId: 'draft-0' });
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'nouveau texte');
+    expect([...draftStore.keys()].at(-1)).toBe('draft-0');
+    expect(draftStore.get('draft-0')).toBe('nouveau texte');
+    expect(draftStore.size).toBe(100);
+    await fireEvent.changeText(screen.getByLabelText('Message'), '   ');
+    expect(draftStore.has('draft-0')).toBe(false);
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('   ');
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'nouveau texte');
+    await fireEvent.changeText(screen.getByLabelText('Message'), '');
+    expect(draftStore.has('draft-0')).toBe(false);
+    expect(draftStore.size).toBe(99);
+    await edited.unmount();
+    await renderInput({ conversationId: 'draft-0' });
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('');
+  });
+
+  it('ne modifie pas le store ni sa priorité en mode modification de message', async () => {
+    draftStore.set('editing-draft', 'brouillon de composition');
+    draftStore.set('other', 'autre brouillon');
+    const snapshot = [...draftStore.entries()];
+    await renderInput({ conversationId: 'editing-draft', editingMessage: { id: 'one', content: 'original' } });
+    await fireEvent.changeText(screen.getByLabelText('Modifier le message'), 'corrigé');
+    expect([...draftStore.entries()]).toEqual(snapshot);
+  });
+
   it('refuse un message vide et conserve le texte en cas d’échec', async () => {
     const onSend = jest.fn().mockRejectedValue('Envoi refusé.');
     await renderInput({ conversationId: 'input-empty-failure', onSend });

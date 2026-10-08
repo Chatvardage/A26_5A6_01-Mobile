@@ -90,6 +90,33 @@ afterEach(() => {
 });
 
 describe('websocketService', () => {
+  it('confirme que le vrai client Socket.IO émet disconnect avant le retour et ne l’émet pas deux fois', () => {
+    const { Manager, Socket } = jest.requireActual<typeof import('socket.io-client')>('socket.io-client');
+    const manager = new Manager({ autoConnect: false });
+    jest.spyOn(manager, '_packet').mockImplementation(() => undefined);
+    const current = new Socket(manager, '/messages');
+    const order: string[] = [];
+    current.on('disconnect', (reason) => order.push(reason));
+    current.connected = true;
+    current.disconnect();
+    order.push('retour');
+    current.disconnect();
+    expect(order).toEqual(['io client disconnect', 'retour']);
+  });
+
+  it('ne masque pas une coupure ultérieure si le renouvellement ne produit aucun événement disconnect', () => {
+    onReady(jest.fn());
+    const changed = jest.fn();
+    onConnectionState(changed);
+    mockSocket.disconnect.mockImplementationOnce(() => {
+      mockSocket.connected = false;
+    });
+    configureRealtime({ getToken: () => 'renewed-token', onUnauthorized: jest.fn() });
+    expect(mockSocket.connect).toHaveBeenCalledTimes(1);
+    trigger('disconnect', 'transport close');
+    expect(changed.mock.calls).toEqual([['disconnected']]);
+  });
+
   it('renouvelle le handshake sans perdre les abonnements ni émettre avant connexion.prete', async () => {
     const handler = jest.fn();
     const ready = jest.fn();

@@ -7,13 +7,13 @@ export type ApiErrorKind =
   | 'unauthorized'
   | 'forbidden'
   | 'not_found'
-  | 'rate_limited'
+  | 'rate_limited' // HTTP 429 produit par kindFromStatus ; message orienté messagerie.
   | 'server'
   | 'unknown'
   | 'invalid_response'
   | 'storage'
   | 'conflict'
-  | 'rate_limit';
+  | 'rate_limit'; // Compatibilité avec les consommateurs auth historiques ; message de tentatives limitées.
 
 export class ApiError extends Error {
   constructor(
@@ -41,32 +41,22 @@ export function kindFromStatus(status: number): ApiErrorKind {
 export function userMessage(error: unknown): string {
   const strings = getTranslations();
   if (error instanceof ApiError) {
-    switch (error.kind) {
-      case 'bad_request':
-        return strings.errors.badRequest;
-      case 'conflict':
-        return strings.errors.conflict;
-      case 'rate_limit':
-        return strings.errors.rateLimit;
-      case 'rate_limited':
-        return strings.errors.rateLimited;
-      case 'storage':
-        return strings.errors.storage;
-      case 'invalid_response':
-        return strings.errors.invalidResponse;
-      case 'network':
-        return strings.errors.network;
-      case 'timeout':
-        return strings.errors.timeout;
-      case 'unauthorized':
-        return strings.errors.unauthorized;
-      case 'forbidden':
-        return strings.errors.forbidden;
-      case 'not_found':
-        return strings.errors.notFound;
-      case 'server':
-        return strings.errors.server;
-    }
+    const messages = {
+      bad_request: strings.errors.badRequest,
+      conflict: strings.errors.conflict,
+      rate_limit: strings.errors.rateLimit,
+      rate_limited: strings.errors.rateLimited,
+      storage: strings.errors.storage,
+      invalid_response: strings.errors.invalidResponse,
+      network: strings.errors.network,
+      timeout: strings.errors.timeout,
+      unauthorized: strings.errors.unauthorized,
+      forbidden: strings.errors.forbidden,
+      not_found: strings.errors.notFound,
+      server: strings.errors.server,
+      unknown: strings.errors.generic,
+    } satisfies Record<ApiErrorKind, string>;
+    return messages[error.kind];
   }
   return strings.errors.generic;
 }

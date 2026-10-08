@@ -65,7 +65,11 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
                   <ThemedText type="small" themeColor="danger">
                     {olderError}
                   </ThemedText>
-                  <Pressable onPress={() => void loadOlder()} accessibilityRole="button">
+                  <Pressable
+                    onPress={() => void loadOlder()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Réessayer le chargement des messages précédents"
+                  >
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
                       Réessayer
                     </ThemedText>
