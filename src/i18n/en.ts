@@ -265,6 +265,11 @@ export const en = {
     badgeNote: 'The unread badge stays visible in the app, even without notifications.',
   },
   control: {
+    transferTitle: (name: string) => `Kick ${name}, the server owner`,
+    transferHint: "Choose the member who will become the owner. They will get every right on the server.",
+    makeOwner: "Make owner",
+    transferConfirmTitle: (owner: string, name: string) => `Kick ${owner} and make ${name} the owner?`,
+    transferConfirmHint: "The former owner loses access to the server and its messages.",
     publicServers: "Public servers",
     searchServers: "Search a server…",
     loadMoreServers: "Show more servers",

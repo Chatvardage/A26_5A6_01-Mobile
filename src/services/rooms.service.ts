@@ -28,7 +28,8 @@ export const acceptInvitation = (id: string) => apiFetch<Server>(`${url(id)}/inv
 export const refuseInvitation = (id: string) => apiFetch<void>(`${url(id)}/invitations/refuse`, body('POST'));
 export const inviteMember = (id: string, utilisateurId: string) => apiFetch(`${url(id)}/invitations`, body('POST', { utilisateurId }));
 export const changeMemberRole = (id: string, userId: string, role: 'membre' | 'moderateur') => apiFetch(`${url(id)}/members/${encodeURIComponent(userId)}`, body('PATCH', { role }));
-export const kickMember = (id: string, userId: string) => apiFetch(`${url(id)}/members/${encodeURIComponent(userId)}`, body('DELETE'));
+/** Expulser le propriétaire (administrateur) exige un autre membre qui reçoit la propriété du serveur. */
+export const kickMember = (id: string, userId: string, newOwnerId?: string) => apiFetch(`${url(id)}/members/${encodeURIComponent(userId)}${newOwnerId ? `?nouveauProprietaire=${encodeURIComponent(newOwnerId)}` : ''}`, body('DELETE'));
 export async function getMembers(id: string, offset = 0): Promise<MembersPage> {
   const page = await apiFetch<MembersPage>(`${url(id)}/members?decalage=${offset}&limite=50`);
   const names = await lookupPseudos(page.membres.map(m => m.utilisateurId));

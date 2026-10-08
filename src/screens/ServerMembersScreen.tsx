@@ -31,6 +31,8 @@ function Members({ serverId, navigation }: { serverId: string; navigation: Props
   const [extra, setExtra] = useState<Member[]>([]); const [next, setNext] = useState<number | null | undefined>();
   const [query, setQuery] = useState(''); const [choices, setChoices] = useState<UserChoice[]>([]);
   const [busy, setBusy] = useState(false); const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(false);
+  // Expulsion du propriétaire (administrateur) : on choisit d'abord le membre qui reçoit la propriété.
+  const [transfer, setTransfer] = useState<{ ownerId: string; ownerName: string } | null>(null);
   async function run(action: () => Promise<unknown>, refreshList = true) { if (busy) return; setBusy(true); setError(null); setNotice(false); try { await action(); if (refreshList) { setExtra([]); setNext(undefined); await refresh(); } } catch (e) { setError(e); } finally { setBusy(false); } }
   const profiles = usePublicProfiles(state.status === 'ready' ? [...state.data.page.membres, ...extra].map(member => member.utilisateurId) : []);
   if (state.status === 'loading') return <LoadingState />;
@@ -41,6 +43,10 @@ function Members({ serverId, navigation }: { serverId: string; navigation: Props
   return <ThemedView style={{ flex: 1 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 16, maxWidth: 700, width: '100%', alignSelf: 'center' }}>
     {error ? <ThemedText accessibilityRole="alert" themeColor="danger">{userMessage(error)}</ThemedText> : null}
     {notice ? <ThemedText>{t.inviteSent}</ThemedText> : null}
+    {transfer ? <SectionCard title={t.transferTitle(transfer.ownerName)}>
+      <ThemedText themeColor="textSecondary">{t.transferHint}</ThemedText>
+      <ActionButton label={t.cancel} disabled={busy} onPress={() => setTransfer(null)} />
+    </SectionCard> : null}
     {members.map(rawMember => {
       const member = { ...rawMember, role: effectiveMemberRole(server, rawMember, user?.id ?? '') };
       const profile = profiles[member.utilisateurId];
@@ -52,8 +58,9 @@ function Members({ serverId, navigation }: { serverId: string; navigation: Props
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {member.utilisateurId !== user?.id ? <ActionButton compact label={`${t.dm} \u00b7 ${name}`} onPress={() => navigation.navigate(Routes.Conversation, { conversationId: `dm:${member.utilisateurId}`, title: name })} /> : null}
-          {canKick(server, member, user?.id ?? '') ? <ActionButton compact disabled={busy} label={t.kick} danger onPress={() => show({ title: t.kickTitle(name), message: t.kickHint, actions: [{ label: t.cancel, kind: 'cancel' }, { label: t.kick, kind: 'danger', onPress: () => void run(() => kickMember(server.id, member.utilisateurId)) }] })} /> : null}
+          {canKick(server, member, user?.id ?? '') && !transfer ? <ActionButton compact disabled={busy} label={t.kick} danger onPress={() => member.role === 'proprietaire' ? setTransfer({ ownerId: member.utilisateurId, ownerName: name }) : show({ title: t.kickTitle(name), message: t.kickHint, actions: [{ label: t.cancel, kind: 'cancel' }, { label: t.kick, kind: 'danger', onPress: () => void run(() => kickMember(server.id, member.utilisateurId)) }] })} /> : null}
         </View>
+        {transfer && member.utilisateurId !== transfer.ownerId ? <ActionButton disabled={busy} label={`${t.makeOwner} · ${name}`} onPress={() => show({ title: t.transferConfirmTitle(transfer.ownerName, name), message: t.transferConfirmHint, actions: [{ label: t.cancel, kind: 'cancel' }, { label: t.kick, kind: 'danger', onPress: () => void run(async () => { await kickMember(server.id, transfer.ownerId, member.utilisateurId); setTransfer(null); }) }] })} /> : null}
         {canManageServer(server) && member.role !== 'proprietaire' && member.role !== 'admin' && member.utilisateurId !== user?.id ? <ActionButton disabled={busy} label={member.role === 'moderateur' ? t.demote : t.promote} onPress={() => void run(() => changeMemberRole(server.id, member.utilisateurId, member.role === 'moderateur' ? 'membre' : 'moderateur'))} /> : null}
       </SectionCard>;
     })}

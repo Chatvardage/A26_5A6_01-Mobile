@@ -265,6 +265,11 @@ export const fr = {
     badgeNote: 'Le badge de messages non lus reste visible dans l’application, même sans notification.',
   },
   control: {
+    transferTitle: (name: string) => `Expulser ${name}, propriétaire du serveur`,
+    transferHint: "Choisissez le membre qui deviendra propriétaire. Il recevra tous les droits sur le serveur.",
+    makeOwner: "Nommer propriétaire",
+    transferConfirmTitle: (owner: string, name: string) => `Expulser ${owner} et nommer ${name} propriétaire ?`,
+    transferConfirmHint: "L’ancien propriétaire perd l’accès au serveur et à ses messages.",
     publicServers: "Serveurs publics",
     searchServers: "Rechercher un serveur…",
     loadMoreServers: "Afficher plus de serveurs",

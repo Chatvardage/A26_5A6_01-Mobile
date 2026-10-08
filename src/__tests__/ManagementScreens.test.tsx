@@ -67,3 +67,30 @@ it('centre la visibilite et colore les indications des champs', async () => {
     expect(screen.getByLabelText(label).props.placeholderTextColor).toBeTruthy();
   }
 });
+
+it('un admin expulse le propriétaire en nommant un autre membre propriétaire', async () => {
+  jest.mocked(rooms.getServer).mockResolvedValue({ ...server, proprietaireId: 'owner', monRole: 'admin' });
+  jest.mocked(rooms.getMembers).mockResolvedValue({ membres: [{ utilisateurId: 'owner', role: 'membre', pseudo: 'Lili' }, { utilisateurId: 'alice', role: 'membre', pseudo: 'Alice' }], total: 2, suivant: null });
+  await render(<ServerMembersScreen {...members} />);
+  await fireEvent.press((await screen.findAllByRole('button', { name: 'Expulser' }))[0]);
+  expect(screen.queryByTestId('app-dialog')).toBeNull();
+  expect(screen.getByText('Expulser Lili, propriétaire du serveur')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Nommer propriétaire · Lili' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Expulser' })).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Nommer propriétaire · Alice' }));
+  expect(dialog().getByRole('header')).toHaveTextContent('Expulser Lili et nommer Alice propriétaire ?');
+  await confirmWith('Expulser');
+  expect(rooms.kickMember).toHaveBeenCalledWith(id, 'owner', 'alice');
+  expect(screen.queryByText('Expulser Lili, propriétaire du serveur')).toBeNull();
+});
+
+it('annule le choix du nouveau propriétaire sans rien expulser', async () => {
+  jest.mocked(rooms.getServer).mockResolvedValue({ ...server, proprietaireId: 'owner', monRole: 'admin' });
+  jest.mocked(rooms.getMembers).mockResolvedValue({ membres: [{ utilisateurId: 'owner', role: 'membre', pseudo: 'Lili' }, { utilisateurId: 'alice', role: 'membre', pseudo: 'Alice' }], total: 2, suivant: null });
+  await render(<ServerMembersScreen {...members} />);
+  await fireEvent.press((await screen.findAllByRole('button', { name: 'Expulser' }))[0]);
+  await fireEvent.press(screen.getByRole('button', { name: 'Annuler' }));
+  expect(screen.queryByText('Expulser Lili, propriétaire du serveur')).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Expulser' })).toHaveLength(2);
+  expect(rooms.kickMember).not.toHaveBeenCalled();
+});

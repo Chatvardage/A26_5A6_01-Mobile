@@ -43,8 +43,8 @@ it('charge les membres par pages et résout leurs pseudos', async () => {
   await rooms.getMembers('s', 50); expect(request).toHaveBeenLastCalledWith('/api/servers/s/members?decalage=50&limite=50');
 });
 it('invite, change le rôle et expulse par identifiant encodé', async () => {
-  await rooms.inviteMember('s','u'); await rooms.changeMemberRole('s','u/a','moderateur'); await rooms.kickMember('s','u/a');
-  expect(request.mock.calls).toEqual([['/api/servers/s/invitations',{ method:'POST', body:'{"utilisateurId":"u"}' }], ['/api/servers/s/members/u%2Fa',{ method:'PATCH',body:'{"role":"moderateur"}' }], ['/api/servers/s/members/u%2Fa',{method:'DELETE'}]]);
+  await rooms.inviteMember('s','u'); await rooms.changeMemberRole('s','u/a','moderateur'); await rooms.kickMember('s','u/a'); await rooms.kickMember('s','owner','b/c');
+  expect(request.mock.calls).toEqual([['/api/servers/s/invitations',{ method:'POST', body:'{"utilisateurId":"u"}' }], ['/api/servers/s/members/u%2Fa',{ method:'PATCH',body:'{"role":"moderateur"}' }], ['/api/servers/s/members/u%2Fa',{method:'DELETE'}], ['/api/servers/s/members/owner?nouveauProprietaire=b%2Fc',{method:'DELETE'}]]);
 });
 it.each(['membre','moderateur','proprietaire','admin',null] as const)('propose seulement les actions de rôle %s', role => {
   const value = { ...server, monRole: role };
@@ -71,6 +71,8 @@ it('le proprietaire reste protege lorsque son adhesion indique membre', () => {
   const owner = { utilisateurId: 'owner', role: 'membre' as const };
   expect(rooms.effectiveMemberRole(value, owner, 'me')).toBe('proprietaire');
   expect(rooms.canKick(value, owner, 'me')).toBe(false);
+  // Seul un administrateur expulse le propriétaire (en désignant son successeur).
+  expect(rooms.canKick({ ...server, monRole: 'admin' }, owner, 'me')).toBe(true);
   expect(rooms.effectiveMemberRole(value, {utilisateurId:'me',role:'membre'}, 'me')).toBe('moderateur');
   expect(rooms.effectiveMemberRole(value, {utilisateurId:'other',role:'membre'}, 'me')).toBe('membre');
 });
