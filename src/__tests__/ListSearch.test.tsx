@@ -1,7 +1,8 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 
 import { HeaderSearchButton } from '@/components/HeaderSearchButton';
-import type { ReactElement } from 'react';
+import { NavigationContext } from '@react-navigation/native';
+import type { ReactElement, ReactNode } from 'react';
 
 import { foldText, useListFilter } from '@/hooks/useListFilter';
 import { useDirectMessages } from '@/hooks/useDirectMessages';
@@ -67,4 +68,21 @@ it('la loupe se présente comme un bouton, sélectionné quand la recherche est 
   expect(screen.getByRole('button', { name: 'Rechercher un serveur' })).toBeSelected();
   await view.rerender(<HeaderSearchButton label="Rechercher un serveur" active={false} onPress={onPress} />);
   expect(screen.getByRole('button', { name: 'Rechercher un serveur' })).not.toBeSelected();
+});
+
+it('ferme et vide la recherche quand on quitte l’écran', async () => {
+  let blur: () => void = () => undefined;
+  const unsubscribe = jest.fn();
+  const navigation = { addListener: jest.fn((event: string, listener: () => void) => { if (event === 'blur') blur = listener; return unsubscribe; }) };
+  const wrapper = ({ children }: { children: ReactNode }) => <NavigationContext.Provider value={navigation as never}>{children}</NavigationContext.Provider>;
+  const hook = await renderHook(() => useListFilter(['Équipe', 'Projet'], (name: string) => name), { wrapper });
+  await act(async () => hook.result.current.toggle());
+  await act(async () => hook.result.current.setQuery('equ'));
+  expect(hook.result.current.filtered).toEqual(['Équipe']);
+  await act(async () => blur());
+  expect(hook.result.current.open).toBe(false);
+  expect(hook.result.current.query).toBe('');
+  expect(hook.result.current.filtered).toEqual(['Équipe', 'Projet']);
+  await hook.unmount();
+  expect(unsubscribe).toHaveBeenCalled();
 });
