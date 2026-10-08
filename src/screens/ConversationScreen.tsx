@@ -56,7 +56,7 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [messageNotFound, setMessageNotFound] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const ready = status === 'ready';
 
@@ -66,20 +66,20 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
     let cancelled = false;
     // Nouvelle demande : l'avis précédent ne vaut plus.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNotice(null);
+    setMessageNotFound(false);
     void jumpTo(messageId).then((found) => {
       if (cancelled) return;
       if (found) {
         setHighlightedId(messageId);
         setScrollTarget(messageId);
       } else {
-        setNotice(strings.search.messageNotFound);
+        setMessageNotFound(true);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [messageId, focusToken, ready, jumpTo, strings]);
+  }, [messageId, focusToken, ready, jumpTo]);
 
   // Défilement une fois le message présent dans la liste (les pages anciennes viennent d'être ajoutées).
   useEffect(() => {
@@ -249,9 +249,9 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
               {actionError}
             </ThemedText>
           ) : null}
-          {notice ? (
-            <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
-              {notice}
+          {messageNotFound ? (
+            <ThemedText type="small" themeColor="textSecondary" accessibilityLiveRegion="polite" style={styles.liveError}>
+              {strings.search.messageNotFound}
             </ThemedText>
           ) : null}
           {body}

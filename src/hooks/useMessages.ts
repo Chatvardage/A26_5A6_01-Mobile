@@ -16,6 +16,8 @@ import type { ChatMessage } from '@/types/conversation';
 import { parseConversationId } from '@/types/conversationId';
 
 const PAGE_SIZE = 50;
+/** Suppressions mémorisées (pour ignorer une réponse tardive qui les ramènerait) : les plus anciennes sont oubliées. */
+const MAX_DELETED_IDS = 500;
 /** Garde-fou comme le client Web : au plus 20 pages (1 000 messages) chargées pour atteindre un message. */
 const MAX_JUMP_PAGES = 20;
 type Status = 'loading' | 'error' | 'ready';
@@ -78,6 +80,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
   /** Retire un message supprimé (événement temps réel ou action locale), y compris du tampon de chargement. */
   const forget = useCallback((messageId: string) => {
     deletedIds.current.add(messageId);
+    if (deletedIds.current.size > MAX_DELETED_IDS) deletedIds.current.delete(deletedIds.current.values().next().value as string);
     eventBuffer.current = eventBuffer.current.filter((message) => message.id !== messageId);
     messagesRef.current = messagesRef.current.filter((message) => message.id !== messageId);
     setMessages(messagesRef.current);

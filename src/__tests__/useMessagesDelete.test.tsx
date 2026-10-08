@@ -152,6 +152,19 @@ describe('useMessages : suppression', () => {
     expect(ids(hook)).not.toContain('ancien');
   });
 
+  it('borne la mémoire des suppressions : les plus anciennes sont oubliées, les récentes restent filtrées', async () => {
+    const hook = await setup();
+    await act(async () => {
+      for (let i = 0; i <= 500; i++) {
+        mockHandlers.get('private-message.deleted')!({ id: `del${i}`, senderId: OLI, recipientId: ME });
+      }
+    });
+    await act(async () => mockHandlers.get('private-message.created')!({ ...message('del0'), recipientId: ME }));
+    await act(async () => mockHandlers.get('private-message.created')!({ ...message('del500'), recipientId: ME }));
+    expect(ids(hook)).toContain('del0');
+    expect(ids(hook)).not.toContain('del500');
+  });
+
   it('oublie les suppressions quand on change de conversation', async () => {
     const hook = await setup();
     await act(async () => mockHandlers.get('private-message.deleted')!({ id: 'a', senderId: OLI, recipientId: ME }));
