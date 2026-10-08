@@ -1,4 +1,4 @@
-import { splitHighlight } from '@/utils/highlight';
+import { splitHighlight } from '@/partage/highlight';
 
 describe('splitHighlight', () => {
   it('marque chaque occurrence sans tenir compte de la casse', () => {

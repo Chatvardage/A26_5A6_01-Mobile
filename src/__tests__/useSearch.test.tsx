@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { useSearch } from '@/hooks/useSearch';
+import { useSearchResults } from '@/partage/useSearch';
 import { ApiError } from '@/services/ApiError';
 import { searchMessages, type SearchResult } from '@/services/searchService';
 
@@ -83,7 +84,7 @@ it("affiche l'erreur et permet de réessayer", async () => {
   await type(hook, 'bonjour');
   await settle();
   expect(hook.result.current.status).toBe('error');
-  expect(hook.result.current.errorMessage).toBe('Une erreur est survenue.');
+  expect(hook.result.current.errorMessage).toBe('Le serveur rencontre un problème. Réessayez plus tard.');
   await act(async () => hook.result.current.retry());
   expect(hook.result.current.status).toBe('loading');
   await settle();
@@ -175,5 +176,33 @@ describe('pagination', () => {
     await settle();
     await act(async () => resolve({ results: [result('tard')], nextCursor: null }));
     await waitFor(() => expect(hook.result.current.results.map((r) => r.id)).toEqual(['n']));
+  });
+});
+
+describe('useSearchResults (hook commun, dépendances injectées)', () => {
+  it("utilise le service et le texte d'erreur fournis, avec un délai de frappe choisi, même si les fonctions sont recréées à chaque rendu", async () => {
+    const calls: string[] = [];
+    const { result } = await renderHook(() =>
+      useSearchResults(
+        {
+          // Fonctions recréées à chaque rendu : la recherche ne doit pas se relancer pour autant.
+          search: async ({ q }) => {
+            calls.push(q);
+            throw new Error('web hors service');
+          },
+          describeError: (error) => `Web : ${(error as Error).message}`,
+          debounceMs: 50,
+        },
+      ),
+    );
+    await act(async () => result.current.setQuery('bonjour'));
+    await act(async () => jest.advanceTimersByTimeAsync(20));
+    expect(calls).toEqual([]);
+    await act(async () => jest.advanceTimersByTimeAsync(60));
+    expect(calls).toEqual(['bonjour']);
+    expect(result.current.status).toBe('error');
+    expect(result.current.errorMessage).toBe('Web : web hors service');
+    await act(async () => jest.advanceTimersByTimeAsync(500));
+    expect(calls).toEqual(['bonjour']);
   });
 });

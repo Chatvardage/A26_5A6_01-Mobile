@@ -29,7 +29,7 @@ export function ConnectionStatus() {
       accessible
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
-      style={[styles.bar, { paddingTop: insets.top + Spacing.one + 2, backgroundColor: offline ? colors.offline : colors.reconnecting }]}
+      style={[styles.bar, { paddingTop: insets.top + Spacing.one + 2, paddingLeft: insets.left + Spacing.three, paddingRight: insets.right + Spacing.three, backgroundColor: offline ? colors.offline : colors.reconnecting }]}
     >
       <ThemedText type="small" style={{ color: offline ? '#ffffff' : colors.onReconnecting }}>
         {offline ? strings.connection.offline : strings.connection.reconnecting}

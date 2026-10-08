@@ -55,4 +55,17 @@ describe('useLoadable', () => {
     await act(async () => resolveOld(['ancien']));
     expect(result.current.state).toEqual({ status: 'ready', data: ['nouveau'] });
   });
+
+    it('ignore également une erreur périmée quand le chargeur change', async () => {
+      let rejectOld!: (error: unknown) => void;
+      const oldLoad = () => new Promise<string[]>((_resolve, reject) => { rejectOld = reject; });
+      const newLoad = () => Promise.resolve(['nouveau']);
+      const { result, rerender } = await renderHook(({ load }: { load: () => Promise<string[]> }) => useLoadable(load, isEmpty), {
+        initialProps: { load: oldLoad },
+      });
+      await rerender({ load: newLoad });
+      await act(async () => rejectOld(new ApiError('network', 'obsolete')));
+      expect(result.current.state).toEqual({ status: 'ready', data: ['nouveau'] });
+      expect(result.current.refreshing).toBe(false);
+    });
 });

@@ -1,5 +1,6 @@
 import type { ConversationSummary } from '@/types/conversation';
-import { toConversationId } from '@/types/conversationId';
+import { parseConversationId, toConversationId } from '@/types/conversationId';
+import { canModerate } from '@/types/serverRole';
 import type { ServerSummary } from '@/types/server';
 
 import { mapWithConcurrency } from '@/utils/mapWithConcurrency';
@@ -8,7 +9,7 @@ import { apiFetch } from './httpClient';
 import { getCountsSafe, noUnreadSource, type UnreadSource } from './unreadSource';
 
 type RawChannel = { id: string; nom: string };
-type RawServer = { id: string; nom: string; nombreMembres: number; salons: RawChannel[] };
+type RawServer = { id: string; nom: string; nombreMembres: number; salons: RawChannel[]; monRole?: unknown };
 type RawRoomMessage = { id: string; authorId: string; content: string; createdAt: string };
 
 // Une requête de dernier message par salon (pas d'endpoint dédié) : on limite la concurrence sur mobile.
@@ -27,6 +28,19 @@ export async function fetchServers(unread: UnreadSource = noUnreadSource): Promi
     channelIds: server.salons.map((s) => s.id),
     unreadCount: server.salons.reduce((sum, s) => sum + Math.max(0, counts[roomId(s.id)] ?? 0), 0),
   }));
+}
+
+/**
+ * L'utilisateur peut-il supprimer les messages des autres dans cette conversation ? Seuls les salons ont des
+ * modérateurs : un message privé répond toujours non, sans appel réseau. Le rôle vient de `monRole` de
+ * `GET /api/servers` (rôle effectif de l'appelant dans chaque serveur).
+ */
+export async function fetchCanModerate(conversationId: string): Promise<boolean> {
+  const ref = parseConversationId(conversationId);
+  if (ref?.kind !== 'room') return false;
+  const servers = await apiFetch<RawServer[]>('/api/servers');
+  const server = servers.find((candidate) => candidate.salons.some((channel) => channel.id === ref.targetId));
+  return canModerate(server?.monRole);
 }
 
 export type ServerChannels = { name: string; channels: ConversationSummary[] };

@@ -1,5 +1,5 @@
-import type { SearchResult } from '@/services/searchService';
-import { groupResults } from '@/utils/groupResults';
+import type { SearchResult } from '@/partage/search';
+import { groupResults } from '@/partage/groupResults';
 
 const result = (id: string, kind: 'dm' | 'room', serverName?: string): SearchResult => ({
   id,

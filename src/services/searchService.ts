@@ -1,4 +1,4 @@
-import type { ConversationKind } from '@/types/conversation';
+import { normalizeQuery, type SearchInput, type SearchPage, type SearchResult } from '@/partage/search';
 import { isUuid, parseConversationId } from '@/types/conversationId';
 
 import { ApiError } from './ApiError';
@@ -6,33 +6,10 @@ import { apiFetch } from './httpClient';
 import { lookupPseudos } from './usersService';
 import { getTranslations } from '@/i18n';
 
-export const MIN_QUERY_LENGTH = 2;
-export const MAX_QUERY_LENGTH = 100;
+export { MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, normalizeQuery } from '@/partage/search';
+export type { SearchPage, SearchResult } from '@/partage/search';
+
 const DEFAULT_LIMIT = 20;
-
-export type SearchResult = {
-  id: string;
-  /** `dm:<interlocuteur>` ou `room:<salon>`, transmis tel quel à la route Conversation. */
-  conversationId: string;
-  kind: ConversationKind;
-  senderId: string;
-  senderName?: string;
-  /** Pseudo de l'interlocuteur (message privé) ou `#nom` du salon ; absent si le nom n'a pas pu être résolu. */
-  conversationTitle?: string;
-  /** Nom du serveur d'un salon ; absent pour un message privé ou si la liste des serveurs est indisponible. */
-  serverName?: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type SearchPage = { results: SearchResult[]; nextCursor: string | null };
-
-/** Texte de recherche normalisé (espaces retirés), ou `null` s'il est trop court : aucune requête ne part alors. */
-export function normalizeQuery(text: string): string | null {
-  const q = text.trim();
-  return q.length >= MIN_QUERY_LENGTH ? q.slice(0, MAX_QUERY_LENGTH) : null;
-}
 
 type RawEntry = {
   conversationId?: unknown;
@@ -79,22 +56,13 @@ async function channelNames(): Promise<Record<string, ChannelInfo>> {
   }
 }
 
-type SearchInput = {
-  q: string;
-  cursor?: string | null;
-  /** Limite la recherche à une conversation (`dm:…` ou `room:…`) ; absent : toutes les conversations accessibles. */
-  conversationId?: string;
-  limit?: number;
-  signal?: AbortSignal;
-};
-
 /**
  * Recherche de texte dans les conversations accessibles (l'API filtre les droits). Les résultats
  * viennent du plus récent au plus ancien ; `nextCursor` pagine sans doublon.
  */
 export async function searchMessages(input: SearchInput): Promise<SearchPage> {
   const q = normalizeQuery(input.q);
-  if (!q) throw new ApiError('validation', getTranslations().search.tooShort, 400);
+  if (!q) throw new ApiError('bad_request', getTranslations().search.tooShort, 400);
   if (input.conversationId && !parseConversationId(input.conversationId)) {
     throw new ApiError('not_found', getTranslations().errors.invalidConversationId);
   }

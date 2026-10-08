@@ -4,12 +4,13 @@ import { AppState, Text } from 'react-native';
 import { getPermission, setAppBadge } from '@/adapters/notifications.adapter';
 import * as http from '@/services/httpClient';
 import { fetchUnreadCounts, markConversationRead } from '@/services/unreadService';
-import { onReady } from '@/services/websocketService';
 import { UnreadProvider, useUnread } from '@/unread/UnreadContext';
 
 jest.mock('@/services/httpClient');
 jest.mock('@/adapters/notifications.adapter');
-jest.mock('@/services/websocketService');
+const mockRealtime = { onReady: jest.fn() };
+const { onReady } = mockRealtime;
+jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ realtime: mockRealtime }) }));
 const apiFetch = http.apiFetch as jest.Mock;
 
 const DM = '11111111-1111-4111-8111-111111111111';

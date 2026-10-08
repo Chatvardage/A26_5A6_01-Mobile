@@ -10,7 +10,7 @@ export type MainTabParamList = {
   Preferences: undefined;
 };
 
-/** Pile racine : Login seul sans session ; Main, Server puis Conversation avec session. */
+/** Pile racine : Login seul sans session ; Main, Server, Conversation et NewDirectMessage avec session. */
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
@@ -18,6 +18,7 @@ export type RootStackParamList = {
   Server: { serverId: string; title?: string };
   Conversation: { conversationId: string; title?: string; messageId?: string; focusToken?: number };
   ConversationSearch: { conversationId: string; title?: string };
+  NewDirectMessage: undefined;
 };
 
 export const Routes = {
@@ -27,6 +28,7 @@ export const Routes = {
   Server: 'Server',
   Conversation: 'Conversation',
   ConversationSearch: 'ConversationSearch',
+  NewDirectMessage: 'NewDirectMessage',
   DirectMessages: 'DirectMessages',
   Servers: 'Servers',
   Search: 'Search',

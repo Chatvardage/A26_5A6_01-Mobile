@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { subscribeToNetwork } from '@/adapters/network.adapter';
-import { getRealtimeState, onConnectionState } from '@/services/websocketService';
+import { useSession } from '@/session/SessionContext';
 
 export type ConnectionStatus = 'online' | 'reconnecting' | 'offline';
 
@@ -11,6 +11,7 @@ export type ConnectionStatus = 'online' | 'reconnecting' | 'offline';
  * `online` quand le canal est prêt.
  */
 export function useConnection(): { status: ConnectionStatus; online: boolean } {
+  const { getRealtimeState, onConnectionState } = useSession().realtime;
   const [networkOnline, setNetworkOnline] = useState(true);
   const realtime = useSyncExternalStore(onConnectionState, getRealtimeState, getRealtimeState);
 

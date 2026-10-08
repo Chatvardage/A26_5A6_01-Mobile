@@ -58,4 +58,18 @@ describe('fetchDirectMessages', () => {
     mockApi({ '/api/messages/conversations': new Error('boom') });
     await expect(fetchDirectMessages()).rejects.toThrow('boom');
   });
+
+  it('classe les conversations sans message ou à date invalide après les conversations actives', async () => {
+    mockApi({
+      '/api/messages/conversations': [
+        { otherUserId: A, lastMessage: null },
+        dm(B, 'date-invalide'),
+        dm('recent', '2026-10-02T10:00:00Z'),
+      ],
+      '/api/users/lookup': [],
+    });
+    const result = await fetchDirectMessages();
+    expect(result.map((item) => item.id)).toEqual(['dm:recent', `dm:${A}`, `dm:${B}`]);
+    expect(result[1].lastMessage).toBeNull();
+  });
 });

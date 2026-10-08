@@ -2,7 +2,7 @@ import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useNotificationPermission } from '@/hooks/useNotificationPermission';
 import { useTheme } from '@/hooks/use-theme';
 import { useSession } from '@/session/SessionContext';
@@ -64,7 +64,7 @@ export function PreferencesScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, padding: Spacing.three, gap: Spacing.two },
+  fill: { flex: 1, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', padding: Spacing.three, gap: Spacing.two },
   section: { marginTop: Spacing.four },
   secondary: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },
   button: { marginTop: Spacing.four, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two },

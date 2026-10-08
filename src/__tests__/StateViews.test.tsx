@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, userEvent } from '@testing-library/react-native';
 
-import { EmptyState, ErrorState } from '@/components/StateViews';
+import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 
 describe('StateViews', () => {
   it('rend un état vide défilable avec tirer-pour-rafraîchir quand `refresh` est fourni', async () => {
@@ -21,5 +21,18 @@ describe('StateViews', () => {
     expect(screen.getByText('Panne')).toBeTruthy();
     expect(screen.getByText('Réessayer')).toBeTruthy();
     expect(screen.getByTestId('refreshable-state')).toBeTruthy();
+  });
+
+  it('utilise le libellé de chargement par défaut', async () => {
+    await render(<LoadingState />);
+    expect(screen.getByLabelText('Chargement…')).toBeTruthy();
+    expect(screen.getByText('Chargement…')).toBeTruthy();
+  });
+
+  it('déclenche le réessai par un appui complet', async () => {
+    const onRetry = jest.fn();
+    await render(<ErrorState message="Panne réseau" onRetry={onRetry} />);
+    await userEvent.setup().press(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

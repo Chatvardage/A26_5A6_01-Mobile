@@ -38,7 +38,11 @@ export function MainTabs() {
       <Tab.Screen name={Routes.DirectMessages} component={DirectMessagesScreen} options={{ title: strings.navigation.directMessages, tabBarBadge: dmTotal > 0 ? unreadLabel(dmTotal) : undefined }} />
       <Tab.Screen name={Routes.Servers} component={ServersScreen} options={{ title: strings.navigation.servers, tabBarBadge: roomTotal > 0 ? unreadLabel(roomTotal) : undefined }} />
       <Tab.Screen name={Routes.Search} component={SearchScreen} options={{ title: strings.navigation.search }} />
-      <Tab.Screen name={Routes.Preferences} component={PreferencesScreen} options={{ title: strings.navigation.preferences }} />
+      <Tab.Screen
+        name={Routes.Preferences}
+        component={PreferencesScreen}
+        options={{ title: strings.navigation.preferences }}
+      />
     </Tab.Navigator>
   );
 }

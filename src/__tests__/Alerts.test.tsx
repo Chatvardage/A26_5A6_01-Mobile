@@ -20,17 +20,19 @@ import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import { fetchServers } from '@/services/serversService';
 import { fetchUnreadCounts, markConversationRead } from '@/services/unreadService';
 import { lookupPseudos } from '@/services/usersService';
-import { joinRoom, onReady, subscribe } from '@/services/websocketService';
 import { UnreadProvider } from '@/unread/UnreadContext';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@/adapters/notifications.adapter');
-jest.mock('@/services/websocketService');
 jest.mock('@/services/unreadService');
 jest.mock('@/services/usersService');
 jest.mock('@/services/serversService');
-jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me', pseudo: 'mia' }, signOut: jest.fn() }) }));
+const mockRealtime = { subscribe: jest.fn(), onReady: jest.fn(), joinRoom: jest.fn() };
+const { subscribe, onReady, joinRoom } = mockRealtime;
+jest.mock('@/session/SessionContext', () => ({
+  useSession: () => ({ user: { id: 'me', pseudo: 'mia' }, signOut: jest.fn(), realtime: mockRealtime }),
+}));
 
 const ME = '11111111-1111-4111-8111-111111111111';
 const OLI = '22222222-2222-4222-8222-222222222222';
@@ -160,7 +162,7 @@ describe('useRoomSubscriptions', () => {
       { id: 's1', name: 'A', memberCount: 1, channelIds: ['c1', 'c2'], unreadCount: 0 },
       { id: 's2', name: 'B', memberCount: 1, channelIds: ['c3'], unreadCount: 0 },
     ]);
-    jest.mocked(joinRoom).mockResolvedValue();
+    jest.mocked(joinRoom).mockResolvedValue(undefined);
   });
   afterEach(() => jest.useRealTimers());
 
@@ -219,7 +221,7 @@ describe('serveur.change', () => {
     jest.useFakeTimers();
     jest.mocked(fetchServers).mockReset();
     jest.mocked(fetchServers).mockResolvedValue([{ id: 's', name: 'A', memberCount: 1, channelIds: ['nouveau'], unreadCount: 0 }]);
-    jest.mocked(joinRoom).mockResolvedValue();
+    jest.mocked(joinRoom).mockResolvedValue(undefined);
     await renderHook(() => useRoomSubscriptions(null));
     await act(async () => handlers.get('serveur.change')!({ serveurId: 's', raison: 'salons' }));
     expect(joinRoom).toHaveBeenCalledWith('nouveau');

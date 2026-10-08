@@ -4,7 +4,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
-import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
+import { ContentFrame } from '@/components/ContentFrame';
+import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ServerItem } from '@/components/ServerItem';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
@@ -24,7 +25,7 @@ const NONE: ServerSummary[] = [];
 
 export function ServersScreen({ navigation }: Props) {
   const { strings } = useTranslation();
-  const { state, refreshing, retry, refresh } = useServers();
+  const { state, refreshing, refreshError, retry, refresh } = useServers();
   useRefreshOnFocus(refresh);
   useRefreshOnServerChange(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
@@ -43,15 +44,18 @@ export function ServersScreen({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.fill}>
-      <FlatList
-        data={servers}
-        keyExtractor={(s) => s.id}
-        renderItem={({ item }) => <ServerItem server={item} onPress={open} />}
-        ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
-        refreshing={refreshing}
-        onRefresh={refresh}
-        contentContainerStyle={styles.list}
-      />
+      <ContentFrame>
+        {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
+        <FlatList
+          data={servers}
+          keyExtractor={(s) => s.id}
+          renderItem={({ item }) => <ServerItem server={item} onPress={open} />}
+          ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
+          refreshing={refreshing}
+          onRefresh={refresh}
+          contentContainerStyle={styles.list}
+        />
+      </ContentFrame>
     </ThemedView>
   );
 }

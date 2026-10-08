@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { getPermission, setAppBadge } from '@/adapters/notifications.adapter';
 import { fetchUnreadCounts } from '@/services/unreadService';
 import type { UnreadCounts } from '@/services/unreadSource';
-import { onReady } from '@/services/websocketService';
+import { useSession } from '@/session/SessionContext';
 
 export type UnreadValue = {
   counts: UnreadCounts;
@@ -40,6 +40,7 @@ const sum = (counts: UnreadCounts, prefix: string) =>
  * incrémentent localement. Le badge reste donc utilisable sans permission de notification.
  */
 export function UnreadProvider({ children }: { children: ReactNode }) {
+  const { onReady } = useSession().realtime;
   const [counts, setCounts] = useState<UnreadCounts>({});
   const [loaded, setLoaded] = useState(false);
 
@@ -81,7 +82,7 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
       offReady();
       appState.remove();
     };
-  }, [refresh]);
+  }, [refresh, onReady]);
 
   const dmTotal = sum(counts, 'dm:');
   const roomTotal = sum(counts, 'room:');

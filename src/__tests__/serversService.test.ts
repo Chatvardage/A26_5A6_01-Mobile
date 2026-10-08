@@ -1,5 +1,5 @@
 import * as http from '@/services/httpClient';
-import { fetchServerChannels, fetchServers } from '@/services/serversService';
+import { fetchCanModerate, fetchServerChannels, fetchServers } from '@/services/serversService';
 
 jest.mock('@/services/httpClient');
 const apiFetch = http.apiFetch as jest.Mock;
@@ -20,7 +20,7 @@ const server = {
 beforeEach(() => apiFetch.mockReset());
 
 describe('fetchServers', () => {
-  it('utilise la source sans non-lus par défaut', async () => {
+  it('utilise des compteurs nuls en l’absence de source', async () => {
     apiFetch.mockResolvedValue([server]);
     expect((await fetchServers())[0].unreadCount).toBe(0);
   });
@@ -73,3 +73,37 @@ describe('fetchServerChannels', () => {
     await expect(fetchServerChannels(S)).rejects.toThrow('404');
   });
 });
+
+describe('fetchCanModerate', () => {
+  const other = { id: 'autre-serveur', nom: 'Autre', nombreMembres: 3, salons: [{ id: 'salon-autre', nom: 'x' }] };
+
+  it.each([
+    ['moderateur', true],
+    ['proprietaire', true],
+    ['admin', true],
+    ['membre', false],
+  ])("lit le rôle effectif du serveur du salon : %s → %s", async (monRole, expected) => {
+    apiFetch.mockResolvedValue([{ ...other, monRole: 'admin' }, { ...server, monRole }]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(expected);
+    expect(apiFetch).toHaveBeenCalledWith('/api/servers');
+  });
+
+  it('répond non pour un message privé sans appel réseau', async () => {
+    expect(await fetchCanModerate(`dm:${S}`)).toBe(false);
+    expect(await fetchCanModerate('invalide')).toBe(false);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("répond non quand le salon n'est dans aucun serveur ou que le rôle est absent", async () => {
+    apiFetch.mockResolvedValue([other]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(false);
+    apiFetch.mockResolvedValue([server]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(false);
+  });
+
+  it('propage une erreur réseau', async () => {
+    apiFetch.mockRejectedValueOnce(new Error('503'));
+    await expect(fetchCanModerate(`room:${C1}`)).rejects.toThrow('503');
+  });
+});
+

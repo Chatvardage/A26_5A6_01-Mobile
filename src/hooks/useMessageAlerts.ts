@@ -5,7 +5,7 @@ import { getPermission, showMessageNotification } from '@/adapters/notifications
 import { useTranslation } from '@/i18n';
 import { markConversationRead } from '@/services/unreadService';
 import { lookupPseudos } from '@/services/usersService';
-import { subscribe } from '@/services/websocketService';
+import { useSession } from '@/session/SessionContext';
 import { toConversationId } from '@/types/conversationId';
 import { useUnread } from '@/unread/UnreadContext';
 
@@ -37,6 +37,7 @@ export function parseIncoming(kind: 'dm' | 'room', raw: unknown, userId: string)
  *   locale s'affiche. Elle ne contient que le pseudo ; le texte du message n'y figure jamais.
  */
 export function useMessageAlerts(userId: string, activeConversationId: string | null) {
+  const { subscribe } = useSession().realtime;
   const unread = useUnread();
   const { strings } = useTranslation();
   const active = useRef(activeConversationId);
@@ -90,5 +91,5 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
     } catch {
       return undefined;
     }
-  }, [userId, strings]);
+  }, [userId, strings, subscribe]);
 }

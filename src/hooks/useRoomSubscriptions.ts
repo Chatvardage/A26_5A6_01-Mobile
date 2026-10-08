@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { fetchServers } from '@/services/serversService';
-import { joinRoom, onReady, subscribe } from '@/services/websocketService';
+import { useSession } from '@/session/SessionContext';
 
 const REJOIN_DELAY_MS = 800;
 
@@ -12,6 +12,7 @@ const REJOIN_DELAY_MS = 800;
  * après chaque changement de conversation, car quitter l'écran d'un salon quitte sa room.
  */
 export function useRoomSubscriptions(activeConversationId: string | null) {
+  const { joinRoom, onReady, subscribe } = useSession().realtime;
   useEffect(() => {
     let cancelled = false;
     const join = () => {
@@ -41,5 +42,5 @@ export function useRoomSubscriptions(activeConversationId: string | null) {
       offReady();
       offChange();
     };
-  }, [activeConversationId]);
+  }, [activeConversationId, joinRoom, onReady, subscribe]);
 }

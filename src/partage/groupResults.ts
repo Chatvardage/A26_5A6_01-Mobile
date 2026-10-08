@@ -1,4 +1,4 @@
-import type { SearchResult } from '@/services/searchService';
+import type { SearchResult } from './search';
 
 export type ResultSection = {
   /** `dm`, `server:<nom>` ou `channels` (salons dont le serveur est inconnu). */

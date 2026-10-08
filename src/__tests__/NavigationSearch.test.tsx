@@ -16,8 +16,16 @@ const MESSAGE = '44444444-4444-4444-8444-444444444444';
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 let mockStatus: 'signedIn' | 'signedOut' | 'loading';
 let mockUser: { id: string } | null;
+const mockRealtime = {
+  getRealtimeState: () => 'disconnected' as const,
+  onConnectionState: () => () => undefined,
+  onReady: () => () => undefined,
+  subscribe: () => () => undefined,
+  joinRoom: async () => undefined,
+  leaveRoom: async () => undefined,
+};
 jest.mock('@/session/SessionContext', () => ({
-  useSession: () => ({ status: mockStatus, user: mockUser, error: null, signOut: jest.fn(), restoreSession: jest.fn() }),
+  useSession: () => ({ status: mockStatus, user: mockUser, error: null, signOut: jest.fn(), restoreSession: jest.fn(), realtime: mockRealtime }),
 }));
 jest.mock('@/adapters/network.adapter');
 jest.mock('@/services/unreadService');

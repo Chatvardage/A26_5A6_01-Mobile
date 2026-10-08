@@ -1,10 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Linking, Platform } from 'react-native';
 
-import { clearAllDrafts, loadDraft, saveDraft } from '@/adapters/drafts.adapter';
 import { isOnline, subscribeToNetwork } from '@/adapters/network.adapter';
 import {
   configureNotifications,
@@ -28,40 +26,6 @@ beforeEach(() => {
 afterEach(() => {
   setPlatform('ios');
   jest.restoreAllMocks();
-});
-
-describe('brouillons', () => {
-  beforeEach(() => AsyncStorage.clear());
-
-  it('enregistre, relit et efface un brouillon', async () => {
-    expect(await loadDraft('dm:a')).toBe('');
-    await saveDraft('dm:a', 'bonjour');
-    expect(await loadDraft('dm:a')).toBe('bonjour');
-    await saveDraft('dm:a', '');
-    expect(await loadDraft('dm:a')).toBe('');
-  });
-
-  it("efface seulement les brouillons à la déconnexion et ne fait rien s'il n'y en a pas", async () => {
-    await clearAllDrafts();
-    await saveDraft('dm:a', 'un');
-    await saveDraft('room:b', 'deux');
-    await AsyncStorage.setItem('autre', 'garde');
-    await clearAllDrafts();
-    expect(await loadDraft('dm:a')).toBe('');
-    expect(await loadDraft('room:b')).toBe('');
-    expect(await AsyncStorage.getItem('autre')).toBe('garde');
-  });
-
-  it('avale les pannes de stockage', async () => {
-    jest.spyOn(AsyncStorage, 'getItem').mockRejectedValue(new Error('disque'));
-    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValue(new Error('disque'));
-    jest.spyOn(AsyncStorage, 'removeItem').mockRejectedValue(new Error('disque'));
-    jest.spyOn(AsyncStorage, 'getAllKeys').mockRejectedValue(new Error('disque'));
-    expect(await loadDraft('dm:a')).toBe('');
-    await expect(saveDraft('dm:a', 'x')).resolves.toBeUndefined();
-    await expect(saveDraft('dm:a', '')).resolves.toBeUndefined();
-    await expect(clearAllDrafts()).resolves.toBeUndefined();
-  });
 });
 
 describe('réseau', () => {

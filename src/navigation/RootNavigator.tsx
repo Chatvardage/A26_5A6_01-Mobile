@@ -16,6 +16,7 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { SearchIcon } from '@/components/SearchIcon';
 import { ConversationScreen } from '@/screens/ConversationScreen';
 import { ConversationSearchScreen } from '@/screens/ConversationSearchScreen';
+import { NewDirectMessageScreen } from '@/screens/NewDirectMessageScreen';
 import { ServerScreen } from '@/screens/ServerScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { RegisterScreen } from '@/screens/RegisterScreen';
@@ -137,8 +138,9 @@ export function RootNavigator() {
           {status === 'signedIn' && navReady && user ? (
             <AppServices userId={user.id} activeConversationId={activeConversationId} navigationRef={navigationRef} />
           ) : null}
-          {status === 'signedIn' ? <ConnectionStatus /> : null}
-        <Stack.Navigator key={status}>
+          {/* L'écran d'une conversation affiche déjà son propre état de connexion. */}
+          {status === 'signedIn' && !activeConversationId ? <ConnectionStatus /> : null}
+        <Stack.Navigator key={`${status}:${user?.id ?? ''}`}>
           {status === 'signedIn' ? (
             <>
               <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
@@ -175,6 +177,11 @@ export function RootNavigator() {
                 name={Routes.ConversationSearch}
                 component={ConversationSearchScreen}
                 options={{ title: strings.navigation.search }}
+              />
+              <Stack.Screen
+                name={Routes.NewDirectMessage}
+                component={NewDirectMessageScreen}
+                options={{ title: 'Nouveau message', presentation: 'modal' }}
               />
             </>
           ) : (

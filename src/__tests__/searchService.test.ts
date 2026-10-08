@@ -32,7 +32,7 @@ describe('normalizeQuery', () => {
 
 describe('searchMessages', () => {
   it("n'appelle pas l'API pour un texte trop court", async () => {
-    await expect(searchMessages({ q: ' a ' })).rejects.toMatchObject({ kind: 'validation' });
+    await expect(searchMessages({ q: ' a ' })).rejects.toMatchObject({ kind: 'bad_request' });
     expect(apiFetch).not.toHaveBeenCalled();
   });
 

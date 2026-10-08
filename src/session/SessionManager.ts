@@ -1,8 +1,7 @@
 import * as auth from '@/services/authService';
 import { ApiError, userMessage } from '@/services/ApiError';
 import { configureHttpClient, invalidateHttpRequests, resetHttpClient } from '@/services/httpClient';
-import { clearAllDrafts } from '@/adapters/drafts.adapter';
-import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
+import { createRealtimeService } from '@/services/websocketService';
 import { storage } from './storage.adapter';
 import { getTranslations } from '@/i18n';
 
@@ -15,6 +14,8 @@ export type SessionState = {
 
 /** One session owner, with serialized persistence and cancellation by generation. */
 export class SessionManager {
+  readonly realtime = createRealtimeService();
+  drafts = new Map<string, string>();
   state: SessionState = { status: 'loading', user: null, error: null };
   private session: auth.AuthResult | null = null;
   private epoch = 0;
@@ -51,17 +52,19 @@ export class SessionManager {
     this.session = null;
     this.restoration = null;
     this.renewal = null;
+    this.drafts.clear();
+    this.drafts = new Map();
+    this.realtime.disconnectRealtime();
     resetHttpClient();
-    disconnectRealtime();
   }
   private async clear(): Promise<void> {
     this.epoch++;
     invalidateHttpRequests();
     this.renewal = null;
     this.session = null;
-    disconnectRealtime();
-    // Les brouillons de messages sont des données de l'utilisateur : ils partent avec la session.
-    void clearAllDrafts();
+    this.drafts.clear();
+    this.drafts = new Map();
+    this.realtime.disconnectRealtime();
     this.update({ status: 'signedOut', user: null, error: null });
     try {
       await this.persist(() => storage.clear());
@@ -83,9 +86,18 @@ export class SessionManager {
         await auth.logout(result.refresh_token).catch(() => undefined);
         return;
       }
+      if (this.session && this.session.utilisateur.id !== result.utilisateur.id) {
+        this.drafts.clear();
+        this.drafts = new Map();
+        this.realtime.disconnectRealtime();
+      }
       this.session = result;
-      // Le canal temps réel utilise toujours le jeton courant (renouvelé par refreshSession).
-      configureRealtime({ getToken: () => this.session?.jeton ?? null, onUnauthorized: () => void this.clear() });
+      this.realtime.configureRealtime({
+        getToken: () => this.session?.jeton ?? null,
+        onUnauthorized: () => {
+          void this.clear();
+        },
+      });
       this.update({
         status: 'signedIn',
         user: result.utilisateur,
@@ -154,7 +166,7 @@ export class SessionManager {
           if (error instanceof ApiError && error.status === 401) await this.refreshSession();
           else if (
             error instanceof ApiError &&
-            ['network', 'timeout', 'server', 'rate_limit'].includes(error.kind)
+            ['network', 'timeout', 'server', 'rate_limit', 'rate_limited'].includes(error.kind)
           ) {
             this.session = null;
             this.update({

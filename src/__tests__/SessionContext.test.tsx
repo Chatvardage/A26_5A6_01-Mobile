@@ -27,3 +27,23 @@ it('exposes loading until storage has completed, then signedOut', async () => {
 it('requires a provider', async () => {
   await expect(renderHook(() => useSession())).rejects.toThrow('SessionProvider');
 });
+
+it('expose la même instance temps réel tant que le provider reste monté', async () => {
+  jest.mocked(storage.load).mockResolvedValue(null);
+  const { result, rerender, unmount } = await renderHook(() => useSession(), {
+    wrapper: ({ children }) => <SessionProvider>{children}</SessionProvider>,
+  });
+  const realtime = result.current.realtime;
+  expect(realtime.getRealtimeState()).toBe('disconnected');
+  await rerender(undefined);
+  expect(result.current.realtime).toBe(realtime);
+  await unmount();
+  expect(realtime.getRealtimeState()).toBe('disconnected');
+  expect(() => realtime.onReady(jest.fn())).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
+
+  const next = await renderHook(() => useSession(), {
+    wrapper: ({ children }) => <SessionProvider>{children}</SessionProvider>,
+  });
+  expect(next.result.current.realtime).not.toBe(realtime);
+  await next.unmount();
+});

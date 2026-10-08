@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ContentFrame } from '@/components/ContentFrame';
 import { SearchPanel } from '@/components/SearchPanel';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import type { SearchResult } from '@/services/searchService';
@@ -32,7 +33,9 @@ export function SearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]} edges={['left', 'right']}>
-      <SearchPanel onOpenResult={open} />
+      <ContentFrame insets={false}>
+        <SearchPanel onOpenResult={open} />
+      </ContentFrame>
     </SafeAreaView>
   );
 }

@@ -8,7 +8,7 @@ import { useSearch } from '@/hooks/useSearch';
 import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from '@/i18n';
 import type { SearchResult } from '@/services/searchService';
-import { groupResults } from '@/utils/groupResults';
+import { groupResults } from '@/partage/groupResults';
 
 type Props = {
   /** Limite la recherche à cette conversation (`dm:…` ou `room:…`), comme le client Web. */

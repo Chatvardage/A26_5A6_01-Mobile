@@ -7,8 +7,16 @@ import type { RootStackParamList } from '@/navigation/routes';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+const mockRealtime = {
+  getRealtimeState: () => 'disconnected' as const,
+  onConnectionState: () => () => undefined,
+  onReady: () => () => undefined,
+  subscribe: () => () => undefined,
+  joinRoom: async () => undefined,
+  leaveRoom: async () => undefined,
+};
 jest.mock('@/session/SessionContext', () => ({
-  useSession: () => ({ status: 'signedIn', user: { id: 'u' }, error: null }),
+  useSession: () => ({ status: 'signedIn', user: { id: 'u' }, error: null, realtime: mockRealtime }),
 }));
 jest.mock('@/screens/DirectMessagesScreen', () => ({ DirectMessagesScreen: () => <MockLinks /> }));
 jest.mock('@/screens/ServersScreen', () => ({ ServersScreen: () => <MockText>Liste serveurs</MockText> }));

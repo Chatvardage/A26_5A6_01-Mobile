@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { subscribe } from '@/services/websocketService';
+import { useSession } from '@/session/SessionContext';
 
 /**
  * Relance `refresh` quand Room-Service signale un changement de serveur (`serveur.change` : salon ou
@@ -8,6 +8,7 @@ import { subscribe } from '@/services/websocketService';
  * Sans cela, une liste ouverte ne verrait un nouveau salon qu'en la rouvrant ou en tirant pour rafraîchir.
  */
 export function useRefreshOnServerChange(refresh: () => unknown, serverId?: string) {
+  const { subscribe } = useSession().realtime;
   useEffect(() => {
     try {
       return subscribe('serveur.change', (raw) => {
@@ -19,5 +20,5 @@ export function useRefreshOnServerChange(refresh: () => unknown, serverId?: stri
       // Canal temps réel non configuré : la liste se rafraîchit toujours au retour sur l'écran.
       return undefined;
     }
-  }, [refresh, serverId]);
+  }, [refresh, serverId, subscribe]);
 }

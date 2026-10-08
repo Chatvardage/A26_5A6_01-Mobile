@@ -6,7 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from '@/i18n';
 import type { SearchResult } from '@/services/searchService';
 import { formatMessageTime } from '@/utils/formatTime';
-import { splitHighlight } from '@/utils/highlight';
+import { splitHighlight } from '@/partage/highlight';
 
 type Props = {
   result: SearchResult;

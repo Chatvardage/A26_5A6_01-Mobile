@@ -30,6 +30,34 @@ function Centered({ children, refresh, ...rest }: { children: ReactNode; refresh
   );
 }
 
+/** Échec d'un rafraîchissement : la liste reste affichée dessous, avec la raison et une action Réessayer. */
+export function RefreshErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const theme = useTheme();
+  const { strings } = useTranslation();
+  return (
+    <ThemedView
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+      style={[styles.banner, { backgroundColor: theme.backgroundElement }]}
+    >
+      <ThemedText type="small" themeColor="danger" style={styles.bannerText}>
+        {message}
+      </ThemedText>
+      <Pressable
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel={strings.navigation.retry}
+        hitSlop={8}
+        style={styles.bannerButton}
+      >
+        <ThemedText type="smallBold" style={{ color: theme.tint }}>
+          {strings.navigation.retry}
+        </ThemedText>
+      </Pressable>
+    </ThemedView>
+  );
+}
+
 export function LoadingState({ label }: { label?: string }) {
   const theme = useTheme();
   const { strings } = useTranslation();
@@ -88,4 +116,7 @@ const styles = StyleSheet.create({
   centerText: { textAlign: 'center' },
   button: { marginTop: Spacing.two, paddingHorizontal: Spacing.four, paddingVertical: Spacing.two, borderRadius: 8 },
   buttonText: { color: '#ffffff' },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  bannerText: { flex: 1 },
+  bannerButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
 });
