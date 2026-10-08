@@ -4,6 +4,7 @@ import { isUuid, parseConversationId } from '@/types/conversationId';
 
 /** Onglets du parcours principal. */
 export type MainTabParamList = {
+  Rooms: undefined;
   DirectMessages: undefined;
   Servers: undefined;
   Search: undefined;
@@ -18,10 +19,17 @@ export type RootStackParamList = {
   Server: { serverId: string; title?: string };
   Conversation: { conversationId: string; title?: string; messageId?: string; focusToken?: number };
   ConversationSearch: { conversationId: string; title?: string };
+  DiscoverServers: { mode: 'discover' | 'create' } | undefined;
+  ManageServer: { serverId: string };
+  ServerMembers: { serverId: string };
   NewDirectMessage: undefined;
 };
 
 export const Routes = {
+  Rooms: 'Rooms',
+  DiscoverServers: 'DiscoverServers',
+  ManageServer: 'ManageServer',
+  ServerMembers: 'ServerMembers',
   Login: 'Login',
   Register: 'Register',
   Main: 'Main',

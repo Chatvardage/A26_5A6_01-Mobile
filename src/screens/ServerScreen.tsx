@@ -1,7 +1,12 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useMemo } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Alert, FlatList, StyleSheet, View } from 'react-native';
 
+import { ActionButton } from '@/components/ActionButton';
+import { getServer, leaveServer, canLeaveServer, canManageRooms } from '@/services/rooms.service';
+import { useLoadable } from '@/hooks/useLoadable';
+import { userMessage } from '@/services/ApiError';
+import { ThemedText } from '@/components/themed-text';
 import { ContentFrame } from '@/components/ContentFrame';
 import { ConversationItem } from '@/components/ConversationItem';
 import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
@@ -30,6 +35,16 @@ export function ServerScreen({ route, navigation }: Props) {
 function ValidServer({ serverId, navigation }: { serverId: string; navigation: Props['navigation'] }) {
   const { strings } = useTranslation();
   const { user } = useSession();
+  const loadDetails = useCallback(() => getServer(serverId), [serverId]);
+  const details = useLoadable(loadDetails, () => false);
+  const [leaving, setLeaving] = useState(false);
+  const [actionError, setActionError] = useState<unknown>(null);
+  useRefreshOnServerChange(details.refresh, serverId);
+  async function leave() {
+    if (leaving) return; setLeaving(true); setActionError(null);
+    try { await leaveServer(serverId); navigation.popTo(Routes.Main, { screen: Routes.Servers }); }
+    catch (e) { setActionError(e); } finally { setLeaving(false); }
+  }
   const { state, refreshing, refreshError, retry, refresh } = useServerChannels(serverId);
   useRefreshOnFocus(refresh);
   useRefreshOnServerChange(refresh, serverId);
@@ -49,6 +64,13 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
   return (
     <ThemedView style={styles.fill}>
       <ContentFrame>
+        {actionError ? <ThemedText accessibilityRole="alert" themeColor="danger">{userMessage(actionError)}</ThemedText> : null}
+        <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16, gap: 12 }}><View style={{ flexDirection: 'row', gap: 12 }}>
+        <ActionButton compact icon={{ ios: 'person.2', android: 'group', web: 'group' }} label={strings.control.members} onPress={() => navigation.navigate(Routes.ServerMembers, { serverId })} />
+        {details.state.status === 'ready' && canManageRooms(details.state.data) ? <ActionButton compact icon={{ ios: 'slider.horizontal.3', android: 'settings', web: 'settings' }} label={strings.control.manageShort} onPress={() => navigation.navigate(Routes.ManageServer, { serverId })} /> : null}
+        </View>
+        {details.state.status === 'ready' && canLeaveServer(details.state.data, user?.id ?? '') ? <ActionButton label={strings.control.leave} disabled={leaving} danger onPress={() => Alert.alert(strings.control.leave, strings.control.leaveHint, [{ text: strings.control.cancel, style: 'cancel' }, { text: strings.control.confirm, style: 'destructive', onPress: () => void leave() }])} /> : null}
+        </View>
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
         <FlatList
           data={channels}

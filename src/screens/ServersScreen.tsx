@@ -2,8 +2,9 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 
+import { ActionButton } from '@/components/ActionButton';
 import { ContentFrame } from '@/components/ContentFrame';
 import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ServerItem } from '@/components/ServerItem';
@@ -47,6 +48,10 @@ export function ServersScreen({ navigation }: Props) {
       <ContentFrame>
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
         <FlatList
+          ListHeaderComponent={<View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 12 }}>
+            <ActionButton label={strings.control.discover} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'discover' })} />
+            <ActionButton label={strings.control.createServer} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'create' })} />
+          </View>}
           data={servers}
           keyExtractor={(s) => s.id}
           renderItem={({ item }) => <ServerItem server={item} onPress={open} />}

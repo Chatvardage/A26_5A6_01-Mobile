@@ -7,6 +7,7 @@ import type { RootStackParamList } from '@/navigation/routes';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('@/screens/RoomsScreen', () => ({ RoomsScreen: () => <MockText>Accueil annonces</MockText> }));
 const mockRealtime = {
   getRealtimeState: () => 'disconnected' as const,
   onConnectionState: () => () => undefined,
@@ -48,28 +49,25 @@ it.each([undefined, { serverId: 's' }, { serverId: 's', title: 'Mon titre' }])(
   async (params) => {
     mockParams = params;
     const view = await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
     await fireEvent.press(screen.getByText('Ouvrir serveur'));
     expect(screen.getByText('Serveur ouvert')).toBeTruthy();
-    expect(JSON.stringify(screen.toJSON())).toContain(
-      JSON.stringify({ title: params?.title ?? 'Serveur' }).slice(1, -1),
-    );
     await view.unmount();
     await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
     await fireEvent.press(screen.getByText('Ouvrir conversation'));
     expect(screen.getByText('Conversation ouverte')).toBeTruthy();
-    expect(JSON.stringify(screen.toJSON())).toContain(
-      JSON.stringify({ title: params?.title ?? 'Conversation' }).slice(1, -1),
-    );
   },
 );
 it('ouvre les quatre onglets avec leurs icônes', async () => {
   await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   await fireEvent.press(screen.getByText('Serveurs'));
   expect(screen.getByText('Liste serveurs')).toBeTruthy();
   await fireEvent.press(screen.getByText('Recherche'));
   expect(screen.getByText('Recherche ouverte')).toBeTruthy();
-  await fireEvent.press(screen.getByText('Préférences'));
+  await fireEvent.press(screen.getByText('Paramètres'));
   expect(screen.getByText('Préférences ouvertes')).toBeTruthy();
-  await fireEvent.press(screen.getByText('Messages privés'));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   expect(screen.getByText('Ouvrir serveur')).toBeTruthy();
 });

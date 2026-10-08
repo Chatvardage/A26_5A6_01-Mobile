@@ -7,9 +7,13 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { DiscoverServersScreen } from '@/screens/DiscoverServersScreen';
+import { ManageServerScreen } from '@/screens/ManageServerScreen';
+import { ServerMembersScreen } from '@/screens/ServerMembersScreen';
 import { Colors } from '@/constants/theme';
 import { AppServices } from '@/components/AppServices';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
@@ -25,8 +29,10 @@ import { useSession } from '@/session/SessionContext';
 import { UnreadProvider } from '@/unread/UnreadContext';
 import { useTranslation } from '@/i18n';
 
+import { displayName } from '@/utils/displayNames';
+import { PersistentNavigation } from '@/components/PersistentNavigation';
 import { MainTabs } from './MainTabs';
-import { parseConversationParams, Routes, type RootStackParamList } from './routes';
+import { parseConversationParams, Routes, type RootStackParamList, type MainTabParamList } from './routes';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -58,12 +64,18 @@ export function RootNavigator() {
   const { strings } = useTranslation();
   const theme = useNavigationTheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const [selectedTab, setSelectedTab] = useState<keyof MainTabParamList>('Rooms');
   const [navReady, setNavReady] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   // Conversation affichée (ou sa recherche) : sert à ne pas notifier ce qu'on est en train de lire.
   const trackActiveConversation = useCallback(() => {
     const route = navigationRef.getCurrentRoute();
+    const name = route?.name;
+    if (name === 'Rooms' || name === 'DirectMessages' || name === 'Servers' || name === 'Search' || name === 'Preferences') setSelectedTab(name);
+    else if (name === Routes.Server || name === Routes.ManageServer || name === Routes.ServerMembers || name === Routes.DiscoverServers) setSelectedTab('Servers');
+    else if (name === Routes.NewDirectMessage) setSelectedTab('DirectMessages');
+    else if (name === Routes.Conversation) setSelectedTab(parseConversationParams(route?.params)?.conversationId.startsWith('room:') ? 'Servers' : 'DirectMessages');
     const onConversation = route?.name === Routes.Conversation || route?.name === Routes.ConversationSearch;
     setActiveConversationId(onConversation ? (parseConversationParams(route.params)?.conversationId ?? null) : null);
   }, [navigationRef]);
@@ -144,18 +156,21 @@ export function RootNavigator() {
             {status === 'signedIn' ? (
               <>
                 <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
+                <Stack.Screen name={Routes.DiscoverServers} component={DiscoverServersScreen} options={({ route }) => ({ title: route.params?.mode === 'create' ? strings.control.createServer : strings.control.discover })} />
+                <Stack.Screen name={Routes.ManageServer} component={ManageServerScreen} options={{ title: strings.control.manage }} />
+                <Stack.Screen name={Routes.ServerMembers} component={ServerMembersScreen} options={{ title: strings.control.members }} />
                 <Stack.Screen
                   name={Routes.Server}
                   component={ServerScreen}
                   options={({ route }) => ({
-                    title: route.params?.title ?? strings.navigation.server,
+                    title: displayName(route.params?.title ?? strings.navigation.server, strings),
                   })}
                 />
                 <Stack.Screen
                   name={Routes.Conversation}
                   component={ConversationScreen}
                   options={({ route, navigation }) => ({
-                    title: route.params?.title ?? strings.navigation.conversation,
+                    title: displayName(route.params?.title ?? strings.navigation.conversation, strings),
                     // Recherche limitée à cette conversation (messages privés ou salon), comme sur le Web.
                     headerRight: () => (
                       <Pressable
@@ -181,7 +196,7 @@ export function RootNavigator() {
                 <Stack.Screen
                   name={Routes.NewDirectMessage}
                   component={NewDirectMessageScreen}
-                  options={{ title: 'Nouveau message', presentation: 'modal' }}
+                  options={{ title: strings.directMessage.title }}
                 />
               </>
             ) : (
@@ -195,6 +210,7 @@ export function RootNavigator() {
               </>
             )}
           </Stack.Navigator>
+          {status === 'signedIn' ? <PersistentNavigation selected={selectedTab} onNavigate={screen => navigationRef.navigate(Routes.Main, { screen })} /> : null}
         </SignedInShell>
       </View>
     </NavigationContainer>

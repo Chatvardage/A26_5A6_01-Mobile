@@ -1,0 +1,10 @@
+import { launchImageLibraryAsync } from 'expo-image-picker';
+import { ImageManipulator } from 'expo-image-manipulator';
+import { pickAvatar } from '@/adapters/avatar.adapter';
+const image={saveAsync:jest.fn(async()=>({base64:'AAAA'})),release:jest.fn()};
+const context={resize:jest.fn(),renderAsync:jest.fn(async()=>image),release:jest.fn()};
+beforeEach(()=>{jest.clearAllMocks();jest.mocked(launchImageLibraryAsync).mockResolvedValue({canceled:false,assets:[{uri:'local-photo'}]} as never);jest.mocked(ImageManipulator.manipulate).mockReturnValue(context as never);image.saveAsync.mockResolvedValue({base64:'AAAA'});});
+it('redimensionne une photo à 256 px et encode une data URL JPEG',async()=>{expect(await pickAvatar()).toBe('data:image/jpeg;base64,AAAA');expect(context.resize).toHaveBeenCalledWith({width:256});expect(image.saveAsync).toHaveBeenCalledWith({format:'jpeg',compress:0.75,base64:true});expect(image.release).toHaveBeenCalled();expect(context.release).toHaveBeenCalled();});
+it('annuler n’ouvre pas le manipulateur',async()=>{jest.mocked(launchImageLibraryAsync).mockResolvedValue({canceled:true,assets:null});expect(await pickAvatar()).toBeNull();expect(ImageManipulator.manipulate).not.toHaveBeenCalled();});
+it.each(['','A'.repeat(90_000)])('refuse une image vide ou dépassant le contrat',async base64=>{image.saveAsync.mockResolvedValue({base64});await expect(pickAvatar()).rejects.toMatchObject({kind:'bad_request'});expect(image.release).toHaveBeenCalled();});
+it('libère les ressources même si l’encodage échoue',async()=>{image.saveAsync.mockRejectedValueOnce(new Error('image'));await expect(pickAvatar()).rejects.toThrow('image');expect(context.release).toHaveBeenCalled();});

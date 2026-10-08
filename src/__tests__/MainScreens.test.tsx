@@ -7,6 +7,8 @@ import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import type { LoadState } from '@/hooks/useLoadable';
 import type { ConversationSummary, ChatMessage } from '@/types/conversation';
 import type { ServerSummary } from '@/types/server';
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => ({}) }));
+jest.mock('@/hooks/useReadReceipts', () => ({ useReadReceipts: () => [] }));
 
 jest.mock('@/hooks/useCanModerate', () => ({ useCanModerate: () => false }));
 jest.mock('@/hooks/useNotificationPermission', () => ({
@@ -14,6 +16,8 @@ jest.mock('@/hooks/useNotificationPermission', () => ({
 }));
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('@/hooks/useConnection', () => ({ useConnection: () => ({ status: 'online', online: true }) }));
+jest.mock('@/hooks/useCanWrite', () => ({ useCanWrite: () => true }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 40 }));
 jest.mock('@/hooks/useRefreshOnFocus', () => ({ useRefreshOnFocus: jest.fn() }));
 jest.mock('@/hooks/useServers', () => ({ useServers: () => mockResult }));
@@ -117,7 +121,7 @@ it.each([true, false])('ouvre un privé, utilisateur présent=%s', async (presen
   if (!present) mockUser = null;
   mockResult.state = { status: 'ready', data: [channel, { ...channel, id: 'second', title: 'Autre' }] };
   await render(<DirectMessagesScreen {...(props as unknown as Parameters<typeof DirectMessagesScreen>[0])} />);
-  await fireEvent.press(screen.getByText('Général'));
+  await fireEvent.press(screen.getByText('général'));
   expect(navigation.navigate).toHaveBeenCalledWith('Conversation', {
     conversationId: channel.id,
     title: channel.title,
@@ -127,7 +131,7 @@ it.each([true, false])('ouvre un salon, utilisateur présent=%s', async (present
   if (!present) mockUser = null;
   mockResult.state = { status: 'ready', data: { channels: [channel, { ...channel, id: 'second', title: 'Autre' }] } };
   await render(<ServerScreen {...serverProps} />);
-  await fireEvent.press(screen.getByText('Général'));
+  await fireEvent.press(screen.getByText('général'));
   expect(navigation.navigate).toHaveBeenCalledWith('Conversation', {
     conversationId: channel.id,
     title: channel.title,
