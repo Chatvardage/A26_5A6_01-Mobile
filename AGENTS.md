@@ -87,3 +87,24 @@ Docs: https://docs.expo.dev/eas/index.md
 ## Documentation centrale
 
 Infra est la référence du démarrage complet, des architectures, contrats et scénarios de validation. Le README local décrit le dépôt et ses commandes; les guides détaillés sont dans `A26_5A6_01-Infra/docs/`. Toute modification de contrat doit mettre à jour la référence centrale et ses liens.
+
+## Revue de code : recommandations non retenues
+
+Décisions prises lors de la revue de la PR « recherche, notifications, reprise réseau » (6-8 octobre 2026). Ne pas
+les « corriger » sans nouvelle information : elles reposent sur le comportement réel du code.
+
+- **`lastHandledTap` (`useNotificationNavigation.ts`) reste au niveau du module et n'est pas réinitialisé au changement de
+  compte.** Les identifiants de notification sont uniques : une collision entre deux sessions est irréaliste. Surtout,
+  `getLastNotificationResponse()` renvoie encore, après une déconnexion puis une reconnexion, la notification qui a lancé
+  l'application ; réinitialiser la variable ferait rouvrir l'ancienne conversation. Le dédoublonnage protège donc la
+  session suivante au lieu de la bloquer.
+- **`// eslint-disable-next-line react-hooks/set-state-in-effect` (`UnreadContext.tsx`) est nécessaire.** `set-state-in-effect`
+  est une règle réelle de `eslint-plugin-react-hooks` (règles du compilateur React activées par `eslint-config-expo`), pas
+  une règle maison. Le chargement initial des compteurs est une synchronisation avec un système externe (le serveur) : le
+  `setState` n'a lieu qu'après la réponse, mais la règle ne peut pas le voir à travers `refresh`. Sans le commentaire, le lint
+  échoue. Un `refresh` stable (`useCallback`) ne la désactive pas.
+- **Avertissement de lint connu dans `src/partage/useAsyncResource.ts`** (`react-hooks/exhaustive-deps` sur `requestId.current`
+  dans le nettoyage de l'effet). Le compteur doit être lu au moment du nettoyage pour invalider les requêtes en vol : copier sa
+  valeur dans une variable le rendrait inopérant. Ce fichier est identique dans le Frontend, qui n'a pas ce plugin ; le
+  modifier demande de reporter le même changement dans les deux dépôts (`A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh`).
+
