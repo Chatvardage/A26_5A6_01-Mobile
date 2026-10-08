@@ -80,6 +80,7 @@ describe('notifications', () => {
     expect(await adapter.getPermission()).toBe('unavailable');
     expect(await adapter.requestPermission()).toBe('unavailable');
     expect(await adapter.showMessageNotification({conversationId:'dm:a',title:'t',body:'b'})).toBe(false);
+    expect(await adapter.showInvitationNotification({title:'t',body:'b'})).toBe(false);
     expect(adapter.onNotificationOpened(jest.fn())()).toBeUndefined();
     expect(await adapter.getLaunchTap()).toBeNull();
     await expect(adapter.setAppBadge(1)).resolves.toBeUndefined();
@@ -139,6 +140,19 @@ describe('notifications', () => {
     expect(await adapter.showMessageNotification({ conversationId: 'dm:a', title: 't', body: 'b' })).toBe(false);
   });
 
+  it('présente une invitation sans autre donnée que sa cible', async () => {
+    expect(await adapter.showInvitationNotification({ title: 'Nouvelle invitation', body: 'Équipe' })).toBe(true);
+    expect(N.scheduleNotificationAsync).toHaveBeenCalledWith({
+      content: { title: 'Nouvelle invitation', body: 'Équipe', data: { invitations: true } },
+      trigger: null,
+    });
+    setPlatform('android');
+    await adapter.showInvitationNotification({ title: 't', body: 'b' });
+    expect(N.scheduleNotificationAsync).toHaveBeenLastCalledWith(expect.objectContaining({ trigger: { channelId: 'messages' } }));
+    N.scheduleNotificationAsync.mockRejectedValueOnce(new Error('x'));
+    expect(await adapter.showInvitationNotification({ title: 't', body: 'b' })).toBe(false);
+  });
+
   const response = (data: unknown, action = 'expo.modules.notifications.actions.DEFAULT') =>
     ({ actionIdentifier: action, notification: { request: { identifier: 'n1', content: { data } } } }) as never;
 
@@ -155,8 +169,9 @@ describe('notifications', () => {
     listener(response({ conversationId: 3 }));
     listener(response(undefined));
     listener(response({ conversationId: 'dm:a' }, 'autre'));
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith({ id: 'n1', conversationId: 'dm:a' });
+    listener(response({ invitations: true }));
+    listener(response({ invitations: 'oui' }));
+    expect(handler.mock.calls).toEqual([[{ id: 'n1', conversationId: 'dm:a' }], [{ id: 'n1', invitations: true }]]);
     off();
     expect(remove).toHaveBeenCalled();
   });

@@ -253,6 +253,9 @@ export const en = {
   notifications: {
     title: 'Notifications',
     newMessage: 'New message',
+    newInvitation: 'New invitation',
+    invitedTo: (name: string) => `You are invited to the server ${name}.`,
+    invitedToServer: 'You are invited to a server.',
     granted: 'Enabled',
     denied: 'Declined: enable them in the system settings.',
     undetermined: 'Not enabled',

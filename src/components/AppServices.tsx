@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import type { NavigationContainerRefWithCurrent } from '@react-navigation/native';
 
 import { configureNotifications, getPermission, requestPermission } from '@/adapters/notifications.adapter';
+import { useInvitationAlerts } from '@/hooks/useInvitationAlerts';
 import { useMessageAlerts } from '@/hooks/useMessageAlerts';
 import { useNotificationNavigation } from '@/hooks/useNotificationNavigation';
 import { useRoomSubscriptions } from '@/hooks/useRoomSubscriptions';
@@ -15,7 +16,8 @@ type Props = {
 
 /**
  * Services d'arrière-plan d'une session ouverte (sans rendu) : permission de notification, abonnement
- * aux salons, alertes de nouveaux messages et ouverture de la bonne conversation au toucher.
+ * aux salons, alertes de nouveaux messages et d'invitations, ouverture de la bonne conversation (ou des
+ * invitations) au toucher.
  */
 export function AppServices({ userId, activeConversationId, navigationRef }: Props) {
   useEffect(() => {
@@ -26,6 +28,7 @@ export function AppServices({ userId, activeConversationId, navigationRef }: Pro
   }, []);
 
   useMessageAlerts(userId, activeConversationId);
+  useInvitationAlerts(userId);
   useRoomSubscriptions(activeConversationId);
 
   const open = useCallback(
@@ -36,6 +39,9 @@ export function AppServices({ userId, activeConversationId, navigationRef }: Pro
     },
     [navigationRef],
   );
-  useNotificationNavigation(open);
+  const openInvitations = useCallback(() => {
+    if (navigationRef.isReady()) navigationRef.navigate(Routes.DiscoverServers, { mode: 'discover' });
+  }, [navigationRef]);
+  useNotificationNavigation(open, openInvitations);
   return null;
 }

@@ -8,10 +8,13 @@ import {
   onNotificationOpened,
   openSystemSettings,
   requestPermission,
+  showInvitationNotification,
   showMessageNotification,
 } from '@/adapters/notifications.adapter';
 import { AppServices } from '@/components/AppServices';
+import { parseInvitation, useInvitationAlerts } from '@/hooks/useInvitationAlerts';
 import { useMessageAlerts, parseIncoming } from '@/hooks/useMessageAlerts';
+import { getInvitations } from '@/services/rooms.service';
 import { resetNotificationNavigationForTests, useNotificationNavigation } from '@/hooks/useNotificationNavigation';
 import { useNotificationPermission } from '@/hooks/useNotificationPermission';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
@@ -31,6 +34,7 @@ jest.mock('@/adapters/notifications.adapter');
 jest.mock('@/services/unreadService');
 jest.mock('@/services/usersService');
 jest.mock('@/services/serversService');
+jest.mock('@/services/rooms.service');
 const mockRealtime = { subscribe: jest.fn(), onReady: jest.fn(), joinRoom: jest.fn() };
 const { subscribe, onReady, joinRoom } = mockRealtime;
 jest.mock('@/session/SessionContext', () => ({
@@ -447,6 +451,73 @@ describe('AppServices', () => {
     jest.mocked(ref.isReady).mockReturnValue(false);
     opened({ id: 'c', conversationId: `dm:${OLI}` });
     expect(ref.navigate).not.toHaveBeenCalled();
+  });
+  it('ouvre les invitations au toucher d’une notification d’invitation', async () => {
+    jest.mocked(getPermission).mockResolvedValue('denied');
+    await mount();
+    (opened as (tap: unknown) => void)({ id: 'i1', invitations: true });
+    expect(ref.navigate).toHaveBeenCalledWith('DiscoverServers', { mode: 'discover' });
+    jest.mocked(ref.navigate).mockClear();
+    jest.mocked(ref.isReady).mockReturnValue(false);
+    (opened as (tap: unknown) => void)({ id: 'i2', invitations: true });
+    expect(ref.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('useInvitationAlerts', () => {
+  const SERVER = '44444444-4444-4444-8444-444444444444';
+  const invitation = (serverId = SERVER) => ({ serveurId: serverId, raison: 'invitation', cibleId: ME });
+  const invitations = [{ serveur: { id: SERVER, nom: 'Équipe', nombreMembres: 2, icone: null, public: false, parDefaut: false }, invitePar: OLI, inviteLe: '2026-10-08' }];
+  beforeEach(() => jest.mocked(getInvitations).mockResolvedValue(invitations));
+
+  it('ne retient que les invitations qui me visent', () => {
+    expect(parseInvitation(invitation(), ME)).toBe(SERVER);
+    expect(parseInvitation({ ...invitation(), cibleId: OLI }, ME)).toBeNull();
+    expect(parseInvitation({ ...invitation(), raison: 'membres' }, ME)).toBeNull();
+    expect(parseInvitation({ ...invitation(), serveurId: 3 }, ME)).toBeNull();
+    expect(parseInvitation(null, ME)).toBeNull();
+  });
+
+  it('notifie une invitation reçue avec le nom du serveur', async () => {
+    await renderHook(() => useInvitationAlerts(ME));
+    await act(async () => handlers.get('serveur.change')!(invitation()));
+    expect(showInvitationNotification).toHaveBeenCalledWith({ title: 'Nouvelle invitation', body: 'Vous avez reçu une invitation pour le serveur Équipe.' });
+    await act(async () => handlers.get('serveur.change')!({ ...invitation(), cibleId: OLI }));
+    expect(showInvitationNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('garde un texte générique si la liste des invitations est indisponible', async () => {
+    jest.mocked(getInvitations).mockRejectedValueOnce(new Error('x'));
+    await renderHook(() => useInvitationAlerts(ME));
+    await act(async () => handlers.get('serveur.change')!(invitation()));
+    expect(showInvitationNotification).toHaveBeenCalledWith({ title: 'Nouvelle invitation', body: 'Vous avez reçu une invitation pour un serveur.' });
+  });
+
+  it('respecte la permission refusée, les modes discret et aucune, et le démontage', async () => {
+    jest.mocked(getPermission).mockResolvedValue('denied');
+    const first = await renderHook(() => useInvitationAlerts(ME));
+    await act(async () => handlers.get('serveur.change')!(invitation()));
+    await first.unmount();
+    for (const mode of ['discret', 'aucune']) {
+      mockNotificationMode = mode;
+      const hook = await renderHook(() => useInvitationAlerts(ME));
+      expect(handlers.has('serveur.change')).toBe(false);
+      await hook.unmount();
+    }
+    mockNotificationMode = 'systeme';
+    jest.mocked(getPermission).mockResolvedValue('granted');
+    let resolve: (value: typeof invitations) => void = () => undefined;
+    jest.mocked(getInvitations).mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    const last = await renderHook(() => useInvitationAlerts(ME));
+    await act(async () => handlers.get('serveur.change')!(invitation()));
+    await last.unmount();
+    await act(async () => resolve(invitations));
+    expect(showInvitationNotification).not.toHaveBeenCalled();
+  });
+
+  it('survit à un canal temps réel absent', async () => {
+    jest.mocked(subscribe).mockImplementation(() => { throw new Error('Session absente'); });
+    await expect(renderHook(() => useInvitationAlerts(ME))).resolves.toBeDefined();
   });
 });
 
