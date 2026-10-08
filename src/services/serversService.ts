@@ -39,7 +39,11 @@ export async function fetchCanModerate(conversationId: string): Promise<boolean>
   const ref = parseConversationId(conversationId);
   if (ref?.kind !== 'room') return false;
   const servers = await apiFetch<RawServer[]>('/api/servers');
-  const server = servers.find((candidate) => candidate.salons.some((channel) => channel.id === ref.targetId));
+  // Réponse inattendue : pas de modération proposée (l'API refuserait de toute façon).
+  if (!Array.isArray(servers)) return false;
+  const server = servers.find(
+    (candidate) => Array.isArray(candidate?.salons) && candidate.salons.some((channel) => channel.id === ref.targetId),
+  );
   return canModerate(server?.monRole);
 }
 

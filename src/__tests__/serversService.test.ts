@@ -105,5 +105,14 @@ describe('fetchCanModerate', () => {
     apiFetch.mockRejectedValueOnce(new Error('503'));
     await expect(fetchCanModerate(`room:${C1}`)).rejects.toThrow('503');
   });
-});
 
+  it.each([[null], [{ pas: 'une liste' }], ['texte']])('répond non pour une réponse inattendue (%j)', async (reponse) => {
+    apiFetch.mockResolvedValue(reponse);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(false);
+  });
+
+  it('ignore un serveur sans liste de salons ou nul', async () => {
+    apiFetch.mockResolvedValue([null, { id: 'x', nom: 'X', nombreMembres: 1, monRole: 'admin' }, { ...server, monRole: 'moderateur' }]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(true);
+  });
+});

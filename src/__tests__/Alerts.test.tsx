@@ -106,6 +106,23 @@ describe('useMessageAlerts', () => {
     expect(lookupPseudos).toHaveBeenCalledTimes(2);
   });
 
+  it("borne le cache des pseudos : au-delà de 500 expéditeurs il est vidé et la recherche reprend", async () => {
+    await setup();
+    jest.mocked(lookupPseudos).mockClear();
+    for (let i = 0; i < 502; i++) {
+      const senderId = `expediteur-${i}`;
+      jest.mocked(lookupPseudos).mockResolvedValueOnce({ [senderId]: `pseudo-${i}` });
+      await act(async () => handlers.get('private-message.created')!({ id: `m${i}`, senderId, recipientId: ME }));
+    }
+    await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(502));
+    // Un expéditeur déjà vu avant le vidage doit être cherché de nouveau.
+    jest.mocked(lookupPseudos).mockClear();
+    await act(async () =>
+      handlers.get('private-message.created')!({ id: 'again', senderId: 'expediteur-0', recipientId: ME }),
+    );
+    await waitFor(() => expect(lookupPseudos).toHaveBeenCalledTimes(1));
+  });
+
   it('tolère un annuaire des pseudos indisponible', async () => {
     jest.mocked(lookupPseudos).mockRejectedValue(new Error('503'));
     await setup();

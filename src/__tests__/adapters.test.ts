@@ -4,24 +4,17 @@ import * as Notifications from 'expo-notifications';
 import { Linking, Platform } from 'react-native';
 
 import { isOnline, subscribeToNetwork } from '@/adapters/network.adapter';
-import {
-  configureNotifications,
-  getLaunchTap,
-  getPermission,
-  onNotificationOpened,
-  openSystemSettings,
-  requestPermission,
-  resetNotificationsModuleForTests,
-  setAppBadge,
-  showMessageNotification,
-} from '@/adapters/notifications.adapter';
+import { createNotificationsAdapter, openSystemSettings } from '@/adapters/notifications.adapter';
 
 const N = jest.mocked(Notifications);
 const setPlatform = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
 
+// Un adaptateur neuf par test : le chargement du module est mémorisé par adaptateur.
+let adapter = createNotificationsAdapter();
+
 beforeEach(() => {
   jest.clearAllMocks();
-  resetNotificationsModuleForTests();
+  adapter = createNotificationsAdapter();
 });
 afterEach(() => {
   setPlatform('ios');
@@ -56,7 +49,7 @@ describe('réseau', () => {
 describe('notifications', () => {
   it('configure le gestionnaire et le canal Android', async () => {
     setPlatform('android');
-    await configureNotifications();
+    await adapter.configureNotifications();
     expect(N.setNotificationHandler).toHaveBeenCalled();
     const handler = N.setNotificationHandler.mock.calls[0][0]!;
     await expect(handler.handleNotification({} as never)).resolves.toMatchObject({ shouldShowBanner: true, shouldSetBadge: false });
@@ -64,41 +57,41 @@ describe('notifications', () => {
   });
 
   it("n'a pas de canal sur iOS, ne fait rien sur le web et avale une panne du module", async () => {
-    await configureNotifications();
+    await adapter.configureNotifications();
     expect(N.setNotificationChannelAsync).not.toHaveBeenCalled();
     N.setNotificationHandler.mockClear();
     setPlatform('web');
-    resetNotificationsModuleForTests();
-    await configureNotifications();
+    adapter = createNotificationsAdapter();
+    await adapter.configureNotifications();
     expect(N.setNotificationHandler).not.toHaveBeenCalled();
     setPlatform('ios');
-    resetNotificationsModuleForTests();
+    adapter = createNotificationsAdapter();
     N.setNotificationHandler.mockImplementationOnce(() => {
       throw new Error('module absent');
     });
-    await expect(configureNotifications()).resolves.toBeUndefined();
+    await expect(adapter.configureNotifications()).resolves.toBeUndefined();
   });
 
   it("ne charge pas expo-notifications dans Expo Go sur Android : tout est indisponible", async () => {
     setPlatform('android');
     jest.replaceProperty(Constants, 'executionEnvironment', 'storeClient' as never);
-    await configureNotifications();
+    await adapter.configureNotifications();
     expect(N.setNotificationHandler).not.toHaveBeenCalled();
-    expect(await getPermission()).toBe('unavailable');
-    expect(await requestPermission()).toBe('unavailable');
-    expect(await showMessageNotification({ conversationId: 'dm:a', title: 't', body: 'b' })).toBe(false);
-    expect(onNotificationOpened(jest.fn())()).toBeUndefined();
-    expect(await getLaunchTap()).toBeNull();
-    await expect(setAppBadge(1)).resolves.toBeUndefined();
+    expect(await adapter.getPermission()).toBe('unavailable');
+    expect(await adapter.requestPermission()).toBe('unavailable');
+    expect(await adapter.showMessageNotification({ conversationId: 'dm:a', title: 't', body: 'b' })).toBe(false);
+    expect(adapter.onNotificationOpened(jest.fn())()).toBeUndefined();
+    expect(await adapter.getLaunchTap()).toBeNull();
+    await expect(adapter.setAppBadge(1)).resolves.toBeUndefined();
     expect(N.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 
   it("reste indisponible si le module ne peut pas être chargé", async () => {
-    resetNotificationsModuleForTests(() => {
+    adapter = createNotificationsAdapter(() => {
       throw new Error('module natif absent');
     });
-    expect(await getPermission()).toBe('unavailable');
-    expect(await getPermission()).toBe('unavailable');
+    expect(await adapter.getPermission()).toBe('unavailable');
+    expect(await adapter.getPermission()).toBe('unavailable');
   });
 
   it.each([
@@ -107,20 +100,20 @@ describe('notifications', () => {
     [{ granted: false, status: 'denied' }, 'denied'],
   ])('traduit la permission %p en %s', async (raw, expected) => {
     N.getPermissionsAsync.mockResolvedValueOnce(raw as never);
-    expect(await getPermission()).toBe(expected);
+    expect(await adapter.getPermission()).toBe(expected);
     N.requestPermissionsAsync.mockResolvedValueOnce(raw as never);
-    expect(await requestPermission()).toBe(expected);
+    expect(await adapter.requestPermission()).toBe(expected);
   });
 
   it('signale la permission indisponible sur le web ou en cas de panne', async () => {
     N.getPermissionsAsync.mockRejectedValueOnce(new Error('x'));
-    expect(await getPermission()).toBe('unavailable');
+    expect(await adapter.getPermission()).toBe('unavailable');
     N.requestPermissionsAsync.mockRejectedValueOnce(new Error('x'));
-    expect(await requestPermission()).toBe('unavailable');
+    expect(await adapter.requestPermission()).toBe('unavailable');
     setPlatform('web');
-    resetNotificationsModuleForTests();
-    expect(await getPermission()).toBe('unavailable');
-    expect(await requestPermission()).toBe('unavailable');
+    adapter = createNotificationsAdapter();
+    expect(await adapter.getPermission()).toBe('unavailable');
+    expect(await adapter.requestPermission()).toBe('unavailable');
   });
 
   it('ouvre les réglages du système, même en cas d\'échec', async () => {
@@ -132,18 +125,18 @@ describe('notifications', () => {
   });
 
   it("présente une notification locale avec le seul identifiant de conversation", async () => {
-    expect(await showMessageNotification({ conversationId: 'dm:a', title: 'oli', body: 'Nouveau message' })).toBe(true);
+    expect(await adapter.showMessageNotification({ conversationId: 'dm:a', title: 'oli', body: 'Nouveau message' })).toBe(true);
     expect(N.scheduleNotificationAsync).toHaveBeenCalledWith({
       content: { title: 'oli', body: 'Nouveau message', data: { conversationId: 'dm:a' } },
       trigger: null,
     });
     setPlatform('android');
-    await showMessageNotification({ conversationId: 'dm:a', title: 'oli', body: 'x' });
+    await adapter.showMessageNotification({ conversationId: 'dm:a', title: 'oli', body: 'x' });
     expect(N.scheduleNotificationAsync).toHaveBeenLastCalledWith(
       expect.objectContaining({ trigger: { channelId: 'messages' } }),
     );
     N.scheduleNotificationAsync.mockRejectedValueOnce(new Error('x'));
-    expect(await showMessageNotification({ conversationId: 'dm:a', title: 't', body: 'b' })).toBe(false);
+    expect(await adapter.showMessageNotification({ conversationId: 'dm:a', title: 't', body: 'b' })).toBe(false);
   });
 
   const response = (data: unknown, action = 'expo.modules.notifications.actions.DEFAULT') =>
@@ -157,7 +150,7 @@ describe('notifications', () => {
       return { remove };
     }) as never);
     const handler = jest.fn();
-    const off = onNotificationOpened(handler);
+    const off = adapter.onNotificationOpened(handler);
     listener(response({ conversationId: 'dm:a' }));
     listener(response({ conversationId: 3 }));
     listener(response(undefined));
@@ -172,23 +165,23 @@ describe('notifications', () => {
     N.addNotificationResponseReceivedListener.mockImplementationOnce(() => {
       throw new Error('x');
     });
-    expect(() => onNotificationOpened(jest.fn())()).not.toThrow();
+    expect(() => adapter.onNotificationOpened(jest.fn())()).not.toThrow();
   });
 
   it('lit la notification qui a lancé l\'application', async () => {
-    expect(await getLaunchTap()).toBeNull();
+    expect(await adapter.getLaunchTap()).toBeNull();
     N.getLastNotificationResponse.mockReturnValueOnce(response({ conversationId: 'room:b' }));
-    expect(await getLaunchTap()).toEqual({ id: 'n1', conversationId: 'room:b' });
+    expect(await adapter.getLaunchTap()).toEqual({ id: 'n1', conversationId: 'room:b' });
     N.getLastNotificationResponse.mockImplementationOnce(() => {
       throw new Error('x');
     });
-    expect(await getLaunchTap()).toBeNull();
+    expect(await adapter.getLaunchTap()).toBeNull();
   });
 
   it("met à jour le badge de l'icône sans jamais échouer", async () => {
-    await setAppBadge(3);
+    await adapter.setAppBadge(3);
     expect(N.setBadgeCountAsync).toHaveBeenCalledWith(3);
     N.setBadgeCountAsync.mockRejectedValueOnce(new Error('x'));
-    await expect(setAppBadge(0)).resolves.toBeUndefined();
+    await expect(adapter.setAppBadge(0)).resolves.toBeUndefined();
   });
 });

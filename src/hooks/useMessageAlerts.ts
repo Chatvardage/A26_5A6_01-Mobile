@@ -9,6 +9,8 @@ import { useSession } from '@/session/SessionContext';
 import { toConversationId } from '@/types/conversationId';
 import { useUnread } from '@/unread/UnreadContext';
 
+const MAX_CACHED_TITLES = 500;
+
 type Incoming = { conversationId: string; senderId: string } | null;
 
 function str(value: unknown): string | null {
@@ -61,6 +63,8 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
       if ((await getPermission()) !== 'granted') return;
       if (!titles.current.has(senderId)) {
         const names = await lookupPseudos([senderId]).catch(() => ({}) as Record<string, string>);
+        // Cache borné : une longue session sur un serveur très actif ne le fait pas grossir sans limite.
+        if (titles.current.size >= MAX_CACHED_TITLES) titles.current.clear();
         if (names[senderId]) titles.current.set(senderId, names[senderId]);
       }
       await showMessageNotification({

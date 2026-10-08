@@ -113,6 +113,17 @@ describe('useAsyncResource : échec d’un rafraîchissement', () => {
     expect(result.current.refreshError).toBeNull();
   });
 
+  it('ignore aussi la réponse réussie d’une requête remplacée par une plus récente', async () => {
+    const slow = deferred<string[]>();
+    const load = jest.fn().mockResolvedValueOnce(['a']).mockReturnValueOnce(slow.promise).mockResolvedValueOnce(['fresh']);
+    const { result } = await renderHook(() => useAsyncResource(load, isEmpty, describeError));
+    await waitFor(() => expect(result.current.state.status).toBe('ready'));
+    await act(async () => void result.current.refresh());
+    await act(async () => result.current.refresh());
+    await act(async () => slow.resolve(['périmé']));
+    expect(result.current.state).toEqual({ status: 'ready', data: ['fresh'] });
+  });
+
   it('relance le chargement quand `load` change', async () => {
     const { result, rerender } = await renderHook(
       ({ load }: { load: () => Promise<string[]> }) => useAsyncResource(load, isEmpty, describeError),

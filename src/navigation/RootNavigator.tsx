@@ -140,61 +140,61 @@ export function RootNavigator() {
           ) : null}
           {/* L'écran d'une conversation affiche déjà son propre état de connexion. */}
           {status === 'signedIn' && !activeConversationId ? <ConnectionStatus /> : null}
-        <Stack.Navigator key={`${status}:${user?.id ?? ''}`}>
-          {status === 'signedIn' ? (
-            <>
-              <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
-              <Stack.Screen
-                name={Routes.Server}
-                component={ServerScreen}
-                options={({ route }) => ({
-                  title: route.params?.title ?? strings.navigation.server,
-                })}
-              />
-              <Stack.Screen
-                name={Routes.Conversation}
-                component={ConversationScreen}
-                options={({ route, navigation }) => ({
-                  title: route.params?.title ?? strings.navigation.conversation,
-                  // Recherche limitée à cette conversation (messages privés ou salon), comme sur le Web.
-                  headerRight: () => (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={strings.accessibility.searchInConversation}
-                      hitSlop={8}
-                      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-                      onPress={() => {
-                        const params = parseConversationParams(route.params);
-                        if (params) navigation.navigate(Routes.ConversationSearch, params);
-                      }}
-                    >
-                      <SearchIcon color={theme.colors.primary} size={22} />
-                    </Pressable>
-                  ),
-                })}
-              />
-              <Stack.Screen
-                name={Routes.ConversationSearch}
-                component={ConversationSearchScreen}
-                options={{ title: strings.navigation.search }}
-              />
-              <Stack.Screen
-                name={Routes.NewDirectMessage}
-                component={NewDirectMessageScreen}
-                options={{ title: 'Nouveau message', presentation: 'modal' }}
-              />
-            </>
-          ) : (
-            <>
-              <Stack.Screen name={Routes.Login} component={LoginScreen} options={{ headerShown: false }} />
-              <Stack.Screen
-                name={Routes.Register}
-                component={RegisterScreen}
-                options={{ headerShown: false }}
-              />
-            </>
-          )}
-        </Stack.Navigator>
+          <Stack.Navigator key={`${status}:${user?.id ?? ''}`}>
+            {status === 'signedIn' ? (
+              <>
+                <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
+                <Stack.Screen
+                  name={Routes.Server}
+                  component={ServerScreen}
+                  options={({ route }) => ({
+                    title: route.params?.title ?? strings.navigation.server,
+                  })}
+                />
+                <Stack.Screen
+                  name={Routes.Conversation}
+                  component={ConversationScreen}
+                  options={({ route, navigation }) => ({
+                    title: route.params?.title ?? strings.navigation.conversation,
+                    // Recherche limitée à cette conversation (messages privés ou salon), comme sur le Web.
+                    headerRight: () => (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={strings.accessibility.searchInConversation}
+                        hitSlop={8}
+                        style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+                        onPress={() => {
+                          const params = parseConversationParams(route.params);
+                          if (params) navigation.navigate(Routes.ConversationSearch, params);
+                        }}
+                      >
+                        <SearchIcon color={theme.colors.primary} size={22} />
+                      </Pressable>
+                    ),
+                  })}
+                />
+                <Stack.Screen
+                  name={Routes.ConversationSearch}
+                  component={ConversationSearchScreen}
+                  options={{ title: strings.navigation.search }}
+                />
+                <Stack.Screen
+                  name={Routes.NewDirectMessage}
+                  component={NewDirectMessageScreen}
+                  options={{ title: 'Nouveau message', presentation: 'modal' }}
+                />
+              </>
+            ) : (
+              <>
+                <Stack.Screen name={Routes.Login} component={LoginScreen} options={{ headerShown: false }} />
+                <Stack.Screen
+                  name={Routes.Register}
+                  component={RegisterScreen}
+                  options={{ headerShown: false }}
+                />
+              </>
+            )}
+          </Stack.Navigator>
         </SignedInShell>
       </View>
     </NavigationContainer>

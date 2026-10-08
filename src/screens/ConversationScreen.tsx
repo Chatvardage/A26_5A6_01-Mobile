@@ -135,10 +135,22 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
     [strings, deleteMessage],
   );
 
-  // Hauteurs variables : si l'index n'est pas encore mesuré, on s'en approche puis on réessaie.
+  // Hauteurs variables : si l'index n'est pas encore mesuré, on s'en approche puis on réessaie. Le délai est
+  // annulé au démontage (ou remplacé par une nouvelle tentative) pour ne jamais agir sur un écran fermé.
+  const scrollRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (scrollRetryTimer.current) clearTimeout(scrollRetryTimer.current);
+    },
+    [],
+  );
   const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
     listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-    setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 100);
+    if (scrollRetryTimer.current) clearTimeout(scrollRetryTimer.current);
+    scrollRetryTimer.current = setTimeout(
+      () => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }),
+      100,
+    );
   }, []);
 
   let body;

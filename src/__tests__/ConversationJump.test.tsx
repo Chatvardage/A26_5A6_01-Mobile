@@ -127,6 +127,28 @@ describe('ConversationScreen : atteindre un message', () => {
   });
 });
 
+describe('ConversationScreen : nouvelle tentative de défilement', () => {
+  it("annule la tentative différée au démontage et remplace une tentative en attente", async () => {
+    mockMessages([msg('b'), msg(TARGET)]);
+    const offset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => undefined);
+    const view = await render(<ConversationScreen {...props({ messageId: TARGET, focusToken: 7 })} />);
+    await act(async () => jest.advanceTimersByTimeAsync(10));
+    scroll.mockClear();
+    // Deux échecs rapprochés : la seconde tentative remplace la première (une seule relance).
+    await fireEvent(screen.getByText('texte b'), 'scrollToIndexFailed', { index: 1, averageItemLength: 80 });
+    await fireEvent(screen.getByText('texte b'), 'scrollToIndexFailed', { index: 1, averageItemLength: 80 });
+    await act(async () => jest.advanceTimersByTimeAsync(150));
+    expect(scroll).toHaveBeenCalledTimes(1);
+    // Écran fermé avant la fin du délai : plus aucune relance.
+    scroll.mockClear();
+    await fireEvent(screen.getByText('texte b'), 'scrollToIndexFailed', { index: 1, averageItemLength: 80 });
+    await view.unmount();
+    await act(async () => jest.advanceTimersByTimeAsync(150));
+    expect(scroll).not.toHaveBeenCalled();
+    offset.mockRestore();
+  });
+});
+
 describe('MessageBubble mis en évidence', () => {
   it('entoure le message atteint', async () => {
     const view = await render(<MessageBubble message={msg('a')} mine={false} showAuthor={false} highlighted />);

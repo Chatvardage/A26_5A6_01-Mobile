@@ -92,6 +92,23 @@ it("affiche l'erreur et permet de réessayer", async () => {
   expect(hook.result.current.errorMessage).toBeNull();
 });
 
+it("ignore aussi la réponse réussie d'une requête annulée par une saisie plus récente", async () => {
+  let resolveFirst: (page: { results: SearchResult[]; nextCursor: null }) => void = () => undefined;
+  search.mockImplementationOnce(
+    () => new Promise((resolve) => {
+      resolveFirst = resolve;
+    }),
+  );
+  search.mockResolvedValueOnce({ results: [result('b')], nextCursor: null });
+  const hook = await renderHook(() => useSearch());
+  await type(hook, 'premier');
+  await settle();
+  await type(hook, 'second');
+  await settle();
+  await act(async () => resolveFirst({ results: [result('périmé')], nextCursor: null }));
+  expect(hook.result.current.results.map((r) => r.id)).toEqual(['b']);
+});
+
 it('ignore la réponse d\'une requête annulée par une saisie plus récente', async () => {
   let rejectFirst: (error: Error) => void = () => undefined;
   search.mockImplementationOnce(

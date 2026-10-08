@@ -146,7 +146,8 @@ export async function sendMessage(conversationId: string, content: string): Prom
 
 /**
  * Supprime un message. Messages privés : l'expéditeur seulement (403 sinon). Salons : l'auteur, ou un
- * modérateur du serveur (le client mobile ne propose que la suppression de ses propres messages).
+ * modérateur, le propriétaire ou un administrateur du serveur (le client ne propose la suppression des messages
+ * des autres qu'à ceux-ci, d'après `monRole` ; l'API vérifie toujours le droit).
  */
 export async function deleteMessage(conversationId: string, messageId: string): Promise<void> {
   const ref = routeFor(conversationId);
