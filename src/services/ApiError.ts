@@ -13,6 +13,7 @@ export type ApiErrorKind =
   | 'invalid_response'
   | 'storage'
   | 'conflict'
+  | 'wrong_password' // Mot de passe actuel refusé (modifier le mot de passe, supprimer le compte).
   | 'rate_limit'; // Compatibilité avec les consommateurs auth historiques ; message de tentatives limitées.
 
 export class ApiError extends Error {
@@ -43,6 +44,7 @@ export function userMessage(error: unknown, strings: Translations = getTranslati
     const messages = {
       bad_request: strings.errors.badRequest,
       conflict: strings.errors.conflict,
+      wrong_password: strings.errors.wrongPassword,
       rate_limit: strings.errors.rateLimit,
       rate_limited: strings.errors.rateLimited,
       storage: strings.errors.storage,

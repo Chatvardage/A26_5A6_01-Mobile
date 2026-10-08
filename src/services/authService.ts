@@ -52,3 +52,38 @@ export function logout(refreshToken: string): Promise<void> {
     { authenticated: false },
   );
 }
+
+/**
+ * Le mot de passe actuel est vérifié par Authentification (401 s'il est faux) : ce 401 ne doit ni renouveler
+ * ni fermer la session, et s'affiche « Mot de passe actuel incorrect ».
+ */
+async function withCurrentPassword<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) throw new ApiError('wrong_password', getTranslations().errors.wrongPassword, 401);
+    throw error;
+  }
+}
+
+/** Nouveau mot de passe ; Authentification révoque alors tous les jetons, celui-ci compris. */
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return withCurrentPassword(() =>
+    apiFetch<void>(
+      '/api/auth/me',
+      { method: 'PATCH', body: JSON.stringify({ mot_de_passe_actuel: currentPassword, mot_de_passe: newPassword }) },
+      { retryUnauthorized: false },
+    ),
+  );
+}
+
+/** Suppression définitive du compte (données des autres services comprises). */
+export function deleteAccount(currentPassword: string): Promise<void> {
+  return withCurrentPassword(() =>
+    apiFetch<void>(
+      '/api/auth/me',
+      { method: 'DELETE', body: JSON.stringify({ mot_de_passe_actuel: currentPassword }) },
+      { retryUnauthorized: false },
+    ),
+  );
+}

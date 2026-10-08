@@ -247,6 +247,18 @@ export const en = {
     channels: 'Channels',
     results: (count: number) => `${count} result${count > 1 ? 's' : ''}`,
   },
+  account: {
+    title: 'Account',
+    changePassword: 'Change password',
+    currentPassword: 'Current password',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    passwordChanged: 'Password changed.',
+    deleteAccount: 'Delete my account',
+    deleteWarning: 'This cannot be undone: all your data will be permanently deleted.',
+    deleteConfirmTitle: 'Delete your account?',
+    deleteConfirmBody: 'Your messages, servers and settings will be deleted. This cannot be undone.',
+  },
   preferences: {
     connectedAs: 'Signed in as',
     signOut: 'Sign out',
@@ -363,6 +375,7 @@ export const en = {
   },
   errors: {
     validation: 'Check the form fields.',
+    wrongPassword: 'Current password is incorrect.',
     badRequest: 'The message is invalid. Check its content.',
     conflict: 'That username or email is already in use.',
     rateLimit: 'Too many attempts. Please try again shortly.',

@@ -20,6 +20,8 @@ jest.mock('@/services/authService', () => ({
   me: jest.fn(),
   refresh: jest.fn(),
   logout: jest.fn(),
+  changePassword: jest.fn(),
+  deleteAccount: jest.fn(),
 }));
 const user = {
   id: 'u',
@@ -486,4 +488,44 @@ it('a failed save after a concurrent logout does not change session state', asyn
   reject(new Error('save failed'));
   await Promise.all([assertion, logout]);
   expect(manager.state.status).toBe('signedOut');
+});
+
+describe('compte', () => {
+  it('change le mot de passe puis rouvre la session avec le nouveau', async () => {
+    await manager.signIn('alice', 'ancien-mdp');
+    jest.mocked(auth.login).mockResolvedValue(renewed);
+    await manager.changePassword('ancien-mdp', 'nouveau-mdp');
+    expect(auth.changePassword).toHaveBeenCalledWith('ancien-mdp', 'nouveau-mdp');
+    expect(auth.login).toHaveBeenLastCalledWith('a@example.com', 'nouveau-mdp');
+    expect(manager.state).toMatchObject({ status: 'signedIn', user });
+    expect(configureRealtime.mock.calls.at(-1)![0].getToken()).toBe('new-access-fixture');
+  });
+
+  it('garde la session si le mot de passe actuel est refusé', async () => {
+    await manager.signIn('alice', 'ancien-mdp');
+    jest.mocked(auth.changePassword).mockRejectedValue(new ApiError('wrong_password', 'x', 401));
+    await expect(manager.changePassword('faux', 'nouveau-mdp')).rejects.toMatchObject({ kind: 'wrong_password' });
+    expect(manager.state.status).toBe('signedIn');
+    expect(auth.login).toHaveBeenCalledTimes(1);
+  });
+
+  it('revient à la connexion si la reconnexion échoue, et exige une session', async () => {
+    await expect(manager.changePassword('a', 'b')).rejects.toMatchObject({ kind: 'unauthorized' });
+    await manager.signIn('alice', 'ancien-mdp');
+    jest.mocked(auth.login).mockRejectedValue(new ApiError('network', 'x'));
+    await expect(manager.changePassword('ancien-mdp', 'nouveau-mdp')).rejects.toMatchObject({ kind: 'network' });
+    expect(manager.state.status).toBe('signedOut');
+    expect(storage.clear).toHaveBeenCalled();
+  });
+
+  it('supprime le compte puis efface la session locale, sauf refus', async () => {
+    await manager.signIn('alice', 'mdp');
+    jest.mocked(auth.deleteAccount).mockRejectedValueOnce(new ApiError('wrong_password', 'x', 401));
+    await expect(manager.deleteAccount('faux')).rejects.toMatchObject({ kind: 'wrong_password' });
+    expect(manager.state.status).toBe('signedIn');
+    await manager.deleteAccount('mdp');
+    expect(auth.deleteAccount).toHaveBeenLastCalledWith('mdp');
+    expect(manager.state.status).toBe('signedOut');
+    expect(storage.clear).toHaveBeenCalled();
+  });
 });

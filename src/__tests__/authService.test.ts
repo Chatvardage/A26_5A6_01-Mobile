@@ -1,4 +1,4 @@
-import { login } from '@/services/authService';
+import { changePassword, deleteAccount, login } from '@/services/authService';
 import { apiFetch } from '@/services/httpClient';
 import { ApiError } from '@/services/ApiError';
 
@@ -22,4 +22,24 @@ it('remonte l’erreur de connexion sans la masquer', async () => {
   const error = new ApiError('unauthorized', 'x', 401);
   jest.mocked(apiFetch).mockRejectedValueOnce(error);
   await expect(login('alice', 'invalid')).rejects.toBe(error);
+});
+
+it('modifie le mot de passe et supprime le compte avec le mot de passe actuel, sans renouveler la session', async () => {
+  jest.mocked(apiFetch).mockResolvedValue(undefined);
+  await changePassword('ancien-test', 'nouveau-test');
+  expect(apiFetch).toHaveBeenLastCalledWith('/api/auth/me', {
+    method: 'PATCH', body: JSON.stringify({ mot_de_passe_actuel: 'ancien-test', mot_de_passe: 'nouveau-test' }),
+  }, { retryUnauthorized: false });
+  await deleteAccount('ancien-test');
+  expect(apiFetch).toHaveBeenLastCalledWith('/api/auth/me', {
+    method: 'DELETE', body: JSON.stringify({ mot_de_passe_actuel: 'ancien-test' }),
+  }, { retryUnauthorized: false });
+});
+
+it('traduit le refus du mot de passe actuel et laisse passer les autres erreurs', async () => {
+  jest.mocked(apiFetch).mockRejectedValueOnce(new ApiError('unauthorized', 'x', 401));
+  await expect(changePassword('faux', 'nouveau-test')).rejects.toMatchObject({ kind: 'wrong_password', status: 401 });
+  const network = new ApiError('network', 'x');
+  jest.mocked(apiFetch).mockRejectedValueOnce(network);
+  await expect(deleteAccount('faux')).rejects.toBe(network);
 });

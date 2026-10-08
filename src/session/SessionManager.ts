@@ -194,6 +194,29 @@ export class SessionManager {
     await this.writes;
     return storage.load();
   }
+  /**
+   * Authentification révoque tous les jetons quand le mot de passe change : on se reconnecte aussitôt avec le
+   * nouveau (le socket repart avec le nouveau jeton, voir configureRealtime). Si cette reconnexion échoue, le
+   * mot de passe est changé mais la session est perdue : retour à la connexion.
+   */
+  changePassword = async (currentPassword: string, newPassword: string) => {
+    const user = this.session?.utilisateur;
+    if (!user) throw new ApiError('unauthorized', 'Session absente');
+    await auth.changePassword(currentPassword, newPassword);
+    // Les requêtes encore en vol avec l'ancien jeton ne doivent pas tenter de renouveler la session.
+    invalidateHttpRequests();
+    try {
+      await this.signIn(user.courriel, newPassword);
+    } catch (error) {
+      await this.clear();
+      throw error;
+    }
+  };
+  /** Compte supprimé : la session locale est effacée (le jeton n'existe plus côté serveur). */
+  deleteAccount = async (currentPassword: string) => {
+    await auth.deleteAccount(currentPassword);
+    await this.clear();
+  };
   signOut = async () => {
     const session = this.session;
     // Local cleanup starts immediately, independently of the network.

@@ -17,6 +17,7 @@ const cases = {
   rate_limited: 'Vous envoyez des messages trop rapidement. Réessayez dans un instant.',
   rate_limit: 'Trop de tentatives. Réessayez dans quelques instants.',
   conflict: 'Ce pseudo ou ce courriel est déjà utilisé.',
+  wrong_password: 'Mot de passe actuel incorrect.',
   storage: 'Le stockage sécurisé est indisponible. Réessayez.',
   invalid_response: 'Réponse du serveur invalide. Réessayez.',
   server: 'Le serveur rencontre un problème. Réessayez plus tard.',

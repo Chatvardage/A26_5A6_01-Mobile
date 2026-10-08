@@ -247,6 +247,18 @@ export const fr = {
     channels: 'Salons',
     results: (count: number) => `${count} résultat${count > 1 ? 's' : ''}`,
   },
+  account: {
+    title: 'Compte',
+    changePassword: 'Modifier le mot de passe',
+    currentPassword: 'Mot de passe actuel',
+    newPassword: 'Nouveau mot de passe',
+    confirmPassword: 'Confirmer le nouveau mot de passe',
+    passwordChanged: 'Mot de passe modifié.',
+    deleteAccount: 'Supprimer mon compte',
+    deleteWarning: 'Cette action est irréversible : toutes tes données seront supprimées définitivement.',
+    deleteConfirmTitle: 'Supprimer ton compte ?',
+    deleteConfirmBody: 'Tes messages, tes serveurs et tes paramètres seront supprimés. Cette action est irréversible.',
+  },
   preferences: {
     connectedAs: 'Connecté en tant que',
     signOut: 'Se déconnecter',
@@ -363,6 +375,7 @@ export const fr = {
   },
   errors: {
     validation: 'Vérifiez les champs du formulaire.',
+    wrongPassword: 'Mot de passe actuel incorrect.',
     badRequest: 'Le message est invalide. Vérifiez son contenu.',
     conflict: 'Ce pseudo ou ce courriel est déjà utilisé.',
     rateLimit: 'Trop de tentatives. Réessayez dans quelques instants.',

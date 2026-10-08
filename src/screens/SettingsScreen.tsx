@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Image, ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { pickAvatar } from '@/adapters/avatar.adapter';
+import { AccountSection } from '@/components/AccountSection';
 import { ActionButton } from '@/components/ActionButton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/ThemedTextInput';
@@ -56,7 +57,7 @@ export function SettingsScreen() {
     {permission ? <ThemedText testID="notification-permission">{strings.notifications[permission]}</ThemedText> : null}
     {permission === 'undetermined' ? <ActionButton label={strings.notifications.enable} onPress={() => void request()} /> : permission === 'denied' ? <ActionButton label={strings.notifications.openSettings} onPress={() => void openSettings()} /> : null}
     <ThemedText type="small">{strings.notifications.badgeNote}</ThemedText><ThemedText type="small">{t.notificationLimit}</ThemedText>
-    </View><View style={card}><ActionButton label={strings.preferences.signOut} danger disabled={busy} onPress={() => void run(signOut)} /></View>
+    </View><AccountSection cardStyle={card} /><View style={card}><ActionButton label={strings.preferences.signOut} danger disabled={busy} onPress={() => void run(signOut)} /></View>
   </ScrollView></ThemedView>;
 }
 

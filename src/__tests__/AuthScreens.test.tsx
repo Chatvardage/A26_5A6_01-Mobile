@@ -63,6 +63,8 @@ beforeEach(() => {
     signIn: jest.fn().mockResolvedValue(undefined),
     register: jest.fn().mockResolvedValue(undefined),
     signOut: jest.fn(),
+    changePassword: jest.fn(),
+    deleteAccount: jest.fn(),
     refreshSession: jest.fn(),
     restoreSession: jest.fn(),
   };
