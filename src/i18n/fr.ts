@@ -233,6 +233,8 @@ export const fr = {
     noResults: 'Aucun résultat',
     noResultsHint: 'Aucun message ne correspond à votre recherche.',
     loadMore: 'Plus de résultats',
+    seeMore: 'Voir plus',
+    seeMoreIn: (name: string) => `Voir plus : ${name}`,
     messageNotFound: 'Ce message est introuvable : il est trop ancien ou a été supprimé.',
     loadingMore: 'Chargement…',
     channel: 'Salon',

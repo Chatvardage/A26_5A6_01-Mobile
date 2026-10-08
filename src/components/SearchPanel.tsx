@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect } from 'react';
 
 import { SearchResultItem } from '@/components/SearchResultItem';
 import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
@@ -15,14 +16,20 @@ type Props = {
   conversationId?: string;
   /** Nom de la conversation, pour le champ de saisie. */
   title?: string;
+  initialQuery?: string;
   onOpenResult: (result: SearchResult) => void;
 };
 
 /** Saisie + résultats paginés ; partagée par l'onglet Recherche (global) et la recherche d'une conversation. */
-export function SearchPanel({ conversationId, title, onOpenResult }: Props) {
+export function SearchPanel({ conversationId, title, initialQuery, onOpenResult }: Props) {
   const theme = useTheme();
   const { strings } = useTranslation();
   const search = useSearch(conversationId);
+  const { setQuery } = search;
+  useEffect(() => {
+    // Synchronise le terme transmis par la navigation globale avec la recherche existante.
+    if (initialQuery !== undefined) setQuery(initialQuery);
+  }, [initialQuery, setQuery]);
   const placeholder = conversationId
     ? strings.search.scopedPlaceholder(title ?? strings.search.scopedFallback)
     : strings.search.placeholder;

@@ -1,6 +1,6 @@
 import * as http from '@/services/httpClient';
 import { ApiError } from '@/services/ApiError';
-import { belongsTo, deleteMessage, editMessage, fetchHistory, mergeMessages, sendMessage } from '@/services/messagesService';
+import { belongsTo, deleteMessage, editMessage, fetchHistory, hasNewerMessages, mergeMessages, sendMessage } from '@/services/messagesService';
 
 jest.mock('@/services/httpClient');
 const apiFetch = http.apiFetch as jest.Mock;
@@ -24,6 +24,21 @@ const msg = (id: string, createdAt: string) => ({
 });
 
 beforeEach(() => apiFetch.mockReset());
+
+describe('hasNewerMessages', () => {
+  it.each(['dm', 'room'])('vérifie le dernier message %s avec une seule ligne sans lookup', async kind => {
+    apiFetch.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'suivant' }]);
+    expect(await hasNewerMessages(`${kind}:${DM}`, 'borne')).toBe(false);
+    expect(await hasNewerMessages(`${kind}:${DM}`, 'borne')).toBe(true);
+    const path = kind === 'dm' ? `/api/messages/history/${DM}` : `/api/messages/rooms/${DM}/history`;
+    expect(apiFetch).toHaveBeenCalledWith(`${path}?limit=1&cursor=borne&direction=after`);
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+  it('rejette une réponse invalide', async () => {
+    apiFetch.mockResolvedValue(null);
+    await expect(hasNewerMessages(`dm:${DM}`, 'borne')).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+});
 
 describe('fetchHistory', () => {
   it('tolère un auteur absent et une résolution des pseudos indisponible', async () => {

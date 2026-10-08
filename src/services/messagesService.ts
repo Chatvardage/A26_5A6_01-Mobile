@@ -110,6 +110,18 @@ function query(limit: number, cursor?: string): string {
   return params.toString();
 }
 
+/** Vérifie la présence d'un message après la borne, sans résoudre les auteurs. */
+export async function hasNewerMessages(conversationId: string, messageId: string): Promise<boolean> {
+  const ref = routeFor(conversationId);
+  const params = new URLSearchParams({ limit: '1', cursor: messageId, direction: 'after' });
+  const path = ref.kind === 'dm'
+    ? `/api/messages/history/${encodeURIComponent(ref.targetId)}?${params}`
+    : `/api/messages/rooms/${encodeURIComponent(ref.targetId)}/history?${params}`;
+  const raw = await apiFetch<RawMessage[]>(path);
+  if (!Array.isArray(raw)) throw new ApiError('invalid_response', 'Invalid history response');
+  return raw.length > 0;
+}
+
 /**
  * Historique récent d'une conversation, du plus récent au plus ancien (ordre attendu par une
  * FlatList inversée). L'API renvoie la page du plus ancien au plus récent : on l'inverse ici.

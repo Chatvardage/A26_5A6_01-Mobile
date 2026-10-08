@@ -15,7 +15,7 @@ jest.mock('@/services/receipts.service', () => ({ confirmDelivery: jest.fn(async
 jest.mock('@/services/usersService', () => ({ lookupPseudos: jest.fn(async () => ({})) }));
 jest.mock('@/services/messagesService', () => ({
   ...jest.requireActual('@/services/messagesService'),
-  fetchHistory: jest.fn(),
+  fetchHistory: jest.fn(), hasNewerMessages: jest.fn(async () => true),
 }));
 const mockRealtime = {
   getRealtimeState: () => 'ready',

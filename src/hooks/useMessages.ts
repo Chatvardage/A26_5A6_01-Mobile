@@ -7,6 +7,7 @@ import {
   deleteMessage,
   editMessage,
   fetchHistory,
+  hasNewerMessages,
   mergeMessages,
   sendMessage,
   type RawMessage,
@@ -101,7 +102,14 @@ export function useMessages(conversationId: string, currentUserId: string, initi
     }
     try {
       const page = anchor.current ? await fetchHistory(conversationId, PAGE_SIZE, undefined, { around: anchor.current }) : await fetchHistory(conversationId);
+      const newest = mergeMessages(messagesRef.current, page)[0];
+      const more = anchor.current && newest
+        ? await hasNewerMessages(conversationId, newest.id).catch(() => true)
+        : false;
       if (requestGeneration !== generation.current || requestId !== recentRequest.current) return;
+      newerAvailable.current = more;
+      setHasNewer(more);
+      if (!more) anchor.current = null;
       for (const message of page) {
         if (conversationId.startsWith('dm:') && message.senderId !== currentUserId && !message.deliveredAt) void confirmDelivery(message.id).catch(() => undefined);
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
@@ -317,11 +325,12 @@ export function useMessages(conversationId: string, currentUserId: string, initi
     setLoadingNewer(false);
     try {
       const page = await fetchHistory(conversationId, PAGE_SIZE, undefined, { around: messageId });
+      const more = page[0] ? await hasNewerMessages(conversationId, page[0].id).catch(() => true) : false;
       if (requestGeneration !== generation.current || version !== windowRequest.current) return false;
       if (!page.some(message => message.id === messageId) || deletedIds.current.has(messageId)) return false;
-      anchor.current = messageId;
-      newerAvailable.current = true;
-      setHasNewer(true);
+      anchor.current = more ? messageId : null;
+      newerAvailable.current = more;
+      setHasNewer(more);
       messagesRef.current = [];
       updateMessages(page);
       hasOlderRef.current = page.length === PAGE_SIZE;
@@ -345,9 +354,12 @@ export function useMessages(conversationId: string, currentUserId: string, initi
     setOlderError(null);
     try {
       const page = await fetchHistory(conversationId, PAGE_SIZE, newest.id, { direction: 'after' });
+      const more = page.length === PAGE_SIZE
+        ? await hasNewerMessages(conversationId, page[0].id).catch(() => true)
+        : false;
       if (requestGeneration !== generation.current || version !== windowRequest.current) return;
       updateMessages(page);
-      newerAvailable.current = page.length === PAGE_SIZE;
+      newerAvailable.current = more;
       setHasNewer(newerAvailable.current);
       if (!newerAvailable.current) anchor.current = null;
     } catch (error) {

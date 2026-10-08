@@ -20,6 +20,7 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { SearchIcon } from '@/components/SearchIcon';
 import { ConversationScreen } from '@/screens/ConversationScreen';
 import { ConversationSearchScreen } from '@/screens/ConversationSearchScreen';
+import { ServerSearchScreen } from '@/screens/ServerSearchScreen';
 import { NewDirectMessageScreen } from '@/screens/NewDirectMessageScreen';
 import { ServerScreen } from '@/screens/ServerScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
@@ -193,6 +194,7 @@ export function RootNavigator() {
                   component={ConversationSearchScreen}
                   options={{ title: strings.navigation.search }}
                 />
+                <Stack.Screen name={Routes.ServerSearch} component={ServerSearchScreen} options={{ title: strings.navigation.search }} />
                 <Stack.Screen
                   name={Routes.NewDirectMessage}
                   component={NewDirectMessageScreen}

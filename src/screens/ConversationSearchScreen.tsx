@@ -28,6 +28,7 @@ export function ConversationSearchScreen({ navigation, route }: Props) {
         <SearchPanel
           conversationId={params.conversationId}
           title={params.title}
+          initialQuery={typeof route.params?.query === 'string' ? route.params.query : undefined}
           // Retour à la conversation déjà ouverte sous cette recherche (popTo la dépile, au lieu d'en
           // empiler une seconde) : plusieurs recherches de suite ne laissent donc qu'une seule entrée, et la
           // flèche de retour ramène directement à la liste. `focusToken` permet de viser deux fois le même message.

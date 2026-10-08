@@ -233,6 +233,8 @@ export const en = {
     noResults: 'No results',
     noResultsHint: 'No message matches your search.',
     loadMore: 'More results',
+    seeMore: 'See more',
+    seeMoreIn: (name: string) => `See more: ${name}`,
     messageNotFound: 'This message could not be found: it is too old or was deleted.',
     loadingMore: 'Loading…',
     channel: 'Channel',

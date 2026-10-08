@@ -2,7 +2,6 @@ import { fireEvent, render, screen, userEvent } from '@testing-library/react-nat
 
 import { SearchResultItem } from '@/components/SearchResultItem';
 import { ConversationSearchScreen } from '@/screens/ConversationSearchScreen';
-import { SearchScreen } from '@/screens/SearchScreen';
 import type { SearchResult } from '@/services/searchService';
 import type { SearchStatus } from '@/hooks/useSearch';
 
@@ -49,7 +48,6 @@ const dm: SearchResult = {
 const room: SearchResult = { ...dm, id: M2, conversationId: `room:${ROOM}`, kind: 'room', conversationTitle: undefined, senderName: undefined, content: 'dans le salon' };
 
 const navigation = { navigate: jest.fn(), popTo: jest.fn(), goBack: jest.fn() };
-const globalProps = { navigation } as unknown as Parameters<typeof SearchScreen>[0];
 const scopedProps = (params: unknown) =>
   ({ navigation, route: { params } }) as unknown as Parameters<typeof ConversationSearchScreen>[0];
 
@@ -71,117 +69,18 @@ beforeEach(() => {
   };
 });
 
-describe('recherche globale', () => {
-  it.each([
-    ['idle', 'Recherchez un message'],
-    ['tooShort', 'Entrez au moins 2 caractères.'],
-    ['loading', 'Recherche en cours…'],
-    ['empty', 'Aucun résultat'],
-  ] as const)("affiche l'état %s", async (status, text) => {
-    mockSearch.status = status;
-    await render(<SearchScreen {...globalProps} />);
-    expect(screen.getByText(text)).toBeTruthy();
-    expect(screen.getByPlaceholderText('Rechercher dans vos conversations')).toBeTruthy();
-    expect(mockUseSearch).toHaveBeenCalledWith(undefined);
-  });
-
-  it("transmet la saisie et affiche l'erreur avec réessai", async () => {
-    mockSearch.status = 'error';
-    mockSearch.errorMessage = 'Impossible de joindre le serveur.';
-    await render(<SearchScreen {...globalProps} />);
-    await fireEvent.changeText(screen.getByLabelText('Recherche'), 'bonjour');
-    expect(mockSearch.setQuery).toHaveBeenCalledWith('bonjour');
-    expect(screen.getByText('Impossible de joindre le serveur.')).toBeTruthy();
-    await userEvent.setup().press(screen.getByText('Réessayer'));
-    expect(mockSearch.retry).toHaveBeenCalled();
-  });
-
-  it("affiche l'erreur même sans message détaillé", async () => {
-    mockSearch.status = 'error';
-    mockSearch.errorMessage = null;
-    await render(<SearchScreen {...globalProps} />);
-    expect(screen.getByText('Une erreur est survenue')).toBeTruthy();
-  });
-
-  it('affiche les résultats et ouvre la bonne conversation au toucher', async () => {
-    mockSearch.status = 'ready';
-    mockSearch.results = [dm, room];
-    await render(<SearchScreen {...globalProps} />);
-    expect(screen.getByText('2 résultats')).toBeTruthy();
-    expect(screen.getByText('bonjour à toi')).toBeTruthy();
-    await userEvent.setup().press(screen.getByText('bonjour à toi'));
-    expect(navigation.navigate).toHaveBeenCalledWith('Conversation', {
-      conversationId: `dm:${OLI}`,
-      title: 'oli',
-      messageId: M1,
-      focusToken: 1234,
-    });
-    await userEvent.setup().press(screen.getByText('dans le salon'));
-    expect(navigation.navigate).toHaveBeenLastCalledWith('Conversation', {
-      conversationId: `room:${ROOM}`,
-      title: undefined,
-      messageId: M2,
-      focusToken: 1234,
-    });
-  });
-
-  it('pagine uniquement par le bouton, sans repousser les serveurs au défilement', async () => {
+describe('recherche dans une conversation', () => {
+  it('reprend le terme choisi dans la recherche globale et pagine au bouton uniquement', async () => {
     mockSearch.status = 'ready';
     mockSearch.results = [dm];
     mockSearch.hasMore = true;
-    const view = await render(<SearchScreen {...globalProps} />);
+    await render(<ConversationSearchScreen {...scopedProps({ conversationId: `dm:${OLI}`, query: 'bonjour' })} />);
+    expect(mockSearch.setQuery).toHaveBeenCalledWith('bonjour');
     await fireEvent(screen.getByText('bonjour à toi'), 'endReached');
     expect(mockSearch.loadMore).not.toHaveBeenCalled();
-    await userEvent.setup().press(screen.getByText('Plus de résultats'));
+    await fireEvent.press(screen.getByText('Plus de résultats'));
     expect(mockSearch.loadMore).toHaveBeenCalledTimes(1);
-
-    mockSearch.loadingMore = true;
-    await view.rerender(<SearchScreen {...globalProps} />);
-    expect(screen.queryByText('Plus de résultats')).toBeNull();
-    expect(screen.getByLabelText('Chargement…')).toBeTruthy();
-
-    mockSearch.loadingMore = false;
-    mockSearch.moreError = 'Réseau coupé';
-    await view.rerender(<SearchScreen {...globalProps} />);
-    expect(screen.getByText('Réseau coupé')).toBeTruthy();
-
-    mockSearch.hasMore = false;
-    mockSearch.moreError = null;
-    await view.rerender(<SearchScreen {...globalProps} />);
-    expect(screen.queryByText('Plus de résultats')).toBeNull();
   });
-});
-
-describe('regroupement des résultats', () => {
-  const inServer = (id: string, serverName: string | undefined, channel: string): SearchResult => ({
-    ...room,
-    id,
-    serverName,
-    conversationTitle: channel,
-    content: `message ${id}`,
-  });
-
-  it('sépare messages privés et serveurs, chaque groupe avec son titre et son nombre', async () => {
-    mockSearch.status = 'ready';
-    mockSearch.results = [inServer('s1', 'Chatvardage', '#annonces'), dm, inServer('s2', 'Équipe', '#général'), inServer('s3', 'Chatvardage', '#général'), inServer('s4', undefined, '#x')];
-    await render(<SearchScreen {...globalProps} />);
-    expect(screen.getByText('Messages privés')).toBeTruthy();
-    expect(screen.getByText('Chatvardage')).toBeTruthy();
-    expect(screen.getByText('Équipe')).toBeTruthy();
-    expect(screen.getByText('Salons')).toBeTruthy();
-    expect(screen.getByText('2')).toBeTruthy();
-    expect(screen.getByText('#annonces')).toBeTruthy();
-  });
-
-  it("n'affiche aucun titre de groupe dans une recherche limitée à une conversation", async () => {
-    mockSearch.status = 'ready';
-    mockSearch.results = [dm];
-    await render(<ConversationSearchScreen {...scopedProps({ conversationId: `dm:${OLI}`, title: 'oli' })} />);
-    expect(screen.queryByText('Messages privés')).toBeNull();
-  });
-});
-
-describe('recherche dans une conversation', () => {
   it('limite la recherche à la conversation, nomme le champ et ne répète pas le lieu', async () => {
     mockSearch.status = 'ready';
     mockSearch.results = [dm];

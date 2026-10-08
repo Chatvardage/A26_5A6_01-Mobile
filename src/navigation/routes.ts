@@ -18,7 +18,8 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Server: { serverId: string; title?: string };
   Conversation: { conversationId: string; title?: string; messageId?: string; focusToken?: number };
-  ConversationSearch: { conversationId: string; title?: string };
+  ConversationSearch: { conversationId: string; title?: string; query?: string };
+  ServerSearch: { serverId: string; title?: string; query: string };
   DiscoverServers: { mode: 'discover' | 'create' } | undefined;
   ManageServer: { serverId: string };
   ServerMembers: { serverId: string };
@@ -36,6 +37,7 @@ export const Routes = {
   Server: 'Server',
   Conversation: 'Conversation',
   ConversationSearch: 'ConversationSearch',
+  ServerSearch: 'ServerSearch',
   NewDirectMessage: 'NewDirectMessage',
   DirectMessages: 'DirectMessages',
   Servers: 'Servers',

@@ -7,7 +7,7 @@ import type { ChatMessage } from '@/types/conversation';
 
 jest.mock('@/services/messagesService', () => {
   const actual = jest.requireActual<typeof import('@/services/messagesService')>('@/services/messagesService');
-  return { ...actual, fetchHistory: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn() };
+  return { ...actual, fetchHistory: jest.fn(), hasNewerMessages: jest.fn(async () => true), sendMessage: jest.fn(), editMessage: jest.fn() };
 });
 jest.mock('@/services/usersService', () => ({ lookupPseudos: jest.fn() }));
 const mockRealtime = {
@@ -38,6 +38,7 @@ const page = (prefix: string, from: number, count: number) =>
 
 beforeEach(() => {
   fetchHistory.mockReset();
+  jest.mocked(messageService.hasNewerMessages).mockReset().mockResolvedValue(true);
   (lookupPseudos as jest.Mock).mockReset().mockResolvedValue({});
 });
 
@@ -61,6 +62,43 @@ const jump = async (hook: Hook, messageId: string) => {
 const ids = (hook: Hook) => hook.result.current.messages.map((m) => m.id);
 
 describe('useMessages.jumpTo', () => {
+  it.each(['dm', 'room'])('masque les messages plus récents si une cible initiale %s est déjà la dernière', async kind => {
+    fetchHistory.mockResolvedValueOnce([msg(TARGET, 0)]);
+    jest.mocked(messageService.hasNewerMessages).mockResolvedValue(false);
+    const hook = await renderHook(() => useMessages(`${kind}:${OLI}`, ME, TARGET));
+    await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+    expect(hook.result.current.hasNewer).toBe(false);
+    expect(messageService.hasNewerMessages).toHaveBeenCalledWith(`${kind}:${OLI}`, TARGET);
+    await act(async () => hook.result.current.loadNewer());
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
+  });
+  it('masque le bouton après un saut vers le dernier message hors de la fenêtre', async () => {
+    const hook = await setup([msg('recent', 0)]);
+    fetchHistory.mockResolvedValueOnce([msg(TARGET, 0)]);
+    jest.mocked(messageService.hasNewerMessages).mockResolvedValue(false);
+    expect(await jump(hook, TARGET)).toBe(true);
+    expect(hook.result.current.hasNewer).toBe(false);
+  });
+  it('masque le bouton même si la dernière page contient exactement cinquante messages', async () => {
+    const hook = await setup([msg('recent', 0)]);
+    fetchHistory.mockResolvedValueOnce([msg(TARGET, 2000)]);
+    await jump(hook, TARGET);
+    fetchHistory.mockResolvedValueOnce(page('fin', 0, 50));
+    jest.mocked(messageService.hasNewerMessages).mockResolvedValue(false);
+    await act(async () => hook.result.current.loadNewer());
+    expect(messageService.hasNewerMessages).toHaveBeenLastCalledWith(`dm:${OLI}`, 'fin0');
+    expect(hook.result.current.hasNewer).toBe(false);
+    await act(async () => hook.result.current.loadNewer());
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
+  });
+  it('conserve la possibilité de charger si la vérification réseau échoue', async () => {
+    fetchHistory.mockResolvedValueOnce([msg(TARGET, 0)]);
+    jest.mocked(messageService.hasNewerMessages).mockRejectedValue(new Error('réseau'));
+    const hook = await renderHook(() => useMessages(`dm:${OLI}`, ME, TARGET));
+    await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+    expect(hook.result.current.hasNewer).toBe(true);
+    expect(ids(hook)).toEqual([TARGET]);
+  });
   it('retrouve un message deja charge sans requete supplementaire', async () => {
     const hook = await setup([msg('a',1)]);
     expect(await jump(hook,'a')).toBe(true);
