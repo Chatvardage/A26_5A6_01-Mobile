@@ -125,15 +125,15 @@ describe('recherche globale', () => {
     });
   });
 
-  it('pagine : fin de liste, bouton « Plus de résultats », chargement et erreur', async () => {
+  it('pagine uniquement par le bouton, sans repousser les serveurs au défilement', async () => {
     mockSearch.status = 'ready';
     mockSearch.results = [dm];
     mockSearch.hasMore = true;
     const view = await render(<SearchScreen {...globalProps} />);
     await fireEvent(screen.getByText('bonjour à toi'), 'endReached');
-    expect(mockSearch.loadMore).toHaveBeenCalledTimes(1);
+    expect(mockSearch.loadMore).not.toHaveBeenCalled();
     await userEvent.setup().press(screen.getByText('Plus de résultats'));
-    expect(mockSearch.loadMore).toHaveBeenCalledTimes(2);
+    expect(mockSearch.loadMore).toHaveBeenCalledTimes(1);
 
     mockSearch.loadingMore = true;
     await view.rerender(<SearchScreen {...globalProps} />);

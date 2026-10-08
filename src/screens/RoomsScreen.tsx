@@ -1,6 +1,6 @@
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { SymbolView } from 'expo-symbols';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -23,8 +23,8 @@ export function RoomsScreen({ navigation }: Props) {
     <ThemedView style={styles.page}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.hero, { backgroundColor: theme.panel }]}>
-          <View style={[styles.brandIcon, { backgroundColor: theme.primary }]}>
-            <SymbolView name={{ ios: 'bubble.left.and.bubble.right.fill', android: 'forum', web: 'forum' }} tintColor={theme.onPrimary} size={32} fallback={<Text style={{ color: theme.onPrimary, fontSize: 32 }}>C</Text>} />
+          <View style={styles.brandIcon}>
+            <Image source={require('../../assets/images/chatvardage-logo.png')} resizeMode="contain" style={styles.logo} accessibilityLabel={strings.accessibility.logo} />
           </View>
           <ThemedText type="subtitle">Chatvardage</ThemedText>
           <ThemedText themeColor="textSecondary">{strings.control.homeIntro}</ThemedText>
@@ -49,6 +49,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, gap: 24, maxWidth: 700, width: '100%', alignSelf: 'center' },
   hero: { padding: 24, borderRadius: 24, gap: 10 },
   brandIcon: { width: 60, height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  logo: { width: 60, height: 60 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: { flexGrow: 1, flexBasis: '45%', minWidth: 140, padding: 18, borderRadius: 20, borderWidth: 1, gap: 10 },
   icon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

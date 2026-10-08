@@ -51,8 +51,11 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   const headerHeight = useHeaderHeight();
   const { user, drafts } = useSession();
   const theme = useTheme();
+  // L'ancre initiale appartient à cette ouverture. Les résultats suivants passent par jumpTo,
+  // sans réinitialiser l'historique en concurrence avec le saut vers le message.
+  const [initialMessageId] = useState(messageId);
   const { hasNewer, loadingNewer, loadNewer, jumping, messages, status, errorMessage, accessError, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove } =
-    useMessages(conversationId, user?.id ?? '', messageId);
+    useMessages(conversationId, user?.id ?? '', initialMessageId);
   const readers = useReadReceipts(conversationId);
   const profiles = usePublicProfiles(messages.map(message => message.senderId));
   const isRoom = conversationId.startsWith('room:');
@@ -82,7 +85,7 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   const [actionError, setActionError] = useState<string | null>(null);
   const ready = status === 'ready';
 
-  // Message demandé par la recherche : on charge les pages plus anciennes jusqu'à lui, puis on y défile.
+  // Message demandé par la recherche : on charge sa page directement, puis on y défile.
   useEffect(() => {
     if (!messageId || !ready) return;
     let cancelled = false;

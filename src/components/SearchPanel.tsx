@@ -65,8 +65,6 @@ export function SearchPanel({ conversationId, title, onOpenResult }: Props) {
         }
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        onEndReached={() => void search.loadMore()}
-        onEndReachedThreshold={0.5}
         renderItem={({ item }) => (
           <SearchResultItem result={item} variant={conversationId ? 'scoped' : 'grouped'} term={search.term} onPress={onOpenResult} />
         )}

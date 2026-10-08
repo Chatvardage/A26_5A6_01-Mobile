@@ -458,3 +458,7 @@ Les boutons d’envoi, de modification, de recherche de destinataires et leurs l
 ### Conversation et messagerie : résultats anciens
 
 Un résultat de recherche ouvre une page directement depuis le message choisi, avec un indicateur de chargement puis une mise en évidence instantanée. Les messages intermédiaires ne sont plus chargés. La pagination reprend depuis cette position, vers les messages plus anciens ou plus récents. Une reconstruction locale de Message-Service est nécessaire pour activer les nouveaux paramètres `around` et `direction`.
+
+### Conversation et messagerie : pagination de recherche
+
+La recherche générale et la recherche dans un DM ou un salon chargent la page suivante uniquement avec le bouton « Plus de résultats ». Le défilement ne rajoute plus automatiquement des DM avant les groupes de serveurs. Le retour d'un résultat vers une conversation déjà ouverte conserve son ancre initiale : seul le saut vers le message charge la nouvelle page, sans relancer le chargement initial en concurrence. Les régressions DM et salon vérifient la fin du chargement, le défilement et une seconde sélection du même résultat. Validation manuelle sur appareil non effectuée. Le bloc Chatvardage de l'accueil affiche le logo du frontend (déjà présent dans les ressources mobiles); les icônes des raccourcis sont conservées.
