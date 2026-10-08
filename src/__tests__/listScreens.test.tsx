@@ -24,7 +24,7 @@ const conversation: ConversationSummary = {
   id: `dm:${SERVER_ID}`, kind: 'dm', title: 'Alice', unreadCount: 0,
   lastMessage: { id: 'message', content: 'Bonjour', senderId: 'alice', createdAt: '2026-10-01T10:00:00Z' },
 };
-const channel: ConversationSummary = { ...conversation, id: `room:${SERVER_ID}`, kind: 'room', title: 'Général' };
+const channel: ConversationSummary = { ...conversation, id: `room:${SERVER_ID}`, kind: 'room', title: 'général' };
 const server: ServerSummary = { id: SERVER_ID, name: 'Équipe', memberCount: 2, channelIds: [channel.id], unreadCount: 1 };
 
 const targets = [
@@ -42,8 +42,8 @@ const targets = [
   },
   {
     name: 'salons', hook: useServerChannels as jest.Mock, loading: 'Chargement des salons…',
-    empty: 'Aucun salon', data: { channels: [channel, { ...channel, id: 'second' }] }, button: /Général/,
-    destination: ['Conversation', { conversationId: channel.id, title: 'Général' }],
+    empty: 'Aucun salon', data: { channels: [channel, { ...channel, id: 'second' }] }, button: /général/,
+    destination: ['Conversation', { conversationId: channel.id, title: 'général' }],
     element: () => <ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: SERVER_ID } } as never} />,
   },
 ];

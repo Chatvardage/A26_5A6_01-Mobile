@@ -24,7 +24,7 @@ const conversation: ConversationSummary = {
   id: `dm:${ID}`, kind: 'dm', title: 'Alice', unreadCount: 0,
   lastMessage: { id: 'm', content: 'Bonjour', senderId: 'alice', createdAt: '2026-10-01T10:00:00Z' },
 };
-const channel: ConversationSummary = { ...conversation, id: `room:${ID}`, kind: 'room', title: 'Général' };
+const channel: ConversationSummary = { ...conversation, id: `room:${ID}`, kind: 'room', title: 'général' };
 const server: ServerSummary = { id: ID, name: 'Équipe', memberCount: 2, channelIds: [channel.id], unreadCount: 0 };
 
 // Les trois listes de conversations obéissent au même contrat à cinq états.
@@ -40,7 +40,7 @@ const lists = [
     element: () => <ServersScreen navigation={{ navigate } as never} route={{} as never} />,
   },
   {
-    name: 'salons', hook: useServerChannels as jest.Mock, item: 'Général', data: { channels: [channel] },
+    name: 'salons', hook: useServerChannels as jest.Mock, item: 'général', data: { channels: [channel] },
     loading: 'Chargement des salons…', empty: 'Aucun salon',
     element: () => <ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: ID } } as never} />,
   },

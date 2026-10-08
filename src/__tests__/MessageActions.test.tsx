@@ -5,9 +5,12 @@ import { useMessages } from '@/hooks/useMessages';
 import { ConversationScreen } from '@/screens/ConversationScreen';
 import { ApiError } from '@/services/ApiError';
 import type { ChatMessage } from '@/types/conversation';
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => ({}) }));
+jest.mock('@/hooks/useReadReceipts', () => ({ useReadReceipts: () => [] }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('@/hooks/useCanWrite', () => ({ useCanWrite: () => true }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 40 }));
 jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' }, drafts: new Map() }) }));
 let mockCanModerate = false;

@@ -8,6 +8,7 @@ import { getTranslations } from '@/i18n';
 
 export type RawMessage = {
   id: string;
+  deliveredAt?: string | null;
   senderId?: string;
   authorId?: string;
   recipientId?: string;
@@ -29,6 +30,7 @@ function normalizeMessage(message: RawMessage, senderName?: string): ChatMessage
     content: message.content,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
+    ...(message.deliveredAt ? { deliveredAt: message.deliveredAt } : {}),
   };
   getMessageDates(normalized);
   return normalized;
@@ -66,6 +68,7 @@ export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): 
       const merged = {
         ...message,
         senderName: message.senderName ?? existing?.senderName,
+        ...(message.deliveredAt || existing?.deliveredAt ? { deliveredAt: message.deliveredAt ?? existing?.deliveredAt } : {}),
       };
       messageDates.set(merged, getMessageDates(message));
       byId.set(message.id, merged);
@@ -112,12 +115,15 @@ function query(limit: number, cursor?: string): string {
  * FlatList inversée). L'API renvoie la page du plus ancien au plus récent : on l'inverse ici.
  * Avec `cursor`, charge la page précédente (messages plus anciens que ce message).
  */
-export async function fetchHistory(conversationId: string, limit = 50, cursor?: string): Promise<ChatMessage[]> {
+export async function fetchHistory(conversationId: string, limit = 50, cursor?: string, options?: { around?: string; direction?: 'after' }): Promise<ChatMessage[]> {
   const ref = routeFor(conversationId);
+  const params = new URLSearchParams(query(limit, cursor));
+  if (options?.around) params.set('around', options.around);
+  if (options?.direction) params.set('direction', options.direction);
   const path =
     ref.kind === 'dm'
-      ? `/api/messages/history/${encodeURIComponent(ref.targetId)}?${query(limit, cursor)}`
-      : `/api/messages/rooms/${encodeURIComponent(ref.targetId)}/history?${query(limit, cursor)}`;
+      ? `/api/messages/history/${encodeURIComponent(ref.targetId)}?${params.toString()}`
+      : `/api/messages/rooms/${encodeURIComponent(ref.targetId)}/history?${params.toString()}`;
   const raw = await apiFetch<RawMessage[]>(path);
 
   // Messages privés : `senderId` ; messages de salon : `authorId` (les deux existent toujours côté API).

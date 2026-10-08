@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import { userMessage } from '@/services/ApiError';
 import type { ChatMessage } from '@/types/conversation';
@@ -36,10 +37,11 @@ export function MessageInput(props: Props) {
 
 function MessageInputState({ conversationId, draftStore, onSend, editingMessage, onEdit, onCancelEdit }: Props) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(() => editingMessage?.content ?? draftStore.get(conversationId) ?? '');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const textRef = useRef(text);
   const mounted = useRef(true);
   const submittingRef = useRef(false);
@@ -88,7 +90,7 @@ function MessageInputState({ conversationId, draftStore, onSend, editingMessage,
         }
       }
     } catch (reason) {
-      if (mounted.current) setError(typeof reason === 'string' ? reason : userMessage(reason));
+      if (mounted.current) setError(reason);
     } finally {
       submittingRef.current = false;
       if (mounted.current) setSubmitting(false);
@@ -107,15 +109,15 @@ function MessageInputState({ conversationId, draftStore, onSend, editingMessage,
     >
       {editing ? (
         <View style={styles.editingLabel}>
-          <ThemedText type="smallBold">Modification du message</ThemedText>
+          <ThemedText type="smallBold">{strings.composer.editingMessage}</ThemedText>
           <Pressable
             disabled={submitting}
             onPress={onCancelEdit}
             accessibilityRole="button"
-            accessibilityLabel="Annuler la modification"
+            accessibilityLabel={strings.composer.cancelEdit}
           >
             <ThemedText type="small" themeColor="textSecondary">
-              Annuler
+              {strings.control.cancel}
             </ThemedText>
           </Pressable>
         </View>
@@ -124,31 +126,31 @@ function MessageInputState({ conversationId, draftStore, onSend, editingMessage,
         <TextInput
           value={text}
           onChangeText={changeText}
-          placeholder={editing ? 'Modifier le message' : 'Écrire un message'}
+          placeholder={editing ? strings.composer.editMessage : strings.composer.writeMessage}
           placeholderTextColor={theme.textSecondary}
           multiline
           maxLength={4000}
           style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-          accessibilityLabel={editing ? 'Modifier le message' : 'Message'}
+          accessibilityLabel={editing ? strings.composer.editMessage : strings.accessibility.message}
         />
         <Pressable
           disabled={!canSubmit}
           onPress={() => void submit()}
           accessibilityRole="button"
-          accessibilityLabel={editing ? 'Enregistrer' : 'Envoyer'}
+          accessibilityLabel={editing ? strings.control.save : strings.accessibility.send}
           style={({ pressed }) => [
             styles.send,
             { backgroundColor: theme.tint, opacity: !canSubmit ? 0.4 : pressed ? 0.7 : 1 },
           ]}
         >
           <ThemedText type="smallBold" style={styles.sendText}>
-            {editing ? 'Enregistrer' : 'Envoyer'}
+            {editing ? strings.control.save : strings.accessibility.send}
           </ThemedText>
         </Pressable>
       </View>
       {error ? (
         <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.error}>
-          {error}
+          {typeof error === 'string' ? error : userMessage(error, strings)}
         </ThemedText>
       ) : null}
     </View>

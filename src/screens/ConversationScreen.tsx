@@ -17,6 +17,11 @@ import { useSession } from '@/session/SessionContext';
 import type { ChatMessage } from '@/types/conversation';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useReadReceipts } from '@/hooks/useReadReceipts';
+import { hasRead } from '@/services/receipts.service';
+import { usePublicProfiles } from '@/hooks/usePublicProfiles';
+import { useCanWrite } from '@/hooks/useCanWrite';
+import { shouldFollowMessages } from '@/utils/conversationScroll';
 import { useTranslation } from '@/i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Conversation'>;
@@ -46,14 +51,31 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   const headerHeight = useHeaderHeight();
   const { user, drafts } = useSession();
   const theme = useTheme();
-  const { messages, status, errorMessage, accessError, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove } =
-    useMessages(conversationId, user?.id ?? '');
+  const { hasNewer, loadingNewer, loadNewer, jumping, messages, status, errorMessage, accessError, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove } =
+    useMessages(conversationId, user?.id ?? '', messageId);
+  const readers = useReadReceipts(conversationId);
+  const profiles = usePublicProfiles(messages.map(message => message.senderId));
   const isRoom = conversationId.startsWith('room:');
   const canModerate = useCanModerate(conversationId);
+  const canWrite = useCanWrite(conversationId);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
   const hasInlineError = status === 'error' && messages.length > 0;
   const displayedError = hasInlineError ? errorMessage ?? strings.errors.generic : errorMessage;
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const followLatest = useRef(!messageId);
+  const [following, setFollowing] = useState(!messageId);
+  const viewportHeight = useRef(0);
+  const lastOwnId = messages.find(message => message.senderId === user?.id)?.id;
+  const [scrollRequest, setScrollRequest] = useState(0);
+  const latestId = messages[0]?.id;
+  useEffect(() => {
+    if (!latestId || !followLatest.current) return;
+    let secondFrame: number | undefined;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => { if (followLatest.current) listRef.current?.scrollToOffset({ offset: 0, animated: true }); });
+    });
+    return () => { cancelAnimationFrame(firstFrame); if (secondFrame !== undefined) cancelAnimationFrame(secondFrame); };
+  }, [latestId, scrollRequest]);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const [messageNotFound, setMessageNotFound] = useState(false);
@@ -64,8 +86,11 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   useEffect(() => {
     if (!messageId || !ready) return;
     let cancelled = false;
-    // Nouvelle demande : l'avis précédent ne vaut plus.
+    followLatest.current = false;
+    // Nouvelle cible de navigation : conserver sa position de lecture.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFollowing(false);
+    // Nouvelle demande : l'avis précédent ne vaut plus.
     setMessageNotFound(false);
     void jumpTo(messageId).then((found) => {
       if (cancelled) return;
@@ -86,7 +111,7 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
     if (!scrollTarget) return;
     const index = messages.findIndex((m) => m.id === scrollTarget);
     if (index === -1) return;
-    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setScrollTarget(null);
   }, [scrollTarget, messages]);
@@ -148,13 +173,13 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
     listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
     if (scrollRetryTimer.current) clearTimeout(scrollRetryTimer.current);
     scrollRetryTimer.current = setTimeout(
-      () => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }),
+      () => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: false }),
       100,
     );
   }, []);
 
   let body;
-  if (status === 'loading') body = <LoadingState label={strings.states.loadingMessages} />;
+  if (status === 'loading' || jumping) body = <LoadingState label={strings.states.loadingMessages} />;
   else if (status === 'error' && messages.length === 0) {
     body = <ErrorState message={errorMessage ?? strings.errors.generic} onRetry={retry} />;
   } else if (messages.length === 0) {
@@ -166,15 +191,22 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
         ref={listRef}
         // Liste inversée : le plus récent est en bas et le clavier ne le masque pas.
         inverted
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+        maintainVisibleContentPosition={following ? undefined : { minIndexForVisible: 0 }}
+        onLayout={event => { viewportHeight.current = event.nativeEvent.layout.height; }}
+        onScroll={event => { const next = !hasNewer && shouldFollowMessages(event.nativeEvent.contentOffset.y, event.nativeEvent.layoutMeasurement?.height ?? viewportHeight.current); followLatest.current = next; setFollowing(next); }}
+        scrollEventThrottle={16}
+        onContentSizeChange={() => { if (followLatest.current && !scrollTarget ) listRef.current?.scrollToOffset({ offset: 0, animated: true }); }}
         testID="messages-list"
         data={messages}
         keyExtractor={(m) => m.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         onScrollToIndexFailed={onScrollToIndexFailed}
-        onEndReached={() => void loadOlder()}
+        onEndReached={() => { if (!scrollTarget && !jumping) void loadOlder(); }}
         onEndReachedThreshold={0.5}
+        ListHeaderComponent={hasNewer ? <View style={styles.pagination}>
+          {loadingNewer ? <ActivityIndicator color={theme.tint} /> : <Pressable accessibilityRole="button" accessibilityLabel={strings.composer.loadNewer} onPress={() => void loadNewer()}><ThemedText style={{color:theme.tint}}>{strings.composer.loadNewer}</ThemedText></Pressable>}
+        </View> : null}
         ListFooterComponent={
           loadingOlder || olderError ? (
             <View style={styles.pagination}>
@@ -187,10 +219,10 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
                   <Pressable
                     onPress={() => void loadOlder()}
                     accessibilityRole="button"
-                    accessibilityLabel="Réessayer le chargement des messages précédents"
+                    accessibilityLabel={strings.composer.retryHistory}
                   >
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Réessayer
+                      {strings.navigation.retry}
                     </ThemedText>
                   </Pressable>
                 </>
@@ -200,8 +232,12 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
         }
         renderItem={({ item }) => (
           <MessageBubble
-            message={item}
+            message={{ ...item, senderName: profiles[item.senderId]?.alias || item.senderName }}
+            avatar={profiles[item.senderId]?.avatar}
+            online={profiles[item.senderId]?.online}
             mine={item.senderId === user?.id}
+            receipt={!isRoom && item.id === lastOwnId ? (readers.some(reader => hasRead(reader, item)) ? 'read' : item.deliveredAt ? 'delivered' : 'sent') : undefined}
+            readerCount={isRoom && item.id === lastOwnId ? readers.filter(reader => reader.userId !== item.senderId && hasRead(reader, item)).length : undefined}
             showAuthor={isRoom}
             highlighted={item.id === highlightedId}
             moderated={item.senderId !== user?.id && canModerate}
@@ -256,14 +292,19 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
           ) : null}
           {body}
         </ThemedView>
-        <MessageInput
+        {canWrite ? <MessageInput
           draftStore={drafts}
           conversationId={conversationId}
-          onSend={send}
+          onSend={async text => {
+              await send(text);
+              followLatest.current = true;
+              setFollowing(true);
+              setScrollRequest(value => value + 1);
+            }}
           editingMessage={editingMessage}
           onEdit={edit}
           onCancelEdit={() => setEditingMessage(null)}
-        />
+        /> : <ThemedText style={{ padding: 16 }}>{strings.control.readOnly}</ThemedText>}
       </ContentFrame>
     </KeyboardAvoidingView>
   );

@@ -1,0 +1,32 @@
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import { useLocales } from 'expo-localization';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { I18nProvider, fr, en } from '@/i18n';
+import { MessageInput } from '@/components/MessageInput';
+import { MessageBubble } from '@/components/MessageBubble';
+import { ApiError } from '@/services/ApiError';
+import { WELCOME_MESSAGE_ID, displayMessage } from '@/utils/systemMessages';
+jest.mock('expo-localization', () => ({getLocales: () => [{languageCode:'en'}],useLocales:jest.fn(() => [{languageCode:'en'}])}));
+const message = {id:WELCOME_MESSAGE_ID,senderId:'system',content:'Original',createdAt:'2026-10-08T10:00:00Z',updatedAt:'2026-10-08T10:00:00Z'};
+it('traduit le composeur et ses erreurs au changement de langue sans perdre le brouillon', async () => {
+  const drafts = new Map<string,string>();
+  const element = () => <I18nProvider><SafeAreaProvider initialMetrics={{frame:{x:0,y:0,width:400,height:800},insets:{top:0,bottom:0,left:0,right:0}}}><MessageInput conversationId="dm:test" draftStore={drafts} editingMessage={null} onSend={jest.fn().mockRejectedValue(new ApiError('forbidden','x'))} onEdit={jest.fn()} onCancelEdit={jest.fn()} /></SafeAreaProvider></I18nProvider>;
+  const view = await render(element());
+  await fireEvent.changeText(screen.getByLabelText('Message'), 'Hello');
+  await fireEvent.press(screen.getByRole('button',{name:'Send'}));
+  expect(screen.getByRole('alert')).toHaveTextContent(en.errors.forbidden);
+  jest.mocked(useLocales).mockReturnValue([{languageCode:'fr'}] as unknown as ReturnType<typeof useLocales>);
+  await view.rerender(element());
+  expect(screen.getByRole('button',{name:'Envoyer'})).toBeTruthy();
+  expect(screen.getByRole('alert')).toHaveTextContent(fr.errors.forbidden);
+  expect(screen.getByLabelText('Message')).toHaveDisplayValue('Hello');
+});
+it('traduit le message de bienvenue et son auteur sans traduire les messages utilisateurs ou modifies', async () => {
+  jest.mocked(useLocales).mockReturnValue([{languageCode:'en'}] as unknown as ReturnType<typeof useLocales>);
+  await render(<I18nProvider><MessageBubble message={message} mine={false} showAuthor /></I18nProvider>);
+  expect(screen.getByText('System')).toBeTruthy();
+  expect(screen.getByText(en.conversation.welcome)).toBeTruthy();
+  expect(displayMessage({...message,id:'custom'},en)).toBe('Original');
+  expect(displayMessage({...message,updatedAt:'2026-10-08T10:01:00Z'},en)).toBe('Original');
+  expect(displayMessage(message,fr)).toBe(fr.conversation.welcome);
+});

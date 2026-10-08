@@ -15,6 +15,9 @@ jest.mock('@/session/SessionContext', () => ({
   useSession: () => ({ realtime: mockRealtime }),
 }));
 const mockRealtime = {
+  followPresence: jest.fn(async () => []),
+  publishPresence: jest.fn(),
+  publishProfile: jest.fn(),
   configureRealtime: jest.fn(),
   disconnectRealtime: jest.fn(),
   getRealtimeState: jest.fn(() => 'ready'),

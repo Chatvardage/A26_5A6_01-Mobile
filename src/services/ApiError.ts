@@ -1,4 +1,4 @@
-import { getTranslations } from '@/i18n';
+import { getTranslations, type Translations } from '@/i18n';
 
 export type ApiErrorKind =
   | 'network'
@@ -38,8 +38,7 @@ export function kindFromStatus(status: number): ApiErrorKind {
 }
 
 /** Message affichable à l'utilisateur (jamais de détail technique). */
-export function userMessage(error: unknown): string {
-  const strings = getTranslations();
+export function userMessage(error: unknown, strings: Translations = getTranslations()): string {
   if (error instanceof ApiError) {
     const messages = {
       bad_request: strings.errors.badRequest,

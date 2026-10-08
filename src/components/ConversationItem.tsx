@@ -7,6 +7,8 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ConversationSummary } from '@/types/conversation';
 import { formatMessageTime } from '@/utils/formatTime';
+import { displayMessage } from '@/utils/systemMessages';
+import { displayName } from '@/utils/displayNames';
 import { useTranslation } from '@/i18n';
 
 type Props = {
@@ -18,10 +20,11 @@ type Props = {
 function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
   const theme = useTheme();
   const { strings } = useTranslation();
-  const { title, subtitle, lastMessage, unreadCount } = conversation;
+  const { subtitle, lastMessage, unreadCount } = conversation;
+  const title = displayName(conversation.title, strings);
   const hasUnread = unreadCount > 0;
   const preview = lastMessage
-    ? `${lastMessage.senderId === currentUserId ? `${strings.conversation.you} : ` : ''}${lastMessage.content}`
+    ? `${lastMessage.senderId === currentUserId ? `${strings.conversation.you} : ` : ''}${displayMessage(lastMessage, strings)}`
     : strings.conversation.noMessage;
 
   return (

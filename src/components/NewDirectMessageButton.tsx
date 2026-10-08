@@ -1,16 +1,18 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useTranslation } from '@/i18n';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export function NewDirectMessageButton({ onPress }: { onPress: () => void }) {
   const theme = useTheme();
+  const { strings } = useTranslation();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Nouveau message privé"
-      accessibilityHint="Choisir un destinataire"
+      accessibilityLabel={strings.directMessage.button}
+      accessibilityHint={strings.directMessage.chooseRecipient}
       style={({ pressed }) => [
         styles.button,
         { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement },

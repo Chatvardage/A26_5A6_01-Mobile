@@ -10,6 +10,7 @@ import { UserChoiceItem } from '@/components/UserChoiceItem';
 import { Spacing } from '@/constants/theme';
 import { useNewDirectMessage } from '@/hooks/useNewDirectMessage';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation } from '@/i18n';
 import { Routes, type RootStackParamList } from '@/navigation/routes';
 import { SEARCH_MAX_LENGTH, type UserChoice } from '@/services/usersService';
 import { useSession } from '@/session/SessionContext';
@@ -20,6 +21,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'NewDirectMessage'>;
 /** Choix du destinataire d'un message privé, y compris une personne à qui on n'a jamais écrit. */
 export function NewDirectMessageScreen({ navigation }: Props) {
   const theme = useTheme();
+  const { strings } = useTranslation();
+  const t = strings.directMessage;
   const { user } = useSession();
   const { query, setQuery, searching, search, retrySearch, suggestions, retrySuggestions, hasConversationWith } =
     useNewDirectMessage(user?.id ?? '');
@@ -53,15 +56,15 @@ export function NewDirectMessageScreen({ navigation }: Props) {
   let body;
   if (searching) {
     if (search.status === 'error') body = <ErrorState message={search.message} onRetry={retrySearch} />;
-    else if (search.status !== 'ready') body = <LoadingState label="Recherche…" />;
+    else if (search.status !== 'ready') body = <LoadingState label={t.searching} />;
     else if (search.users.length === 0) {
-      body = <EmptyState title="Aucun utilisateur trouvé" hint="Vérifiez le début du pseudo." />;
-    } else body = list('Résultats', search.users);
-  } else if (suggestions.status === 'loading') body = <LoadingState label="Chargement des suggestions…" />;
+      body = <EmptyState title={t.noUsers} hint={t.noUsersHint} />;
+    } else body = list(t.results, search.users);
+  } else if (suggestions.status === 'loading') body = <LoadingState label={t.loadingSuggestions} />;
   else if (suggestions.status === 'error') body = <ErrorState message={suggestions.message} onRetry={retrySuggestions} />;
   else if (suggestions.status === 'empty') {
-    body = <EmptyState title="Aucune suggestion" hint="Tapez le début d'un pseudo pour trouver quelqu'un." />;
-  } else body = list('Suggestions', suggestions.data);
+    body = <EmptyState title={t.noSuggestions} hint={t.noSuggestionsHint} />;
+  } else body = list(t.suggestions, suggestions.data);
 
   return (
     <ThemedView style={styles.fill}>
@@ -69,7 +72,7 @@ export function NewDirectMessageScreen({ navigation }: Props) {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Rechercher un pseudo"
+          placeholder={t.searchUsername}
           placeholderTextColor={theme.textSecondary}
           maxLength={SEARCH_MAX_LENGTH}
           autoFocus
@@ -77,7 +80,7 @@ export function NewDirectMessageScreen({ navigation }: Props) {
           autoCorrect={false}
           returnKeyType="search"
           clearButtonMode="while-editing"
-          accessibilityLabel="Rechercher un pseudo"
+          accessibilityLabel={t.searchUsername}
           style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
         />
         {body}

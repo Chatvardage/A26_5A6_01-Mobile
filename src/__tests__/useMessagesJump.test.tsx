@@ -61,145 +61,90 @@ const jump = async (hook: Hook, messageId: string) => {
 const ids = (hook: Hook) => hook.result.current.messages.map((m) => m.id);
 
 describe('useMessages.jumpTo', () => {
-  it('retrouve tout de suite un message déjà chargé, sans appel supplémentaire', async () => {
-    const hook = await setup([msg('a', 1), msg('b', 2)]);
-    await expect(hook.result.current.jumpTo('b')).resolves.toBe(true);
+  it('retrouve un message deja charge sans requete supplementaire', async () => {
+    const hook = await setup([msg('a',1)]);
+    expect(await jump(hook,'a')).toBe(true);
     expect(fetchHistory).toHaveBeenCalledTimes(1);
   });
-
-  it("charge les pages plus anciennes, sans trou ni doublon, jusqu'au message", async () => {
-    const hook = await setup(page('r', 0, 50));
-    fetchHistory.mockResolvedValueOnce(page('p', 50, 50));
-    fetchHistory.mockResolvedValueOnce([...page('q', 100, 49), msg(TARGET, 149), msg('r49', 49)]);
-    expect(await jump(hook, TARGET)).toBe(true);
-    expect(fetchHistory).toHaveBeenNthCalledWith(2, `dm:${OLI}`, 50, 'r49');
-    expect(fetchHistory).toHaveBeenNthCalledWith(3, `dm:${OLI}`, 50, 'p99');
-    expect(ids(hook)).toHaveLength(new Set(ids(hook)).size);
-    expect(ids(hook)[0]).toBe('r0');
-    expect(ids(hook).at(-1)).toBe(TARGET);
-  });
-
-  it("s'arrête à la fin de l'historique : message introuvable, sans nouvel appel ensuite", async () => {
-    const hook = await setup(page('r', 0, 50));
-    fetchHistory.mockResolvedValueOnce(page('p', 50, 3));
-    expect(await jump(hook, TARGET)).toBe(false);
-    await waitFor(() => expect(hook.result.current.hasOlder).toBe(false));
-    expect(await jump(hook, TARGET)).toBe(false);
+  it('remplace les messages recents par une seule page depuis la cible', async () => {
+    const hook = await setup(page('r',0,50));
+    fetchHistory.mockResolvedValueOnce([msg(TARGET,2000),...page('p',2001,49)]);
+    expect(await jump(hook,TARGET)).toBe(true);
+    expect(fetchHistory).toHaveBeenLastCalledWith(`dm:${OLI}`,50,undefined,{around:TARGET});
     expect(fetchHistory).toHaveBeenCalledTimes(2);
+    expect(ids(hook)[0]).toBe(TARGET);
+    expect(ids(hook)).not.toContain('r0');
+    expect(hook.result.current.hasOlder).toBe(true);
+    expect(hook.result.current.hasNewer).toBe(true);
+    expect(hook.result.current.jumping).toBe(false);
+    fetchHistory.mockResolvedValueOnce([msg('older',2050)]);
+    await act(async () => hook.result.current.loadOlder());
+    expect(fetchHistory).toHaveBeenLastCalledWith(`dm:${OLI}`,50,'p2049');
+    expect(hook.result.current.hasOlder).toBe(false);
   });
+  it('conserve la liste et termine le chargement si la cible est absente ou le reseau refuse', async () => {
+    const hook = await setup([msg('recent',0)]);
+    fetchHistory.mockResolvedValueOnce([]);
+    expect(await jump(hook,TARGET)).toBe(false);
+    expect(ids(hook)).toEqual(['recent']);
+    fetchHistory.mockRejectedValueOnce(new Error('network'));
+    expect(await jump(hook,TARGET)).toBe(false);
+    expect(hook.result.current.jumping).toBe(false);
+  });
+  it('affiche le chargement et ignore une reponse tardive apres changement de conversation', async () => {
+    const hook = await setup([msg('recent',0)]);
+    let resolve!: (messages:ChatMessage[]) => void;
+    fetchHistory.mockImplementationOnce(() => new Promise(done => {resolve=done;}));
+    let pending!:Promise<boolean>;
+    await act(async () => {pending=hook.result.current.jumpTo(TARGET);});
+    expect(hook.result.current.jumping).toBe(true);
+    fetchHistory.mockResolvedValueOnce([msg('new-conversation',0)]);
+    await hook.rerender({conversation:`dm:${TARGET}`});
+    await act(async () => resolve([msg(TARGET,2000)]));
+    expect(await pending).toBe(false);
+    expect(ids(hook)).toEqual(['new-conversation']);
+  });
+  it('seule la derniere recherche peut remplacer la liste', async () => {
+    const hook = await setup([msg('recent',0)]);
+    let resolve!:(messages:ChatMessage[]) => void;
+    fetchHistory.mockImplementationOnce(() => new Promise(done => {resolve=done;}));
+    let pending!:Promise<boolean>;
+    await act(async () => {pending=hook.result.current.jumpTo('first');});
+    fetchHistory.mockResolvedValueOnce([msg('second',2000)]);
+    expect(await jump(hook,'second')).toBe(true);
+    await act(async () => resolve([msg('first',2001)]));
+    expect(await pending).toBe(false);
+    expect(ids(hook)).toEqual(['second']);
+  });
+  it('charge les pages plus recentes a partir de la cible sans doublons', async () => {
+    const hook = await setup([msg('recent',0)]);
+    fetchHistory.mockResolvedValueOnce([msg(TARGET,2000)]);
+    await jump(hook,TARGET);
+    fetchHistory.mockResolvedValueOnce([msg('newer',1999)]);
+    await act(async () => hook.result.current.loadNewer());
+    expect(fetchHistory).toHaveBeenLastCalledWith(`dm:${OLI}`,50,TARGET,{direction:'after'});
+    expect(ids(hook)).toEqual(['newer',TARGET]);
+    expect(hook.result.current.hasNewer).toBe(false);
+  });
+  it('un echec de page recente garde la fenetre et permet de reessayer', async () => {
+    const hook = await setup([msg('recent',0)]);
+    fetchHistory.mockResolvedValueOnce([msg(TARGET,2000)]);
+    await jump(hook,TARGET);
+    fetchHistory.mockRejectedValueOnce(new Error('network'));
+    await act(async () => hook.result.current.loadNewer());
+    expect(ids(hook)).toEqual([TARGET]);
+    expect(hook.result.current.hasNewer).toBe(true);
+    expect(hook.result.current.olderError).toBeTruthy();
+    expect(hook.result.current.loadingNewer).toBe(false);
+  });
+});
 
-  it('abandonne après 20 pages', async () => {
-    const hook = await setup(page('r', 0, 50));
-    fetchHistory.mockImplementation(async (_id: string, _limit: number, cursor: string) => page(`c${cursor}-`, 1, 50));
-    expect(await jump(hook, TARGET)).toBe(false);
-    expect(fetchHistory).toHaveBeenCalledTimes(21);
-  });
-
-  it("retourne faux quand le chargement d'une page échoue", async () => {
-    const hook = await setup(page('r', 0, 50));
-    fetchHistory.mockRejectedValueOnce(new Error('réseau'));
-    expect(await jump(hook, TARGET)).toBe(false);
-  });
-
-  it("retourne faux sans historique chargé ou avant la fin du chargement", async () => {
-    fetchHistory.mockReturnValueOnce(new Promise(() => undefined));
-    const loading = await renderHook(() => useMessages(`dm:${OLI}`, ME));
-    expect(await jump(loading, TARGET)).toBe(false);
-    const empty = await setup([], `room:${OLI}`);
-    expect(await jump(empty, TARGET)).toBe(false);
-  });
-
-  it('abandonne si la conversation change pendant le chargement', async () => {
-    const hook = await setup(page('r', 0, 50));
-    let resolve: (messages: ChatMessage[]) => void = () => undefined;
-    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
-    let result: Promise<boolean> = Promise.resolve(true);
-    await act(async () => {
-      result = hook.result.current.jumpTo(TARGET);
-    });
-    fetchHistory.mockResolvedValueOnce([msg('autre', 1)]);
-    await hook.rerender({ conversation: `room:${OLI}` });
-    await act(async () => resolve(page('p', 50, 50)));
-    await expect(result).resolves.toBe(false);
-  });
-
-  it('attend un loadOlder en cours au lieu de redemander la même page', async () => {
-    const hook = await setup(page('r', 0, 50));
-    let resolve: (messages: ChatMessage[]) => void = () => undefined;
-    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
-    let jumped: Promise<boolean> = Promise.resolve(false);
-    await act(async () => {
-      void hook.result.current.loadOlder();
-    });
-    await act(async () => {
-      jumped = hook.result.current.jumpTo(TARGET);
-    });
-    expect(fetchHistory).toHaveBeenCalledTimes(2);
-    await act(async () => resolve([...page('p', 50, 49), msg(TARGET, 99)]));
-    await expect(jumped).resolves.toBe(true);
-    expect(fetchHistory).toHaveBeenCalledTimes(2);
-    expect(ids(hook)).toHaveLength(new Set(ids(hook)).size);
-  });
-
-  it("continue après un loadOlder concurrent qui laisse d'autres pages à charger", async () => {
-    const hook = await setup(page('r', 0, 50));
-    let resolve: (messages: ChatMessage[]) => void = () => undefined;
-    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
-    let jumped: Promise<boolean> = Promise.resolve(false);
-    await act(async () => {
-      void hook.result.current.loadOlder();
-    });
-    await act(async () => {
-      jumped = hook.result.current.jumpTo(TARGET);
-    });
-    fetchHistory.mockResolvedValueOnce([...page('q', 100, 49), msg(TARGET, 149)]);
-    await act(async () => resolve(page('p', 50, 50)));
-    await expect(jumped).resolves.toBe(true);
-    expect(fetchHistory).toHaveBeenCalledTimes(3);
-  });
-
-  it('ignore loadOlder tant que jumpTo charge une page, puis le réautorise', async () => {
-    const hook = await setup(page('r', 0, 50));
-    let resolve: (messages: ChatMessage[]) => void = () => undefined;
-    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
-    let jumped: Promise<boolean> = Promise.resolve(false);
-    await act(async () => {
-      jumped = hook.result.current.jumpTo(TARGET);
-    });
-    await act(async () => {
-      await hook.result.current.loadOlder();
-    });
-    expect(fetchHistory).toHaveBeenCalledTimes(2);
-    await act(async () => resolve([...page('p', 50, 49), msg(TARGET, 99)]));
-    await expect(jumped).resolves.toBe(true);
-    fetchHistory.mockResolvedValueOnce([msg('encore', 70)]);
-    await act(async () => {
-      await hook.result.current.loadOlder();
-    });
-    expect(fetchHistory).toHaveBeenCalledTimes(3);
-  });
-
-  it('abandonne si la conversation change pendant l\'attente d\'un loadOlder', async () => {
-    const hook = await setup(page('r', 0, 50));
-    let resolve: (messages: ChatMessage[]) => void = () => undefined;
-    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
-    let jumped: Promise<boolean> = Promise.resolve(true);
-    await act(async () => {
-      void hook.result.current.loadOlder();
-    });
-    await act(async () => {
-      jumped = hook.result.current.jumpTo(TARGET);
-    });
-    fetchHistory.mockResolvedValueOnce([msg('autre', 1)]);
-    await hook.rerender({ conversation: `room:${OLI}` });
-    await act(async () => resolve(page('p', 50, 50)));
-    await expect(jumped).resolves.toBe(false);
-  });
-
-  it('mémorise les pseudos déjà connus des pages anciennes', async () => {
-    const hook = await setup(page('r', 0, 50));
-    fetchHistory.mockResolvedValueOnce([msg(TARGET, 60), { ...msg('sans-nom', 61), senderName: undefined }]);
-    await jump(hook, TARGET);
-    expect(ids(hook)).toContain(TARGET);
-  });
+it('ouvre directement une cible initiale sans charger la page recente', async () => {
+  fetchHistory.mockResolvedValueOnce([msg(TARGET,2000)]);
+  const hook = await renderHook(() => useMessages(`dm:${OLI}`,ME,TARGET));
+  await waitFor(() => expect(hook.result.current.status).toBe('ready'));
+  expect(fetchHistory).toHaveBeenCalledTimes(1);
+  expect(fetchHistory).toHaveBeenCalledWith(`dm:${OLI}`,50,undefined,{around:TARGET});
+  expect(ids(hook)).toEqual([TARGET]);
+  expect(hook.result.current.hasNewer).toBe(true);
 });

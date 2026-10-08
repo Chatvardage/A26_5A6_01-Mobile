@@ -24,6 +24,9 @@ import { UnreadProvider } from '@/unread/UnreadContext';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+let mockNotificationMode = 'systeme';
+jest.mock('@/profile/ProfileContext', () => ({ useProfile: () => ({ profile: { modeNotification: mockNotificationMode } }) }));
+jest.mock('@/hooks/useConnection', () => ({ useConnection: () => ({ status: 'online', online: true }) }));
 jest.mock('@/adapters/notifications.adapter');
 jest.mock('@/services/unreadService');
 jest.mock('@/services/usersService');
@@ -44,6 +47,7 @@ const handlers = new Map<string, (raw: unknown) => void>();
 let appState = 'active';
 
 beforeEach(() => {
+  mockNotificationMode = 'systeme';
   jest.clearAllMocks();
   handlers.clear();
   appState = 'active';
@@ -376,7 +380,7 @@ describe('permission de notification', () => {
 
   it.each([
     ['granted', 'Activées', null],
-    ['unavailable', 'Indisponibles sur cet appareil.', null],
+    ['unavailable', 'Notifications système indisponibles dans cet environnement. Sur Android avec Expo Go, installez la version de développement Chatvardage. Les badges restent actifs.', null],
     ['undetermined', 'Non activées', 'Activer les notifications'],
     ['denied', 'Refusées : activez-les dans les réglages du système.', 'Ouvrir les réglages'],
   ] as const)('affiche la permission %s dans les préférences', async (permission, label, button) => {
@@ -444,4 +448,11 @@ describe('AppServices', () => {
     opened({ id: 'c', conversationId: `dm:${OLI}` });
     expect(ref.navigate).not.toHaveBeenCalled();
   });
+});
+
+it.each(['discret','aucune'])('ne présente pas de notification système en mode %s',async mode=>{
+  mockNotificationMode=mode;
+  await renderHook(()=>useMessageAlerts(ME,null),{wrapper:UnreadProvider});
+  await act(async()=>handlers.get('private-message.created')!(dmEvent()));
+  expect(showMessageNotification).not.toHaveBeenCalled();
 });

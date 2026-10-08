@@ -6,6 +6,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from '@/i18n';
 import { SYSTEM_AUTHOR, type SearchResult } from '@/services/searchService';
 import { formatMessageTime } from '@/utils/formatTime';
+import { displayMessage } from '@/utils/systemMessages';
+import { displayName } from '@/utils/displayNames';
 import { splitHighlight } from '@/partage/highlight';
 
 type Props = {
@@ -27,7 +29,7 @@ export function SearchResultItem({ result, variant, term = '', onPress }: Props)
     result.senderName ??
     (result.senderId === SYSTEM_AUTHOR ? strings.conversation.system : strings.conversation.unknownUser);
   const place =
-    result.conversationTitle ?? (result.kind === 'room' ? strings.search.channel : strings.search.privateMessage);
+    (result.conversationTitle ? (result.kind === 'room' ? displayName(result.conversationTitle, strings) : result.conversationTitle) : undefined) ?? (result.kind === 'room' ? strings.search.channel : strings.search.privateMessage);
 
   return (
     <Pressable
@@ -49,7 +51,7 @@ export function SearchResultItem({ result, variant, term = '', onPress }: Props)
         </ThemedText>
       ) : null}
       <ThemedText numberOfLines={3}>
-        {splitHighlight(result.content, term).map((segment, index) =>
+        {splitHighlight(displayMessage(result, strings), term).map((segment, index) =>
           segment.match ? (
             <ThemedText key={index} style={[styles.mark, { backgroundColor: theme.accent, color: theme.background }]}>
               {segment.text}

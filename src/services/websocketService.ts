@@ -256,12 +256,34 @@ export function createRealtimeService() {
     options = null;
   }
 
+  /** Demandes de presence uniquement apres la connexion protocolaire. */
+  function followPresence(ids: string[]): Promise<string[]> {
+    if (state !== 'ready') return Promise.reject(new ApiError('network', 'Realtime not ready'));
+    const current = requireSocket();
+    return new Promise((resolve, reject) => {
+      current.timeout(ACK_TIMEOUT_MS).emit('presence.suivre', { ids: [...new Set(ids)].slice(-500) }, (error: Error | null, response?: { enLigne?: unknown }) => {
+        if (error) return reject(error);
+        if (!Array.isArray(response?.enLigne) || !response.enLigne.every(id => typeof id === 'string')) return reject(new ApiError('invalid_response', 'Invalid presence response'));
+        resolve(response.enLigne);
+      });
+    });
+  }
+  function publishPresence(statut: 'en-ligne' | 'hors-ligne') {
+    if (state === 'ready') requireSocket().emit('presence.update', { statut });
+  }
+  function publishProfile() {
+    if (state === 'ready') requireSocket().emit('profil.update');
+  }
+
   return {
     configureRealtime,
     getRealtimeState,
     onConnectionState,
     onReady,
     subscribe,
+    followPresence,
+    publishPresence,
+    publishProfile,
     joinRoom,
     leaveRoom,
     disconnectRealtime,

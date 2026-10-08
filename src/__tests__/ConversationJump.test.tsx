@@ -5,9 +5,12 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { useMessages } from '@/hooks/useMessages';
 import { HIGHLIGHT_MS, ConversationScreen } from '@/screens/ConversationScreen';
 import type { ChatMessage } from '@/types/conversation';
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => ({}) }));
+jest.mock('@/hooks/useReadReceipts', () => ({ useReadReceipts: () => [] }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('@/hooks/useCanWrite', () => ({ useCanWrite: () => true }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 40 }));
 jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' }, drafts: new Map() }) }));
 jest.mock('@/hooks/useCanModerate', () => ({ useCanModerate: () => false }));
@@ -62,7 +65,7 @@ describe('ConversationScreen : atteindre un message', () => {
     await render(<ConversationScreen {...props({ messageId: TARGET, focusToken: 1 })} />);
     await act(async () => jest.advanceTimersByTimeAsync(10));
     expect(jumpTo).toHaveBeenCalledWith(TARGET);
-    expect(scroll).toHaveBeenCalledWith({ index: 1, viewPosition: 0.5, animated: true });
+    expect(scroll).toHaveBeenCalledWith({ index: 1, viewPosition: 0.5, animated: false });
     expect(highlighted()).toHaveLength(1);
     await act(async () => jest.advanceTimersByTimeAsync(HIGHLIGHT_MS + 10));
     expect(highlighted()).toHaveLength(0);

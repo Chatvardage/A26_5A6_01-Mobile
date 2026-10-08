@@ -41,11 +41,11 @@ describe('MessageBubble', () => {
     const { rerender } = await render(
       <MessageBubble message={{ ...message, content: sentence }} mine showAuthor={false} onLongPress={jest.fn()} />,
     );
-    expect(screen.getByRole('button', { name: sentence })).toHaveStyle({ maxWidth: '80%', flexShrink: 1 });
+    expect(screen.getByTestId('message-content')).toHaveStyle({ maxWidth: '80%', flexShrink: 1 });
     expect(screen.getByTestId('message-bubble')).not.toHaveStyle({ maxWidth: '80%' });
 
     await rerender(<MessageBubble message={{ ...message, content: sentence }} mine={false} showAuthor={false} />);
-    expect(screen.getByTestId('message-bubble')).toHaveStyle({ maxWidth: '80%', flexShrink: 1 });
+    expect(screen.getByTestId('message-content')).toHaveStyle({ maxWidth: '80%', flexShrink: 1 });
   });
 
   it('identifie explicitement un auteur dont le pseudo n’a pas été résolu', async () => {
@@ -65,4 +65,9 @@ describe('MessageBubble', () => {
     await view.rerender(<MessageBubble message={message} mine={false} showAuthor moderated />);
     expect(screen.queryByRole('button', { name: 'Contenu' })).toBeNull();
   });
+});
+
+it('aligne l avatar au debut de la bulle plutot qu au pied des accuses', async () => {
+  await render(<MessageBubble message={message} mine={false} showAuthor readerCount={3} />);
+  expect(screen.getByTestId('message-row')).toHaveStyle({alignItems:'flex-start'});
 });
