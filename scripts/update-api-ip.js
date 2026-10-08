@@ -98,4 +98,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { buildApiUrl, getLocalIpv4Addresses, isPrivateIpv4, updateEnvContent };
+module.exports = { buildApiUrl, getLocalIpv4Addresses, isPrivateIpv4, readConfiguredUrl, updateEnvContent };

@@ -12,6 +12,7 @@ function runStart({
   args = [] as string[],
   missingCli = false,
   env = {} as Record<string, string>,
+  dotEnvContent = '',
   networkInterfaces = { WiFi: [{ family: 'IPv4', internal: false, address: '192.168.1.20' }] },
 } = {}) {
   const handlers: Record<string, (...args: unknown[]) => void> = {};
@@ -32,11 +33,21 @@ function runStart({
   const requireMock = Object.assign((name: string) => {
     if (name === 'node:child_process') return { spawn, spawnSync };
     if (name === 'node:fs') return {
-      readFileSync: (file: string) => file === '/proc/version' ? 'Microsoft WSL2' : '',
+      readFileSync: (file: string) => file === '/proc/version' ? 'Microsoft WSL2' : dotEnvContent,
       writeFileSync,
     };
-    if (name === 'node:os') return { networkInterfaces: () => networkInterfaces };
     if (name === 'node:path') return path;
+    if (name === './update-api-ip') return {
+      buildApiUrl: (configuredUrl: string | null, ip: string) => configuredUrl
+        ? new URL(configuredUrl).toString().replace(new URL(configuredUrl).hostname, ip)
+        : `http://${ip}:3000`,
+      getLocalIpv4Addresses: () => Object.values(networkInterfaces)
+        .flatMap((interfaces) => interfaces ?? [])
+        .filter((network) => network.family === 'IPv4' && !network.internal)
+        .map((network) => network.address),
+      readConfiguredUrl: (content: string) => content.match(/^\s*EXPO_PUBLIC_API_URL\s*=\s*(\S+)\s*$/m)?.[1] ?? null,
+      updateEnvContent: (content: string, apiUrl: string) => `${content.replace(/\s*$/, '')}\nEXPO_PUBLIC_API_URL=${apiUrl}\n`,
+    };
     throw new Error(`Unexpected module: ${name}`);
   }, { resolve });
   const context = {
@@ -68,6 +79,17 @@ test('met à jour l adresse API dans .env hors WSL2 avant de lancer Expo', () =>
     '\nEXPO_PUBLIC_API_URL=http://192.168.1.20:3000\n',
   );
   expect(launcher.consoleMock.log).toHaveBeenCalledWith('[start] API mise à jour : http://192.168.1.20:3000');
+});
+
+test.each([
+  { env: { EXPO_PUBLIC_API_URL: 'http://10.0.2.2:3000' }, dotEnvContent: '', description: "l'environnement" },
+  { env: {} as Record<string, string>, dotEnvContent: 'EXPO_PUBLIC_API_URL=http://192.168.1.42:3000\n', description: '.env' },
+])('ne remplace pas une URL déjà définie dans $description hors WSL2', ({ env, dotEnvContent }) => {
+  const launcher = runStart({ platform: 'win32', env, dotEnvContent });
+
+  launcher.run();
+
+  expect(launcher.writeFileSync).not.toHaveBeenCalled();
 });
 
 test.each([
