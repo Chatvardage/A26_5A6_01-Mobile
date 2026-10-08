@@ -1,5 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Alert, type AlertButton } from 'react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import { useMessages } from '@/hooks/useMessages';
 import { ConversationScreen } from '@/screens/ConversationScreen';
@@ -22,7 +21,6 @@ const mine: ChatMessage = { id: 'mine', senderId: 'me', content: 'Mon message', 
 const theirs: ChatMessage = { ...mine, id: 'theirs', senderId: OLI, content: 'Son message' };
 
 let remove: jest.Mock;
-let alert: jest.SpyInstance;
 const props = { route: { params: { conversationId: `dm:${OLI}` } } } as unknown as Parameters<typeof ConversationScreen>[0];
 
 const mockMessages = (messages: ChatMessage[]) =>
@@ -46,53 +44,54 @@ const mockMessages = (messages: ChatMessage[]) =>
 beforeEach(() => {
   mockCanModerate = false;
   remove = jest.fn(async () => undefined);
-  alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockMessages([mine, theirs]);
 });
-afterEach(() => alert.mockRestore());
-
-const buttons = (call = 0): AlertButton[] => alert.mock.calls[call][2];
-const press = (list: AlertButton[], text: string) => act(async () => list.find((b) => b.text === text)!.onPress?.());
+// Dialogue au style de l'app : titre, puis boutons dans l'ordre affiché (Annuler à gauche, Supprimer à droite).
+const dialog = () => within(screen.getByTestId('app-dialog'));
+const title = () => dialog().getByRole('header').props.children;
+const labels = () => dialog().getAllByRole('button').map((button) => button.props.accessibilityLabel);
+const press = (label: string) => fireEvent.press(dialog().getByRole('button', { name: label }));
 
 describe('Appui long sur un message : modifier ou supprimer', () => {
-  it('propose Modifier, Supprimer (destructif) et Annuler sur ses propres messages', async () => {
+  it('propose Annuler à gauche, puis Modifier et Supprimer à droite sur ses propres messages', async () => {
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    expect(alert).toHaveBeenCalledTimes(1);
-    expect(alert.mock.calls[0][0]).toBe('Message');
-    expect(buttons().map((b) => [b.text, b.style])).toEqual([
-      ['Modifier', undefined],
-      ['Supprimer', 'destructive'],
-      ['Annuler', 'cancel'],
-    ]);
+    expect(title()).toBe('Que faire de votre message ?');
+    expect(dialog().getByText('Vous pouvez le modifier ou le supprimer pour tout le monde.')).toBeTruthy();
+    expect(dialog().getByText('Mon message')).toBeTruthy();
+    expect(labels()).toEqual(['Annuler', 'Modifier', 'Supprimer']);
     expect(screen.getByRole('button', { name: 'Mon message' }).props.accessibilityHint).toBe('Appui long : modifier ou supprimer');
   });
 
   it("n'offre aucune action sur le message d'un autre", async () => {
     await render(<ConversationScreen {...props} />);
     expect(screen.queryByRole('button', { name: 'Son message' })).toBeNull();
-    expect(alert).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('app-dialog')).toBeNull();
   });
 
   it('demande confirmation avant de supprimer, puis supprime le message', async () => {
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await press(buttons(), 'Supprimer');
-    expect(alert).toHaveBeenCalledTimes(2);
-    expect(alert.mock.calls[1][0]).toBe('Supprimer ce message ?');
-    expect(alert.mock.calls[1][1]).toMatch(/définitive/);
+    await press('Supprimer');
+    expect(title()).toBe('Supprimer ce message ?');
+    expect(dialog().getByText(/définitive/)).toBeTruthy();
+    expect(labels()).toEqual(['Annuler', 'Supprimer']);
     expect(remove).not.toHaveBeenCalled();
-    await press(buttons(1), 'Supprimer');
+    await press('Supprimer');
     expect(remove).toHaveBeenCalledWith('mine');
+    expect(screen.queryByTestId('app-dialog')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('ne supprime rien quand on annule, au menu ou à la confirmation', async () => {
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await press(buttons(), 'Annuler');
-    await press(buttons(), 'Supprimer');
-    await press(buttons(1), 'Annuler');
+    await press('Annuler');
+    expect(screen.queryByTestId('app-dialog')).toBeNull();
+    await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
+    await press('Supprimer');
+    await press('Annuler');
+    expect(screen.queryByTestId('app-dialog')).toBeNull();
     expect(remove).not.toHaveBeenCalled();
   });
 
@@ -100,14 +99,14 @@ describe('Appui long sur un message : modifier ou supprimer', () => {
     remove.mockRejectedValueOnce(new ApiError('forbidden', 'HTTP 403', 403));
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await press(buttons(), 'Supprimer');
-    await press(buttons(1), 'Supprimer');
+    await press('Supprimer');
+    await press('Supprimer');
     expect(screen.getByRole('alert')).toHaveTextContent('Vous n’avez pas accès à cette conversation.');
     expect(screen.getByText('Mon message')).toBeTruthy();
     // Une nouvelle tentative réussie efface l'erreur.
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await press(buttons(2), 'Supprimer');
-    await press(buttons(3), 'Supprimer');
+    await press('Supprimer');
+    await press('Supprimer');
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -117,17 +116,17 @@ describe('Appui long sur un message : modifier ou supprimer', () => {
     await render(<ConversationScreen {...props} />);
     // Modification de « mine », puis suppression de « other » : la modification continue.
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await press(buttons(), 'Modifier');
+    await press('Modifier');
     expect(screen.getByLabelText('Modifier le message')).toBeTruthy();
     await fireEvent(screen.getByRole('button', { name: 'Autre à moi' }), 'longPress');
-    await press(buttons(1), 'Supprimer');
-    await press(buttons(2), 'Supprimer');
+    await press('Supprimer');
+    await press('Supprimer');
     expect(remove).toHaveBeenLastCalledWith('other');
     expect(screen.getByLabelText('Modifier le message')).toBeTruthy();
     // Suppression du message en cours de modification : retour à la saisie normale.
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await press(buttons(3), 'Supprimer');
-    await press(buttons(4), 'Supprimer');
+    await press('Supprimer');
+    await press('Supprimer');
     expect(remove).toHaveBeenLastCalledWith('mine');
     expect(screen.queryByLabelText('Modifier le message')).toBeNull();
     expect(screen.getByLabelText('Message')).toBeTruthy();
@@ -135,27 +134,25 @@ describe('Appui long sur un message : modifier ou supprimer', () => {
 });
 
 describe("Modération : supprimer le message d'un autre", () => {
-  it("propose seulement Supprimer et Annuler sur le message d'un autre, avec un libellé de modération", async () => {
+  it("propose seulement Annuler et Supprimer sur le message d'un autre, avec un libellé de modération", async () => {
     mockCanModerate = true;
     await render(<ConversationScreen {...props} />);
     const bubble = screen.getByRole('button', { name: 'Son message' });
     expect(bubble.props.accessibilityHint).toBe('Appui long : supprimer (modération)');
     await fireEvent(bubble, 'longPress');
-    expect(alert.mock.calls[0][0]).toBe('Modération');
-    expect(buttons().map((b) => [b.text, b.style])).toEqual([
-      ['Supprimer', 'destructive'],
-      ['Annuler', 'cancel'],
-    ]);
+    expect(title()).toBe('Modérer ce message ?');
+    expect(dialog().getByText(/écrit par quelqu’un d’autre/)).toBeTruthy();
+    expect(labels()).toEqual(['Annuler', 'Supprimer']);
   });
 
   it('confirme avec un texte de modération, puis supprime le message de l\'autre', async () => {
     mockCanModerate = true;
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Son message' }), 'longPress');
-    await press(buttons(), 'Supprimer');
-    expect(alert.mock.calls[1][0]).toBe('Supprimer ce message ?');
-    expect(alert.mock.calls[1][1]).toMatch(/en tant que modérateur/i);
-    await press(buttons(1), 'Supprimer');
+    await press('Supprimer');
+    expect(title()).toBe('Supprimer ce message ?');
+    expect(dialog().getByText(/en tant que modérateur/i)).toBeTruthy();
+    await press('Supprimer');
     expect(remove).toHaveBeenCalledWith('theirs');
   });
 
@@ -163,8 +160,8 @@ describe("Modération : supprimer le message d'un autre", () => {
     mockCanModerate = true;
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    expect(alert.mock.calls[0][0]).toBe('Message');
-    expect(buttons().map((b) => b.text)).toEqual(['Modifier', 'Supprimer', 'Annuler']);
+    expect(title()).toBe('Que faire de votre message ?');
+    expect(labels()).toEqual(['Annuler', 'Modifier', 'Supprimer']);
     expect(screen.getByRole('button', { name: 'Mon message' }).props.accessibilityHint).toBe('Appui long : modifier ou supprimer');
   });
 
@@ -179,8 +176,8 @@ describe("Modération : supprimer le message d'un autre", () => {
     remove.mockRejectedValueOnce(new ApiError('forbidden', 'HTTP 403', 403));
     await render(<ConversationScreen {...props} />);
     await fireEvent(screen.getByRole('button', { name: 'Son message' }), 'longPress');
-    await press(buttons(), 'Supprimer');
-    await press(buttons(1), 'Supprimer');
+    await press('Supprimer');
+    await press('Supprimer');
     expect(screen.getByRole('alert')).toHaveTextContent('Vous n’avez pas accès à cette conversation.');
     expect(screen.getByText('Son message')).toBeTruthy();
   });

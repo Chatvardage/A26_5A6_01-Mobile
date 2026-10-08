@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { DiscoverServersScreen } from '@/screens/DiscoverServersScreen';
 import { ManageServerScreen } from '@/screens/ManageServerScreen';
+import { EditRoomScreen } from '@/screens/EditRoomScreen';
 import { ServerMembersScreen } from '@/screens/ServerMembersScreen';
 import { Colors } from '@/constants/theme';
 import { AppServices } from '@/components/AppServices';
@@ -74,7 +75,7 @@ export function RootNavigator() {
     const route = navigationRef.getCurrentRoute();
     const name = route?.name;
     if (name === 'Rooms' || name === 'DirectMessages' || name === 'Servers' || name === 'Search' || name === 'Preferences') setSelectedTab(name);
-    else if (name === Routes.Server || name === Routes.ManageServer || name === Routes.ServerMembers || name === Routes.DiscoverServers) setSelectedTab('Servers');
+    else if (name === Routes.Server || name === Routes.ManageServer || name === Routes.EditRoom || name === Routes.ServerMembers || name === Routes.DiscoverServers) setSelectedTab('Servers');
     else if (name === Routes.NewDirectMessage) setSelectedTab('DirectMessages');
     else if (name === Routes.Conversation) setSelectedTab(parseConversationParams(route?.params)?.conversationId.startsWith('room:') ? 'Servers' : 'DirectMessages');
     const onConversation = route?.name === Routes.Conversation || route?.name === Routes.ConversationSearch;
@@ -159,6 +160,7 @@ export function RootNavigator() {
                 <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
                 <Stack.Screen name={Routes.DiscoverServers} component={DiscoverServersScreen} options={({ route }) => ({ title: route.params?.mode === 'create' ? strings.control.createServer : strings.control.discover })} />
                 <Stack.Screen name={Routes.ManageServer} component={ManageServerScreen} options={{ title: strings.control.manage }} />
+                <Stack.Screen name={Routes.EditRoom} component={EditRoomScreen} options={{ title: strings.control.editRoom }} />
                 <Stack.Screen name={Routes.ServerMembers} component={ServerMembersScreen} options={{ title: strings.control.members }} />
                 <Stack.Screen
                   name={Routes.Server}

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, TextInput, View, Pressable, StyleSheet } from 'react-native';
+import { Image, ScrollView, View, Pressable, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { pickAvatar } from '@/adapters/avatar.adapter';
 import { ActionButton } from '@/components/ActionButton';
 import { ThemedText } from '@/components/themed-text';
+import { ThemedTextInput } from '@/components/ThemedTextInput';
 import { ThemedView } from '@/components/themed-view';
 import { useNotificationPermission } from '@/hooks/useNotificationPermission';
 import { useTheme } from '@/hooks/use-theme';
@@ -42,7 +43,7 @@ export function SettingsScreen() {
       {profile.avatar ? <Image accessibilityLabel={t.avatar} source={{ uri: profile.avatar }} style={{ width: 80, height: 80, borderRadius: 40 }} /> : null}
       <ActionButton label={t.chooseAvatar} disabled={busy} onPress={() => void run(async () => { const avatar = await pickAvatar(); if (avatar) await save({ avatar }); })} />
       {profile.avatar ? <ActionButton label={t.removeAvatar} disabled={busy} onPress={() => void run(() => save({ avatar: null }))} /> : null}
-      <TextInput accessibilityLabel={t.alias} placeholder={t.alias} maxLength={50} value={alias} onChangeText={setAlias} style={{ color: theme.text, padding: 12, borderWidth: 1, borderColor: theme.textSecondary, borderRadius: 12, backgroundColor: theme.backgroundSelected }} />
+      <ThemedTextInput accessibilityLabel={t.alias} placeholder={t.alias} maxLength={50} value={alias} onChangeText={setAlias} />
       <ActionButton label={t.save} disabled={busy} onPress={() => void run(() => save({ alias: alias.trim() }))} />
       </View><View style={card}>{heading(t.language, 'settings')}
       <ThemedText>{t.deviceLanguage}</ThemedText>

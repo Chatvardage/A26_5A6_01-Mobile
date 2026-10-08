@@ -22,6 +22,7 @@ export type RootStackParamList = {
   ServerSearch: { serverId: string; title?: string; query: string };
   DiscoverServers: { mode: 'discover' | 'create' } | undefined;
   ManageServer: { serverId: string };
+  EditRoom: { serverId: string; roomId: string };
   ServerMembers: { serverId: string };
   NewDirectMessage: undefined;
 };
@@ -30,6 +31,7 @@ export const Routes = {
   Rooms: 'Rooms',
   DiscoverServers: 'DiscoverServers',
   ManageServer: 'ManageServer',
+  EditRoom: 'EditRoom',
   ServerMembers: 'ServerMembers',
   Login: 'Login',
   Register: 'Register',
@@ -74,4 +76,15 @@ export function parseServerParams(params: unknown): ServerParams | null {
   const { serverId, title } = params as Record<string, unknown>;
   if (typeof serverId !== 'string' || !isUuid(serverId)) return null;
   return { serverId, title: typeof title === 'string' ? title : undefined };
+}
+
+export type RoomParams = { serverId: string; roomId: string };
+
+/** Valide les paramètres de la route EditRoom avant tout chargement ; `null` si invalides. */
+export function parseRoomParams(params: unknown): RoomParams | null {
+  const server = parseServerParams(params);
+  if (!server) return null;
+  const { roomId } = params as Record<string, unknown>;
+  if (typeof roomId !== 'string' || !isUuid(roomId)) return null;
+  return { serverId: server.serverId, roomId };
 }

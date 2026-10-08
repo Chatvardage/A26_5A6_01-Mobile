@@ -6,9 +6,11 @@ const request = jest.mocked(apiFetch);
 const server: rooms.Server = { id: 's', nom: 'Équipe', public: true, parDefaut: false, proprietaireId: 'owner', monRole: 'membre', nombreMembres: 2, salons: [], invitations: [], icone: null };
 beforeEach(() => jest.clearAllMocks());
 it('encode la découverte et borne la recherche au contrat', async () => {
-  request.mockResolvedValue([]); await rooms.discoverServers('  équipe & amis  ');
-  expect(request).toHaveBeenCalledWith('/api/servers/decouvrir?q=%C3%A9quipe%20%26%20amis');
-  await rooms.discoverServers('a'.repeat(100)); expect(request).toHaveBeenLastCalledWith('/api/servers/decouvrir?q='+ 'a'.repeat(80));
+  const page = { serveurs: [], total: 0, suivant: null }; request.mockResolvedValue(page);
+  expect(await rooms.discoverServers('  équipe & amis  ')).toBe(page);
+  expect(request).toHaveBeenCalledWith('/api/servers/decouvrir?q=%C3%A9quipe%20%26%20amis&decalage=0&limite=20');
+  await rooms.discoverServers('a'.repeat(100)); expect(request).toHaveBeenLastCalledWith('/api/servers/decouvrir?q='+ 'a'.repeat(80) + '&decalage=0&limite=20');
+  await rooms.discoverServers('', 40); expect(request).toHaveBeenLastCalledWith('/api/servers/decouvrir?q=&decalage=40&limite=20');
 });
 it('joint et quitte le serveur via le contrat serveur, sans ancienne route rooms', async () => {
   request.mockResolvedValueOnce(server).mockResolvedValueOnce(undefined);

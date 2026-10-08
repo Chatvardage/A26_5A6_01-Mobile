@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert, FlatList } from 'react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { FlatList } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConversationScreen } from '@/screens/ConversationScreen';
@@ -153,10 +153,8 @@ describe('ConversationScreen', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Autre message' })).toBeNull();
     // L'appui long ouvre le menu d'actions (Modifier / Supprimer / Annuler) ; on choisit « Modifier ».
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await act(async () => alert.mock.calls[0][2]!.find((button) => button.text === 'Modifier')!.onPress!());
-    alert.mockRestore();
+    await fireEvent.press(screen.getByRole('button', { name: 'Modifier' }));
     expect(screen.getByLabelText('Modifier le message')).toHaveDisplayValue('Mon message');
     await fireEvent.changeText(screen.getByLabelText('Modifier le message'), 'Texte corrigé');
     await fireEvent.press(screen.getByRole('button', { name: 'Enregistrer' }));

@@ -1,8 +1,9 @@
 import { useHeaderHeight } from '@react-navigation/elements';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, View } from 'react-native';
 
+import { useAppDialog } from '@/components/AppDialog';
 import { ContentFrame } from '@/components/ContentFrame';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MessageInput } from '@/components/MessageInput';
@@ -141,26 +142,31 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
 
   // Appui long : sur un de ses messages, modifier ou supprimer ; sur celui d'un autre, supprimer seulement et
   // uniquement pour un modérateur (la modification reste réservée à l'auteur). La suppression est définitive,
-  // donc confirmée.
+  // donc confirmée. Annuler à gauche, puis Modifier et Supprimer (le plus à droite).
+  const { show: showDialog, dialog } = useAppDialog();
   const openActions = useCallback(
     (message: ChatMessage, moderation: boolean) => {
       const actions = strings.conversation.actions;
-      const confirm = {
-        text: actions.delete,
-        style: 'destructive' as const,
-        onPress: () =>
-          Alert.alert(actions.confirmTitle, moderation ? actions.confirmBodyModeration : actions.confirmBody, [
-            { text: actions.cancel, style: 'cancel' },
-            { text: actions.delete, style: 'destructive', onPress: () => void deleteMessage(message) },
-          ]),
-      };
-      Alert.alert(moderation ? actions.moderationTitle : actions.title, undefined, [
-        ...(moderation ? [] : [{ text: actions.edit, onPress: () => setEditingMessage(message) }]),
-        confirm,
-        { text: actions.cancel, style: 'cancel' },
-      ]);
+      const cancel = { label: actions.cancel, kind: 'cancel' as const };
+      const confirm = () =>
+        showDialog({
+          title: actions.confirmTitle,
+          message: moderation ? actions.confirmBodyModeration : actions.confirmBody,
+          quote: message.content,
+          actions: [cancel, { label: actions.delete, kind: 'danger', onPress: () => void deleteMessage(message) }],
+        });
+      showDialog({
+        title: moderation ? actions.moderationTitle : actions.title,
+        message: moderation ? actions.moderationBody : actions.body,
+        quote: message.content,
+        actions: [
+          cancel,
+          ...(moderation ? [] : [{ label: actions.edit, onPress: () => setEditingMessage(message) }]),
+          { label: actions.delete, kind: 'danger' as const, onPress: confirm },
+        ],
+      });
     },
-    [strings, deleteMessage],
+    [strings, deleteMessage, showDialog],
   );
 
   // Hauteurs variables : si l'index n'est pas encore mesuré, on s'en approche puis on réessaie. Le délai est
@@ -309,6 +315,7 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
           onCancelEdit={() => setEditingMessage(null)}
         /> : <ThemedText style={{ padding: 16 }}>{strings.control.readOnly}</ThemedText>}
       </ContentFrame>
+      {dialog}
     </KeyboardAvoidingView>
   );
 }

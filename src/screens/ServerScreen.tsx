@@ -1,8 +1,9 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 
 import { ActionButton } from '@/components/ActionButton';
+import { useAppDialog } from '@/components/AppDialog';
 import { getServer, leaveServer, canLeaveServer, canManageRooms } from '@/services/rooms.service';
 import { useLoadable } from '@/hooks/useLoadable';
 import { userMessage } from '@/services/ApiError';
@@ -38,6 +39,7 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
   const loadDetails = useCallback(() => getServer(serverId), [serverId]);
   const details = useLoadable(loadDetails, () => false);
   const [leaving, setLeaving] = useState(false);
+  const { show: showDialog, dialog } = useAppDialog();
   const [actionError, setActionError] = useState<unknown>(null);
   useRefreshOnServerChange(details.refresh, serverId);
   async function leave() {
@@ -69,7 +71,7 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
         <ActionButton compact icon={{ ios: 'person.2', android: 'group', web: 'group' }} label={strings.control.members} onPress={() => navigation.navigate(Routes.ServerMembers, { serverId })} />
         {details.state.status === 'ready' && canManageRooms(details.state.data) ? <ActionButton compact icon={{ ios: 'slider.horizontal.3', android: 'settings', web: 'settings' }} label={strings.control.manageShort} onPress={() => navigation.navigate(Routes.ManageServer, { serverId })} /> : null}
         </View>
-        {details.state.status === 'ready' && canLeaveServer(details.state.data, user?.id ?? '') ? <ActionButton label={strings.control.leave} disabled={leaving} danger onPress={() => Alert.alert(strings.control.leave, strings.control.leaveHint, [{ text: strings.control.cancel, style: 'cancel' }, { text: strings.control.confirm, style: 'destructive', onPress: () => void leave() }])} /> : null}
+        {details.state.status === 'ready' && canLeaveServer(details.state.data, user?.id ?? '') ? <ActionButton label={strings.control.leave} disabled={leaving} danger onPress={() => showDialog({ title: strings.control.leaveTitle(details.state.status === 'ready' ? details.state.data.nom : ''), message: strings.control.leaveHint, actions: [{ label: strings.control.cancel, kind: 'cancel' }, { label: strings.control.leave, kind: 'danger', onPress: () => void leave() }] })} /> : null}
         </View>
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
         <FlatList
@@ -82,6 +84,7 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
           contentContainerStyle={styles.list}
         />
       </ContentFrame>
+      {dialog}
     </ThemedView>
   );
 }

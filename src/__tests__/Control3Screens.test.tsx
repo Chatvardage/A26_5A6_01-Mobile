@@ -1,5 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { DiscoverServersScreen } from '@/screens/DiscoverServersScreen';
 import { ServerScreen } from '@/screens/ServerScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -25,7 +24,7 @@ const discoverProps = { navigation } as unknown as Parameters<typeof DiscoverSer
 const serverProps = { navigation,route:{params:{serverId:id}} } as unknown as Parameters<typeof ServerScreen>[0];
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(rooms.discoverServers).mockResolvedValue([server]); jest.mocked(rooms.getInvitations).mockResolvedValue([]); jest.mocked(rooms.getServer).mockResolvedValue(server); jest.mocked(rooms.joinServer).mockResolvedValue(server);
+  jest.mocked(rooms.discoverServers).mockResolvedValue({serveurs:[server],total:1,suivant:null}); jest.mocked(rooms.getInvitations).mockResolvedValue([]); jest.mocked(rooms.getServer).mockResolvedValue(server); jest.mocked(rooms.joinServer).mockResolvedValue(server);
   jest.mocked(useServerChannels).mockReturnValue({ state:{ status:'ready',data:{ name:'Équipe',channels:[{ id:`room:${id}`,title:'#général',kind:'room',lastMessage:null,unreadCount:0 }] } },refresh:jest.fn(),retry:jest.fn(),refreshing:false } as never);
   jest.mocked(useProfile).mockReturnValue({ profile:{idUtilisateur:'me',alias:'Ari',avatar:null,theme:'sombre',langue:'fr',statutPresence:'enLigne',modeNotification:'systeme'},loading:false,error:null,reload:jest.fn(),save,presence });
 });
@@ -50,12 +49,49 @@ it('accepte et refuse une invitation', async () => {
   const view=await render(<DiscoverServersScreen {...discoverProps} />); await fireEvent.press(await screen.findByText('Accepter')); expect(rooms.acceptInvitation).toHaveBeenCalledWith(id);
   await view.unmount(); await render(<DiscoverServersScreen {...discoverProps} />); await fireEvent.press(await screen.findByText('Refuser')); expect(rooms.refuseInvitation).toHaveBeenCalledWith(id);
 });
+it('affiche les invitations au-dessus des serveurs publics, sans section vide', async () => {
+  const view = await render(<DiscoverServersScreen {...discoverProps} />);
+  await screen.findByText('Rejoindre · Équipe'); expect(screen.queryByText('Invitations')).toBeNull();
+  await view.unmount();
+  jest.mocked(rooms.getInvitations).mockResolvedValue([{serveur:{...server,id:'invite',nom:'Invitant'},invitePar:'owner',inviteLe:'2026-10-08'}]);
+  await render(<DiscoverServersScreen {...discoverProps} />); await screen.findByText('Invitant');
+  const texts = screen.getAllByText(/^(Invitations|Serveurs publics)$/).map(node => node.props.children);
+  expect(texts).toEqual(['Invitations','Serveurs publics']);
+  expect(screen.getByLabelText('Rechercher un serveur…').props.placeholderTextColor).toBeTruthy();
+});
+it('propose les serveurs sans recherche, charge la page suivante puis filtre par nom', async () => {
+  const autre = {...server,id:'22222222-2222-4222-8222-222222222222',nom:'Autre'};
+  jest.mocked(rooms.discoverServers).mockResolvedValueOnce({serveurs:[server],total:2,suivant:20}).mockResolvedValueOnce({serveurs:[server,autre],total:2,suivant:null}).mockResolvedValue({serveurs:[autre],total:1,suivant:null});
+  await render(<DiscoverServersScreen {...discoverProps} />);
+  await fireEvent.press(await screen.findByRole('button',{name:'Afficher plus de serveurs'}));
+  expect(rooms.discoverServers).toHaveBeenLastCalledWith('',20);
+  expect(await screen.findByText('Rejoindre · Autre')).toBeTruthy(); expect(screen.getAllByText('Rejoindre · Équipe')).toHaveLength(1);
+  expect(screen.queryByRole('button',{name:'Afficher plus de serveurs'})).toBeNull();
+  await fireEvent.changeText(screen.getByLabelText('Rechercher un serveur…'),' aut ');
+  await waitFor(() => expect(rooms.discoverServers).toHaveBeenLastCalledWith('aut'));
+  await waitFor(() => expect(screen.queryByText('Rejoindre · Équipe')).toBeNull());
+});
+it('signale l’échec de la page suivante sans perdre la première', async () => {
+  jest.mocked(rooms.discoverServers).mockResolvedValueOnce({serveurs:[server],total:2,suivant:20}).mockRejectedValueOnce(new ApiError('network','x'));
+  await render(<DiscoverServersScreen {...discoverProps} />);
+  await fireEvent.press(await screen.findByRole('button',{name:'Afficher plus de serveurs'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de joindre le serveur. Vérifiez votre connexion.');
+  expect(screen.getByText('Rejoindre · Équipe')).toBeTruthy(); expect(screen.getByRole('button',{name:'Afficher plus de serveurs'})).toBeTruthy();
+});
+it('affiche une panne de découverte et réessaie', async () => {
+  jest.mocked(rooms.discoverServers).mockRejectedValueOnce(new ApiError('network','x'));
+  await render(<DiscoverServersScreen {...discoverProps} />);
+  await fireEvent.press(await screen.findByText('Réessayer'));
+  expect(await screen.findByText('Rejoindre · Équipe')).toBeTruthy();
+});
 it('confirme la sortie avant de quitter un serveur et revient à la liste', async () => {
-  const alert=jest.spyOn(Alert,'alert').mockImplementation(() => undefined);
   await render(<ServerScreen {...serverProps} />); await fireEvent.press(await screen.findByText('Quitter le serveur'));
   expect(rooms.leaveServer).not.toHaveBeenCalled();
-  await act(async () => alert.mock.calls[0][2]!.find(b => b.text==='Confirmer')!.onPress!());
-  expect(rooms.leaveServer).toHaveBeenCalledWith(id); expect(navigation.popTo).toHaveBeenCalledWith('Main',{screen:'Servers'}); alert.mockRestore();
+  const dialog = within(screen.getByTestId('app-dialog'));
+  expect(dialog.getByRole('header')).toHaveTextContent('Quitter Équipe ?');
+  expect(dialog.getAllByRole('button').map(b => b.props.accessibilityLabel)).toEqual(['Annuler','Quitter le serveur']);
+  await fireEvent.press(dialog.getByRole('button',{name:'Quitter le serveur'}));
+  expect(rooms.leaveServer).toHaveBeenCalledWith(id); expect(navigation.popTo).toHaveBeenCalledWith('Main',{screen:'Servers'});
 });
 it.each([{parDefaut:true},{proprietaireId:'me'}])('ne propose pas de quitter Chatvardage ou son serveur (%p)',async patch => {
   jest.mocked(rooms.getServer).mockResolvedValue({...server,...patch}); await render(<ServerScreen {...serverProps} />); await waitFor(() => expect(rooms.getServer).toHaveBeenCalled()); expect(screen.queryByText('Quitter le serveur')).toBeNull();

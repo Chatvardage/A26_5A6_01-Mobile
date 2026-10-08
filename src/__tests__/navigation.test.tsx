@@ -116,12 +116,13 @@ describe('RootNavigator', () => {
     (useSession as jest.Mock).mockReturnValue({ status: 'signedIn', realtime: mockRealtime });
     jest.mocked(useColorScheme).mockReturnValue('dark');
     await render(<RootNavigator />);
-    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'DiscoverServers', 'ManageServer', 'ServerMembers', 'Server', 'Conversation', 'ConversationSearch', 'ServerSearch', 'NewDirectMessage']);
+    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'DiscoverServers', 'ManageServer', 'EditRoom', 'ServerMembers', 'Server', 'Conversation', 'ConversationSearch', 'ServerSearch', 'NewDirectMessage']);
     expect(mockTheme.colors.background).toBe(Colors.dark.background);
     expect(mockTheme.colors.primary).toBe(Colors.dark.tint);
-    expect(mockStackScreens[7].options).toEqual({ title: 'Recherche' });
-    expect(mockStackScreens[8].options).toEqual({ title: 'Nouveau message' });
-    for (const route of mockStackScreens.slice(4, 6)) {
+    expect(mockStackScreens[3].options).toEqual({ title: 'Modifier le salon' });
+    expect(mockStackScreens[8].options).toEqual({ title: 'Recherche' });
+    expect(mockStackScreens[9].options).toEqual({ title: 'Nouveau message' });
+    for (const route of mockStackScreens.slice(5, 7)) {
       if (typeof route.options !== 'function') throw new Error('Options dynamiques attendues');
       expect(route.options({ route: {} }).title).toBe(route.name === 'Server' ? 'Serveur' : 'Conversation');
       expect(route.options({ route: { params: { title: 'Titre transmis' } } }).title).toBe('Titre transmis');
