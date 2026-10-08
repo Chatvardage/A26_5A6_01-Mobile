@@ -62,7 +62,8 @@
     "test:dependencies": "node scripts/check-xcode.js",
     "test:auth-e2e": "node scripts/auth-e2e.cjs",
     "typecheck": "tsc --noEmit",
-    "start:tunnel": "expo start --tunnel"
+    "start:tunnel": "expo start --tunnel",
+    "update-ip": "node scripts/update-api-ip.js"
   },
   "private": true,
   "jest": {
