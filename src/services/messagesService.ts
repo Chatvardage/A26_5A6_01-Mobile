@@ -115,8 +115,8 @@ export async function fetchHistory(conversationId: string, limit = 50, cursor?: 
   const ref = routeFor(conversationId);
   const path =
     ref.kind === 'dm'
-      ? `/api/messages/history/${ref.targetId}?${query(limit, cursor)}`
-      : `/api/messages/rooms/${ref.targetId}/history?${query(limit, cursor)}`;
+      ? `/api/messages/history/${encodeURIComponent(ref.targetId)}?${query(limit, cursor)}`
+      : `/api/messages/rooms/${encodeURIComponent(ref.targetId)}/history?${query(limit, cursor)}`;
   const raw = await apiFetch<RawMessage[]>(path);
 
   // Messages privés : `senderId` ; messages de salon : `authorId` (les deux existent toujours côté API).
@@ -136,7 +136,7 @@ export async function sendMessage(conversationId: string, content: string): Prom
           method: 'POST',
           body: JSON.stringify({ recipientId: ref.targetId, content }),
         })
-      : await apiFetch<RawMessage>(`/api/messages/rooms/${ref.targetId}`, {
+      : await apiFetch<RawMessage>(`/api/messages/rooms/${encodeURIComponent(ref.targetId)}`, {
           method: 'POST',
           body: JSON.stringify({ content }),
         });
@@ -148,7 +148,7 @@ export async function editMessage(conversationId: string, messageId: string, con
   const path =
     ref.kind === 'dm'
       ? `/api/messages/${encodeURIComponent(messageId)}`
-      : `/api/messages/rooms/${ref.targetId}/${encodeURIComponent(messageId)}`;
+      : `/api/messages/rooms/${encodeURIComponent(ref.targetId)}/${encodeURIComponent(messageId)}`;
   return normalizeMessage(
     await apiFetch<RawMessage>(path, {
       method: 'PATCH',

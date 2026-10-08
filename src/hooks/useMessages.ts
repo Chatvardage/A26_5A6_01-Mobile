@@ -114,7 +114,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
 
     const receive = (raw: unknown) => {
       if (currentGeneration !== generation.current) return;
-      if (!belongsTo(conversationId, currentUserId, raw) || typeof raw !== 'object' || raw === null) return;
+      if (!belongsTo(conversationId, currentUserId, raw)) return;
       const message = raw as RawMessage;
       if (typeof message.id !== 'string' || typeof message.content !== 'string') return;
       const senderId = message.senderId ?? message.authorId;

@@ -35,6 +35,8 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
     useMessages(conversationId, user?.id ?? '');
   const isRoom = conversationId.startsWith('room:');
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const hasInlineError = status === 'error' && messages.length > 0;
+  const displayedError = hasInlineError ? errorMessage ?? strings.errors.generic : errorMessage;
 
   let body;
   if (status === 'loading') body = <LoadingState label={strings.states.loadingMessages} />;
@@ -102,14 +104,14 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
             </ThemedText>
           </View>
         ) : null}
-        {accessError && status !== 'error' && accessError !== errorMessage ? (
+        {accessError && (status !== 'error' || hasInlineError) && accessError !== displayedError ? (
           <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
             {accessError}
           </ThemedText>
         ) : null}
-        {errorMessage && status === 'ready' ? (
+        {displayedError && (status === 'ready' || hasInlineError) ? (
           <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
-            {errorMessage}
+            {displayedError}
           </ThemedText>
         ) : null}
         {body}

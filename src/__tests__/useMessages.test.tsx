@@ -645,6 +645,8 @@ describe('useMessages', () => {
     await act(async () => {
       const receive = mockHandlers.get('room-message.created')!;
       receive(null);
+      receive('événement invalide');
+      receive(42);
       receive({ roomId: ROOM });
       receive({ roomId: ROOM, id: 'bad', content: 1 });
       receive({ roomId: ROOM, id: 'bad', content: 'x' });

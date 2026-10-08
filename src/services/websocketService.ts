@@ -151,9 +151,15 @@ export function createRealtimeService() {
 
   function configureRealtime(configuration: RealtimeOptions) {
     options = configuration;
-    if (socket && typeof socket.auth === 'object') {
+    if (socket) {
       const token = configuration.getToken();
-      if (token && socket.auth.token !== token) {
+      if (!token) {
+        // Ne conserve pas l'ancien jeton si la session disparaît avant son nettoyage.
+        disconnectRealtime();
+        configuration.onUnauthorized();
+        return;
+      }
+      if (typeof socket.auth === 'object' && socket.auth.token !== token) {
         socket.auth = { token };
         joinedRooms.clear();
         joiningRooms.clear();

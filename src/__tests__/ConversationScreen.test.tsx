@@ -48,6 +48,23 @@ describe('ConversationScreen', () => {
     jest.mocked(useSession).mockReturnValue({ user: { id: 'user-id' }, drafts: new Map() } as ReturnType<typeof useSession>);
   });
 
+  it.each([
+    { errorMessage: 'Serveur indisponible', accessError: null, errors: ['Serveur indisponible'] },
+    { errorMessage: null, accessError: null, errors: ['Une erreur est survenue.'] },
+    { errorMessage: 'Accès refusé', accessError: 'Accès refusé', errors: ['Accès refusé'] },
+    { errorMessage: 'Serveur indisponible', accessError: 'Accès refusé', errors: ['Serveur indisponible', 'Accès refusé'] },
+  ])('garde visibles la liste et les erreurs en statut error ($errorMessage, $accessError)', async ({ errorMessage, accessError, errors }) => {
+    jest.mocked(useMessages).mockReturnValue({
+      ...baseState, status: 'error', errorMessage, accessError,
+      messages: [{ id: 'one', senderId: 'alice', content: 'Message conservé', createdAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z' }],
+    } as ReturnType<typeof useMessages>);
+    await renderScreen(`room:${DM}`);
+    expect(screen.getByText('Message conservé')).toBeTruthy();
+    expect(screen.getByTestId('messages-list')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(errors.length);
+    for (const error of errors) expect(screen.getAllByText(error)).toHaveLength(1);
+  });
+
   it('affiche chargement, erreur réessayable et conversation vide avec saisie', async () => {
     (useMessages as jest.Mock).mockReturnValueOnce({ ...baseState, status: 'loading' });
     const { rerender } = await renderScreen();

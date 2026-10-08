@@ -75,6 +75,40 @@ describe('fetchHistory', () => {
 });
 
 describe('sendMessage et editMessage', () => {
+  it('encode chaque identifiant placé dans un chemin sans élargir le contrat UUID', async () => {
+    const encode = jest.spyOn(globalThis, 'encodeURIComponent');
+    try {
+      apiFetch.mockResolvedValue([]);
+      await fetchHistory(`dm:${DM}`);
+      expect(encode).toHaveBeenCalledWith(DM);
+      encode.mockClear();
+      await fetchHistory(`room:${ROOM}`);
+      expect(encode).toHaveBeenCalledWith(ROOM);
+
+      apiFetch.mockResolvedValue(baseMessage('m1', '2026-10-01T10:00:00Z'));
+      encode.mockClear();
+      await sendMessage(`room:${ROOM}`, 'salut');
+      expect(encode).toHaveBeenCalledWith(ROOM);
+      encode.mockClear();
+      const messageId = 'message/avec espaces?#%';
+      await editMessage(`room:${ROOM}`, messageId, 'corrigé');
+      expect(encode.mock.calls).toEqual([[ROOM], [messageId]]);
+      expect(apiFetch).toHaveBeenLastCalledWith(
+        `/api/messages/rooms/${ROOM}/message%2Favec%20espaces%3F%23%25`,
+        { method: 'PATCH', body: JSON.stringify({ content: 'corrigé' }) },
+      );
+      encode.mockClear();
+      await editMessage(`dm:${DM}`, messageId, 'corrigé');
+      expect(encode.mock.calls).toEqual([[messageId]]);
+      expect(apiFetch).toHaveBeenLastCalledWith(
+        '/api/messages/message%2Favec%20espaces%3F%23%25',
+        { method: 'PATCH', body: JSON.stringify({ content: 'corrigé' }) },
+      );
+    } finally {
+      encode.mockRestore();
+    }
+  });
+
   it.each([
     [`dm:${DM}`, '/api/messages', { recipientId: DM, content: 'salut' }],
     [`room:${ROOM}`, `/api/messages/rooms/${ROOM}`, { content: 'salut' }],
