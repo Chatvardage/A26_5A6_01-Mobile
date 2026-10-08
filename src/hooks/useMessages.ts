@@ -30,7 +30,7 @@ function normalizeEvent(raw: RawMessage, senderId: string, senderName?: string):
 
 export function useMessages(conversationId: string, currentUserId: string) {
   const { realtime } = useSession();
-  const { getRealtimeState, hasRealtimeBeenReady, joinRoom, leaveRoom, onConnectionState, onReady, subscribe } = realtime;
+  const { getRealtimeState, joinRoom, leaveRoom, onConnectionState, onReady, subscribe } = realtime;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -50,6 +50,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const olderRequest = useRef(false);
   const subscriptionFailed = useRef(false);
   const [subscriptionAttempt, setSubscriptionAttempt] = useState(0);
+  const recentRequest = useRef(0);
 
   const updateStatus = useCallback((next: Status) => {
     statusRef.current = next;
@@ -65,6 +66,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
 
   const loadRecent = useCallback(async () => {
     const requestGeneration = generation.current;
+    const requestId = ++recentRequest.current;
     const initial = !firstLoadDone.current;
     if (initial) {
       updateStatus('loading');
@@ -72,7 +74,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     }
     try {
       const page = await fetchHistory(conversationId);
-      if (requestGeneration !== generation.current) return;
+      if (requestGeneration !== generation.current || requestId !== recentRequest.current) return;
       for (const message of page) {
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
       }
@@ -84,7 +86,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       updateStatus('ready');
       setErrorMessage(null);
     } catch (error) {
-      if (requestGeneration !== generation.current) return;
+      if (requestGeneration !== generation.current || requestId !== recentRequest.current) return;
       setErrorMessage(userMessage(error));
       if (initial) updateStatus('error');
     }
@@ -93,8 +95,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
   useEffect(() => {
     const ref = parseConversationId(conversationId);
     const currentGeneration = ++generation.current;
-    let firstReadyIsInitial = !hasRealtimeBeenReady();
-    let joinFailed = false;
+    let joinGeneration = 0;
     messagesRef.current = [];
     // La conversation est une frontière d'état: son changement invalide immédiatement la liste précédente.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -112,6 +113,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     olderRequest.current = false;
 
     const receive = (raw: unknown) => {
+      if (currentGeneration !== generation.current) return;
       if (!belongsTo(conversationId, currentUserId, raw) || typeof raw !== 'object' || raw === null) return;
       const message = raw as RawMessage;
       if (typeof message.id !== 'string' || typeof message.content !== 'string') return;
@@ -134,23 +136,30 @@ export function useMessages(conversationId: string, currentUserId: string) {
           const name = names[senderId];
           if (!name || currentGeneration !== generation.current) return;
           pseudoCache.current.set(senderId, name);
-          const enriched = { ...incoming, senderName: name };
-          if (firstLoadDone.current) updateMessages([enriched]);
-          else eventBuffer.current = mergeMessages(eventBuffer.current, [enriched]);
+          const source = firstLoadDone.current ? messagesRef.current : eventBuffer.current;
+          const enriched = source
+            .filter((item) => item.senderId === senderId)
+            .map((item) => ({ ...item, senderName: name }));
+          if (firstLoadDone.current) updateMessages(enriched);
+          else eventBuffer.current = mergeMessages(eventBuffer.current, enriched);
         })
         .catch((error: unknown) => {
           if (currentGeneration === generation.current) setErrorMessage(userMessage(error));
+        })
+        .finally(() => {
+          if (currentGeneration === generation.current) pseudoLookups.current.delete(senderId);
         });
     };
 
     const revoke = (raw: unknown) => {
+      if (currentGeneration !== generation.current) return;
       if (
         typeof raw === 'object' &&
         raw !== null &&
         'roomId' in raw &&
         (raw as { roomId?: unknown }).roomId === ref?.targetId
       ) {
-        joinFailed = true;
+        joinGeneration++;
         setAccessError(userMessage(new ApiError('forbidden', 'Accès au salon révoqué')));
       }
     };
@@ -169,14 +178,13 @@ export function useMessages(conversationId: string, currentUserId: string) {
 
     const join = () => {
       if (ref?.kind !== 'room') return;
-      joinFailed = false;
+      const requestJoinGeneration = ++joinGeneration;
       joinRoom(ref.targetId).then(
         () => {
-          if (currentGeneration === generation.current) setAccessError(null);
+          if (currentGeneration === generation.current && requestJoinGeneration === joinGeneration) setAccessError(null);
         },
         (error: unknown) => {
-          if (currentGeneration !== generation.current) return;
-          joinFailed = true;
+          if (currentGeneration !== generation.current || requestJoinGeneration !== joinGeneration) return;
           setAccessError(userMessage(error));
         },
       );
@@ -187,12 +195,9 @@ export function useMessages(conversationId: string, currentUserId: string) {
       for (const [event, handler] of events) unsubscribers.push(subscribe(event, handler));
       unsubscribers.push(onConnectionState(setConnection));
       unsubscribers.push(onReady(() => {
-        // Un abonnement expiré avant la première connexion, refusé ou révoqué est retenté à chaque connexion prête.
-        if (joinFailed) join();
-        if (firstReadyIsInitial) {
-          firstReadyIsInitial = false;
-          return;
-        }
+        if (currentGeneration !== generation.current) return;
+        // Suit l'adhésion de la connexion courante, même si l'ancien ACK a été perdu.
+        join();
         void loadRecent();
       }));
     } catch (error) {
@@ -214,7 +219,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       if (ref?.kind === 'room') void leaveRoom(ref.targetId).catch(() => undefined);
     };
-  }, [conversationId, currentUserId, getRealtimeState, hasRealtimeBeenReady, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
+  }, [conversationId, currentUserId, getRealtimeState, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
 
   const retry = useCallback(() => {
     if (subscriptionFailed.current) setSubscriptionAttempt((attempt) => attempt + 1);

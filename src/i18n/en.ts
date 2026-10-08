@@ -80,7 +80,6 @@ export const en = {
   },
   composer: {
     writeMessage: 'Write a message',
-    unavailable: 'Sending will be available soon',
   },
   conversation: {
     unknownUser: 'Unknown user',

@@ -45,7 +45,7 @@ const renderScreen = (conversationId: unknown = `dm:${DM}`) =>
 describe('ConversationScreen', () => {
   beforeEach(() => {
     (useMessages as jest.Mock).mockReset().mockReturnValue({ ...baseState });
-    jest.mocked(useSession).mockReturnValue({ user: { id: 'user-id' } } as ReturnType<typeof useSession>);
+    jest.mocked(useSession).mockReturnValue({ user: { id: 'user-id' }, drafts: new Map() } as ReturnType<typeof useSession>);
   });
 
   it('affiche chargement, erreur réessayable et conversation vide avec saisie', async () => {
@@ -137,7 +137,7 @@ describe('ConversationScreen', () => {
   });
 
     it('affiche une erreur générique sans session et une liste sans pied de pagination', async () => {
-      jest.mocked(useSession).mockReturnValue({ user: null } as ReturnType<typeof useSession>);
+      jest.mocked(useSession).mockReturnValue({ user: null, drafts: new Map() } as ReturnType<typeof useSession>);
       jest.mocked(useMessages).mockReturnValueOnce({ ...baseState, status: 'error' } as ReturnType<typeof useMessages>);
       const view = await renderScreen();
       expect(screen.getByText('Une erreur est survenue.')).toBeTruthy();

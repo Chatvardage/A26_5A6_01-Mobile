@@ -5,6 +5,7 @@ import type { RealtimeService } from '@/services/websocketService';
 export type { SessionStatus } from './SessionManager';
 export type Session = SessionState & {
   realtime: RealtimeService;
+  drafts: Map<string, string>;
   signIn: (identifiant: string, motDePasse: string) => Promise<void>;
   register: (input: Registration) => Promise<void>;
   signOut: () => Promise<void>;
@@ -24,6 +25,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       value={{
         ...state,
         realtime: manager.realtime,
+        drafts: manager.drafts,
         signIn: manager.signIn,
         register: manager.register,
         signOut: manager.signOut,

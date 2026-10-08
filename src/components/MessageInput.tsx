@@ -10,14 +10,13 @@ import type { ChatMessage } from '@/types/conversation';
 
 type Props = {
   conversationId: string;
-  draftStore?: Map<string, string>;
+  draftStore: Map<string, string>;
   onSend: (text: string) => Promise<void>;
   editingMessage: Pick<ChatMessage, 'id' | 'content'> | null;
   onEdit: (messageId: string, text: string) => Promise<void>;
   onCancelEdit: () => void;
 };
 
-const drafts = new Map<string, string>();
 const MAX_DRAFTS = 100;
 
 function storeDraft(store: Map<string, string>, conversationId: string, value: string) {
@@ -35,7 +34,7 @@ export function MessageInput(props: Props) {
   return <MessageInputState key={`${props.conversationId}:${editingKey}`} {...props} />;
 }
 
-function MessageInputState({ conversationId, draftStore = drafts, onSend, editingMessage, onEdit, onCancelEdit }: Props) {
+function MessageInputState({ conversationId, draftStore, onSend, editingMessage, onEdit, onCancelEdit }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState(() => editingMessage?.content ?? draftStore.get(conversationId) ?? '');
@@ -43,6 +42,7 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
   const [error, setError] = useState<string | null>(null);
   const textRef = useRef(text);
   const mounted = useRef(true);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (editingMessage) return;
@@ -67,8 +67,9 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
   const submit = async () => {
     const submittedText = textRef.current;
     const trimmed = submittedText.trim();
-    if (!trimmed || submitting) return;
+    if (!trimmed || submittingRef.current) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -89,6 +90,7 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
     } catch (reason) {
       if (mounted.current) setError(typeof reason === 'string' ? reason : userMessage(reason));
     } finally {
+      submittingRef.current = false;
       if (mounted.current) setSubmitting(false);
     }
   };

@@ -56,6 +56,7 @@ it('renders Android keyboard behavior on both auth screens', async () => {
 beforeEach(() => {
   mockSession = {
     realtime: createRealtimeService(),
+    drafts: new Map(),
     status: 'signedOut',
     user: null,
     error: null,

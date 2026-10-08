@@ -31,7 +31,8 @@ jest.mock('@/hooks/useMessages', () => ({
     edit: jest.fn(),
   }),
 }));
-jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: mockUser, signOut: mockSignOut }) }));
+jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: mockUser, drafts: mockDrafts, signOut: mockSignOut }) }));
+let mockDrafts: Map<string, string>;
 let mockUser: { id: string; pseudo: string } | null;
 const mockSignOut = jest.fn();
 const retry = jest.fn();
@@ -66,6 +67,7 @@ const conversationProps = (conversationId: string) =>
   ({ route: { params: { conversationId } } }) as Parameters<typeof ConversationScreen>[0];
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDrafts = new Map();
   mockUser = { id, pseudo: 'alice' };
   mockResult = { state: { status: 'loading' }, refreshing: false, retry, refresh };
   mockMessages = [];

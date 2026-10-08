@@ -180,11 +180,11 @@ describe('MessageInput', () => {
     expect(secondStore.get('same-id')).toBe('second brouillon');
   });
 
-  it('conserve le brouillon de production par défaut entre deux montages', async () => {
-    const first = await renderInput({ conversationId: 'default-store', draftStore: undefined });
+  it('conserve le brouillon de session entre deux montages', async () => {
+    const first = await renderInput({ conversationId: 'session-store' });
     await fireEvent.changeText(screen.getByLabelText('Message'), 'brouillon partagé');
     await first.unmount();
-    await renderInput({ conversationId: 'default-store', draftStore: undefined });
+    await renderInput({ conversationId: 'session-store' });
     expect(screen.getByLabelText('Message')).toHaveDisplayValue('brouillon partagé');
     await fireEvent.press(screen.getByRole('button', { name: 'Envoyer' }));
     expect(screen.getByLabelText('Message')).toHaveDisplayValue('');

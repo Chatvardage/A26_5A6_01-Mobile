@@ -33,13 +33,18 @@ type TabProps = {
   };
 };
 const mockStackScreens: ScreenProps[] = [];
+const mockStackMount = jest.fn();
 const mockTabScreens: ScreenProps[] = [];
 let mockTabProps: TabProps;
 let mockTheme: { colors: Record<string, string> };
 
 jest.mock('@react-navigation/native-stack', () => ({
   createNativeStackNavigator: () => ({
-    Navigator: ({ children }: { children: ReactNode }) => children,
+    Navigator: ({ children }: { children: ReactNode }) => {
+      const React = jest.requireActual<typeof import('react')>('react');
+      React.useEffect(() => { mockStackMount(); }, []);
+      return children;
+    },
     Screen: (props: ScreenProps) => {
       mockStackScreens.push(props);
       return null;
@@ -67,12 +72,23 @@ jest.mock('expo-symbols', () => ({
 
 beforeEach(() => {
   mockStackScreens.length = 0;
+  mockStackMount.mockClear();
   mockTabScreens.length = 0;
   (useSession as jest.Mock).mockReturnValue({ status: 'signedOut' });
   jest.mocked(useColorScheme).mockReturnValue('light');
 });
 
 describe('RootNavigator', () => {
+  it('remonte les écrans lors du changement de compte, mais pas au renouvellement du même compte', async () => {
+    jest.mocked(useSession).mockReturnValue({ status: 'signedIn', user: { id: 'alice' } } as ReturnType<typeof useSession>);
+    const { rerender } = await render(<RootNavigator />);
+    expect(mockStackMount).toHaveBeenCalledTimes(1);
+    await rerender(<RootNavigator />);
+    expect(mockStackMount).toHaveBeenCalledTimes(1);
+    jest.mocked(useSession).mockReturnValue({ status: 'signedIn', user: { id: 'bob' } } as ReturnType<typeof useSession>);
+    await rerender(<RootNavigator />);
+    expect(mockStackMount).toHaveBeenCalledTimes(2);
+  });
   it('n’enregistre que les routes d’authentification sans session et utilise le thème clair', async () => {
     await render(<RootNavigator />);
     expect(mockStackScreens.map((route) => route.name)).toEqual(['Login', 'Register']);

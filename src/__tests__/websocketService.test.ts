@@ -10,7 +10,6 @@ let getRealtimeState: RealtimeService['getRealtimeState'];
 let joinRoom: RealtimeService['joinRoom'];
 let leaveRoom: RealtimeService['leaveRoom'];
 let onConnectionState: RealtimeService['onConnectionState'];
-let hasRealtimeBeenReady: RealtimeService['hasRealtimeBeenReady'];
 let onReady: RealtimeService['onReady'];
 let subscribe: RealtimeService['subscribe'];
 
@@ -63,7 +62,7 @@ mockSocket.connect.mockImplementation(() => {
 mockSocket.removeAllListeners.mockImplementation(() => listeners.clear());
 
 beforeEach(() => {
-  ({ configureRealtime, disconnectRealtime, getRealtimeState, joinRoom, leaveRoom, onConnectionState, hasRealtimeBeenReady, onReady, subscribe } = createRealtimeService());
+  ({ configureRealtime, disconnectRealtime, getRealtimeState, joinRoom, leaveRoom, onConnectionState, onReady, subscribe } = createRealtimeService());
   listeners.clear();
   mockSocket.auth = { token: 'test-token' };
   mockSocket.connected = false;
@@ -129,7 +128,6 @@ describe('websocketService', () => {
     await joinRoom('first-room');
     const second = createRealtimeService();
     expect(second.getRealtimeState()).toBe('disconnected');
-    expect(second.hasRealtimeBeenReady()).toBe(false);
     expect(() => second.onReady(jest.fn())).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
 
     const secondListeners = new Map<string, Listener>();
@@ -149,7 +147,6 @@ describe('websocketService', () => {
     expect(secondSocket.emit).not.toHaveBeenCalled();
     expect(secondSocket.disconnect).toHaveBeenCalledTimes(1);
     expect(getRealtimeState()).toBe('ready');
-    expect(hasRealtimeBeenReady()).toBe(true);
     mockSocket.emit.mockClear();
     await joinRoom('first-room');
     expect(mockSocket.emit).not.toHaveBeenCalled();
@@ -361,7 +358,6 @@ describe('websocketService', () => {
     trigger('connect');
     trigger('connect_error');
     trigger('connexion.prete');
-    expect(hasRealtimeBeenReady()).toBe(true);
     expect(changed).toHaveBeenLastCalledWith('ready');
     unsubscribeReady();
     unsubscribeState();
@@ -450,6 +446,67 @@ describe('websocketService', () => {
     acknowledge({ joined: true });
     await Promise.all([joined, leaving]);
     expect(mockSocket.emit).toHaveBeenLastCalledWith('room-message.leave', { roomId: 'room' }, expect.any(Function));
+  });
+
+  it('annule une ancienne sortie si le salon est rouvert avant la fin de son adhésion', async () => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    let acknowledge!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event, _payload, ack) => { acknowledge = ack; });
+    const first = joinRoom('room');
+    const leaving = leaveRoom('room');
+    const reopened = joinRoom('room');
+    acknowledge({ joined: true });
+    await Promise.all([first, leaving, reopened]);
+    expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+    expect(mockSocket.emit).not.toHaveBeenCalledWith('room-message.leave', expect.anything(), expect.any(Function));
+    await joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne supprime pas la nouvelle adhésion lorsque l’accusé de sortie arrive tardivement', async () => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    await joinRoom('room');
+    let acknowledgeLeave!: (response: unknown) => void;
+    mockSocket.emit.mockImplementationOnce((_event, _payload, ack) => { acknowledgeLeave = ack; });
+    const leaving = leaveRoom('room');
+    await joinRoom('room');
+    expect(mockSocket.emit.mock.calls.map(([event]) => event)).toEqual([
+      'room-message.join', 'room-message.leave', 'room-message.join',
+    ]);
+    acknowledgeLeave({ left: true });
+    await leaving;
+    await joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(3);
+  });
+
+  it('n’accepte pas un succès d’adhésion de l’ancienne connexion après reconnexion', async () => {
+    subscribe('event', jest.fn());
+    trigger('connexion.prete');
+    const acknowledgements: ((response: unknown) => void)[] = [];
+    mockSocket.emit.mockImplementation((_event, _payload, ack) => { acknowledgements.push(ack); });
+    const old = joinRoom('room');
+    trigger('disconnect');
+    trigger('connexion.prete');
+    const current = joinRoom('room');
+    acknowledgements[0]({ joined: true });
+    await old;
+    const duplicate = joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(2);
+    acknowledgements[1]({ joined: true });
+    await Promise.all([current, duplicate]);
+    await joinRoom('room');
+    expect(mockSocket.emit).toHaveBeenCalledTimes(2);
+  });
+
+  it('ne mémorise pas un salon si sa demande échoue avant création du socket', async () => {
+    disconnectRealtime();
+    await expect(joinRoom('unauthorized-room')).rejects.toMatchObject({ kind: 'unauthorized' });
+    configureRealtime({ getToken: () => 'test-token', onUnauthorized: jest.fn() });
+    onReady(jest.fn());
+    trigger('connexion.prete');
+    expect(mockSocket.emit).not.toHaveBeenCalled();
   });
 
   it('rejette les attentes révoquées et ignore les notifications de révocation invalides', async () => {

@@ -26,6 +26,11 @@ it('refuse les déclenchements programmatiques vides ou pendant un envoi, même 
   await press();
   expect(onSend).not.toHaveBeenCalled();
   await fireEvent.changeText(screen.getByLabelText('Message'), 'texte');
+  const sameRender = jest.mocked(Pressable).mock.lastCall![0];
+  await act(async () => {
+    sameRender.onPress?.({} as GestureResponderEvent);
+    sameRender.onPress?.({} as GestureResponderEvent);
+  });
   await press();
   await press();
   expect(onSend).toHaveBeenCalledTimes(1);

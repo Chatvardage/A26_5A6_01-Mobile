@@ -1,5 +1,4 @@
-import { render, screen, fireEvent, userEvent } from '@testing-library/react-native';
-import { MessageComposer } from '@/components/MessageComposer';
+import { render, screen, userEvent } from '@testing-library/react-native';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ServerItem } from '@/components/ServerItem';
 import { ThemedText } from '@/components/themed-text';
@@ -8,26 +7,6 @@ import { formatMessageTime } from '@/utils/formatTime';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-it('garde le champ utilisable mais désactive l’envoi sans gestionnaire', async () => {
-  await render(<MessageComposer />);
-  const input = screen.getByPlaceholderText('Envoi bientôt disponible');
-  await fireEvent.changeText(input, 'bonjour');
-  await fireEvent.press(screen.getByLabelText('Envoyer'));
-  expect(input.props.value).toBe('bonjour');
-  expect(screen.getByLabelText('Envoyer')).toBeDisabled();
-});
-
-it('envoie le texte nettoyé et vide le champ, sans permettre les espaces seuls', async () => {
-  const onSend = jest.fn();
-  await render(<MessageComposer onSend={onSend} />);
-  await fireEvent.changeText(screen.getByLabelText('Message'), '   ');
-  await fireEvent.press(screen.getByLabelText('Envoyer'));
-  expect(onSend).not.toHaveBeenCalled();
-  await fireEvent.changeText(screen.getByLabelText('Message'), ' bonjour ');
-  await userEvent.setup().press(screen.getByLabelText('Envoyer'));
-  expect(onSend).toHaveBeenCalledWith('bonjour');
-  expect(screen.getByLabelText('Message').props.value).toBe('');
-});
 it.each([0, 1, 3])('affiche les accords et transmet le serveur avec %s non-lus', async (unreadCount) => {
   const server = {
     id: 's',

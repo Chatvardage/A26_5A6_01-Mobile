@@ -110,6 +110,40 @@ it('ferme le temps réel à la déconnexion et à la destruction du gestionnaire
   expect(jest.mocked(configureRealtime).mock.calls.at(-1)?.[0].getToken()).toBeNull();
 });
 
+it('efface et remplace les brouillons à la déconnexion sans partager le store avec le compte suivant', async () => {
+  await manager.start();
+  await manager.signIn('alice', 'fixture');
+  const oldStore = manager.drafts;
+  oldStore.set('shared-room', 'texte du premier compte');
+  await manager.refreshSession();
+  expect(manager.drafts).toBe(oldStore);
+  expect(manager.drafts.get('shared-room')).toBe('texte du premier compte');
+  await manager.signOut();
+  expect(oldStore.size).toBe(0);
+  expect(manager.drafts).not.toBe(oldStore);
+  jest.mocked(auth.login).mockResolvedValueOnce({ ...session, utilisateur: { ...user, id: 'other-user' } });
+  await manager.signIn('bob', 'fixture');
+  manager.drafts.set('shared-room', 'texte du second compte');
+  oldStore.delete('shared-room');
+  expect(manager.drafts.get('shared-room')).toBe('texte du second compte');
+  manager.dispose();
+  expect(manager.drafts.size).toBe(0);
+});
+
+it('remplace le store et ferme le socket si un nouveau compte est accepté sans déconnexion préalable', async () => {
+  await manager.start();
+  await manager.signIn('alice', 'fixture');
+  const oldStore = manager.drafts;
+  oldStore.set('shared-room', 'ancien brouillon');
+  jest.mocked(auth.login).mockResolvedValueOnce({ ...session, utilisateur: { ...user, id: 'other-user' } });
+  disconnectRealtime.mockClear();
+  await manager.signIn('bob', 'fixture');
+  expect(manager.drafts).not.toBe(oldStore);
+  expect(oldStore.size).toBe(0);
+  expect(manager.drafts.size).toBe(0);
+  expect(disconnectRealtime).toHaveBeenCalledTimes(1);
+});
+
 it('preserves inaccessible secure storage and validates the session after retry', async () => {
   jest
     .mocked(storage.load)

@@ -18,7 +18,6 @@ const mockRealtime = {
   configureRealtime: jest.fn(),
   disconnectRealtime: jest.fn(),
   getRealtimeState: jest.fn(() => 'ready'),
-  hasRealtimeBeenReady: jest.fn(() => false),
   joinRoom: jest.fn(() => Promise.resolve()),
   leaveRoom: jest.fn(() => Promise.resolve()),
   onConnectionState: jest.fn((handler: Parameters<RealtimeService['onConnectionState']>[0]) => {
@@ -73,10 +72,115 @@ beforeEach(() => {
   (lookupPseudos as jest.Mock).mockReset().mockResolvedValue({ [OTHER]: 'Alice' });
   jest.mocked(realtime.joinRoom).mockReset().mockResolvedValue(undefined);
   jest.mocked(realtime.leaveRoom).mockReset().mockResolvedValue(undefined);
-  jest.mocked(realtime.hasRealtimeBeenReady).mockReset().mockReturnValue(false);
 });
 
 describe('useMessages', () => {
+  it.each(['resolve', 'reject'] as const)('suit la nouvelle adhésion après reconnexion et ignore l’ancien ACK (%s)', async (outcome) => {
+    const oldJoin = deferred<void>();
+    const newJoin = deferred<void>();
+    jest.mocked(realtime.joinRoom).mockReturnValueOnce(oldJoin.promise).mockReturnValueOnce(newJoin.promise);
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    await act(async () => mockReadyHandler?.());
+    expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
+    await act(async () => newJoin.resolve());
+    await act(async () => {
+      if (outcome === 'resolve') oldJoin.resolve();
+      else oldJoin.reject(new ApiError('timeout', 'ACK perdu'));
+    });
+    expect(result.current.accessError).toBeNull();
+    expect(result.current.status).toBe('ready');
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignore une ancienne requête initiale après le rattrapage prêt (%s)', async (outcome) => {
+    const initial = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(initial.promise);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    fetchHistory.mockResolvedValueOnce([message('missed-before-ready')]);
+    await act(async () => mockReadyHandler?.());
+    expect(result.current.messages.map((item) => item.id)).toEqual(['missed-before-ready']);
+    await act(async () => {
+      if (outcome === 'resolve') initial.resolve(Array.from({ length: 50 }, (_, index) => message(`stale-${index}`)));
+      else initial.reject(new ApiError('network', 'ancienne requête'));
+    });
+    expect(result.current.messages.map((item) => item.id)).toEqual(['missed-before-ready']);
+    expect(result.current.hasOlder).toBe(false);
+    expect(result.current.errorMessage).toBeNull();
+    expect(result.current.status).toBe('ready');
+  });
+
+  it.each(['loading', 'ready'] as const)('résout tous les messages du même auteur reçus pendant sa recherche (%s)', async (status) => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    const names = deferred<Record<string, string>>();
+    if (status === 'loading') fetchHistory.mockReturnValueOnce(history.promise);
+    jest.mocked(lookupPseudos).mockReturnValueOnce(names.promise);
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    await act(async () => {
+      mockHandlers.get('room-message.created')?.({ ...message('one', 'unknown'), roomId: ROOM });
+      mockHandlers.get('room-message.created')?.({ ...message('two', 'unknown'), roomId: ROOM });
+    });
+    expect(lookupPseudos).toHaveBeenCalledTimes(1);
+    await act(async () => names.resolve({ unknown: 'Bob' }));
+    if (status === 'loading') await act(async () => history.resolve([]));
+    expect(result.current.messages.filter((item) => item.senderId === 'unknown')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'one', senderName: 'Bob' }),
+        expect.objectContaining({ id: 'two', senderName: 'Bob' }),
+      ]),
+    );
+  });
+
+  it.each(['resolve', 'reject'] as const)('préserve une révocation malgré une ancienne réponse d’adhésion (%s)', async (outcome) => {
+    const joining = deferred<void>();
+    jest.mocked(realtime.joinRoom).mockReturnValueOnce(joining.promise);
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    await act(async () => mockHandlers.get('room-message.revoked')?.({ roomId: ROOM }));
+    await act(async () => {
+      if (outcome === 'resolve') joining.resolve();
+      else joining.reject(new ApiError('timeout', 'ancienne adhésion'));
+    });
+    expect(result.current.accessError).toBe('Vous n’avez pas accès à cette conversation.');
+    await act(async () => mockReadyHandler?.());
+    expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
+    expect(result.current.accessError).toBeNull();
+  });
+
+  it.each(['error', 'empty'] as const)('retente un pseudo après une réponse %s sans dupliquer les requêtes en cours', async (outcome) => {
+    const { result } = await renderHook(() => useMessages(roomConversation, ME));
+    const raw = { ...message('retry-name', 'unknown'), roomId: ROOM };
+    if (outcome === 'error') jest.mocked(lookupPseudos).mockRejectedValueOnce(new ApiError('network', 'offline'));
+    else jest.mocked(lookupPseudos).mockResolvedValueOnce({});
+    await act(async () => mockHandlers.get('room-message.created')?.(raw));
+    expect(result.current.messages.find((item) => item.id === raw.id)?.senderName).toBeUndefined();
+    const names = deferred<Record<string, string>>();
+    jest.mocked(lookupPseudos).mockReturnValueOnce(names.promise);
+    await act(async () => {
+      mockHandlers.get('room-message.updated')?.(raw);
+      mockHandlers.get('room-message.updated')?.(raw);
+    });
+    expect(lookupPseudos).toHaveBeenCalledTimes(2);
+    await act(async () => names.resolve({ unknown: 'Bob' }));
+    expect(result.current.messages.find((item) => item.id === raw.id)?.senderName).toBe('Bob');
+  });
+
+  it('ignore les anciens callbacks de réception, révocation et connexion prête après changement de conversation', async () => {
+    const { result, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), { initialProps: { id: roomConversation } });
+    const receive = mockHandlers.get('room-message.created')!;
+    const revoke = mockHandlers.get('room-message.revoked')!;
+    const ready = mockReadyHandler!;
+    await rerender({ id: conversationId });
+    const before = result.current.messages;
+    const calls = fetchHistory.mock.calls.length;
+    await act(async () => {
+      receive({ ...message('obsolete'), roomId: ROOM });
+      revoke({ roomId: ROOM });
+      ready();
+    });
+    expect(result.current.messages).toBe(before);
+    expect(result.current.accessError).toBeNull();
+    expect(fetchHistory).toHaveBeenCalledTimes(calls);
+  });
+
   it.each(['first-event', 'second-event', 'third-event', 'state', 'ready'] as const)(
     'nettoie les abonnements partiels après un échec %s et les recrée au réessai',
     async (step) => {
@@ -264,7 +368,6 @@ describe('useMessages', () => {
     expect(result.current.loadingOlder).toBe(false);
     expect(result.current.hasOlder).toBe(true);
 
-    await act(async () => mockReadyHandler?.());
     fetchHistory.mockResolvedValueOnce([{ ...message('invalid'), createdAt: '' }]);
     await act(async () => mockReadyHandler?.());
     expect(result.current.messages).toBe(before);
@@ -468,7 +571,6 @@ describe('useMessages', () => {
   it('rattrape les messages après reconnexion sans vider les pages chargées et quitte les salons', async () => {
     const roomId = '66666666-6666-4666-8666-666666666666';
     const roomConversation = `room:${roomId}`;
-    (realtime.hasRealtimeBeenReady as jest.Mock).mockReturnValueOnce(true);
     fetchHistory.mockResolvedValueOnce([message('existing')]).mockResolvedValueOnce([message('latest', ME)]);
     const { result, unmount, rerender } = await renderHook(({ id }: { id: string }) => useMessages(id, ME), {
       initialProps: { id: conversationId },
@@ -555,13 +657,13 @@ describe('useMessages', () => {
     expect(lookupPseudos).not.toHaveBeenCalled();
   });
 
-  it('ignore la première notification prête puis expose un échec de rattrapage sans perdre la liste', async () => {
+  it('rattrape dès la première connexion prête et conserve la liste après un échec ultérieur', async () => {
     const { result } = await renderHook(() => useMessages(conversationId, ME));
     await act(async () => mockReadyHandler?.());
-    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
     fetchHistory.mockRejectedValueOnce(new ApiError('network', 'offline'));
     await act(async () => mockReadyHandler?.());
-    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
     expect(result.current.status).toBe('ready');
     expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
     expect(result.current.errorMessage).toMatch(/joindre le serveur/);
@@ -602,11 +704,11 @@ describe('useMessages', () => {
 
     await act(async () => mockReadyHandler?.());
     expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
-    // Première connexion prête : l'historique vient d'être chargé, pas de rattrapage REST.
-    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    // Le rattrapage ferme la fenêtre sans événements avant connexion.prete.
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(result.current.accessError).toBeNull());
     await act(async () => mockReadyHandler?.());
-    expect(realtime.joinRoom).toHaveBeenCalledTimes(2);
+    expect(realtime.joinRoom).toHaveBeenCalledTimes(3);
   });
 
   it('ignore un échec d’abonnement retenté après changement de conversation', async () => {

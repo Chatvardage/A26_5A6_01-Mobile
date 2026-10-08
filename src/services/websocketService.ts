@@ -21,7 +21,6 @@ export function createRealtimeService() {
   let options: RealtimeOptions | null = null;
   let socket: Socket | null = null;
   let state: RealtimeState = 'disconnected';
-  let hasBeenReady = false;
   let refreshingToken = false;
   let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
   const rooms = new Set<string>();
@@ -60,7 +59,6 @@ export function createRealtimeService() {
     });
     current.on('connect_error', () => setState('connecting'));
     current.on('connexion.prete', () => {
-      hasBeenReady = true;
       setState('ready');
       for (const handler of [...readyHandlers]) handler();
       if (socket !== current || state !== 'ready') return;
@@ -123,7 +121,8 @@ export function createRealtimeService() {
 
     const roomEpoch = roomEpochs.get(roomId) ?? 0;
     const pending = emitRoomEvent(roomId, 'room-message.join').then(() => {
-      if (socket === owner && state === 'ready' && (roomEpochs.get(roomId) ?? 0) === roomEpoch) joinedRooms.add(roomId);
+      if (socket === owner && state === 'ready' && joiningRooms.get(roomId) === pending &&
+          (roomEpochs.get(roomId) ?? 0) === roomEpoch) joinedRooms.add(roomId);
     });
     joiningRooms.set(roomId, pending);
     pending.then(
@@ -175,10 +174,6 @@ export function createRealtimeService() {
     return state;
   }
 
-  function hasRealtimeBeenReady(): boolean {
-    return hasBeenReady;
-  }
-
   function onConnectionState(handler: StateHandler): () => void {
     stateHandlers.add(handler);
     try {
@@ -204,8 +199,8 @@ export function createRealtimeService() {
   }
 
   async function joinRoom(roomId: string): Promise<void> {
-    rooms.add(roomId);
     const current = requireSocket();
+    rooms.add(roomId);
     if (state === 'ready') return startJoin(roomId, current);
     return new Promise((resolve, reject) => {
       const waiters = roomWaiters.get(roomId) ?? [];
@@ -227,9 +222,10 @@ export function createRealtimeService() {
       return;
     }
     if (pending) await pending;
+    if (rooms.has(roomId)) return;
     if (state !== 'ready' || !joinedRooms.has(roomId)) return;
-    await emitRoomEvent(roomId, 'room-message.leave');
     joinedRooms.delete(roomId);
+    await emitRoomEvent(roomId, 'room-message.leave');
   }
 
   function disconnectRealtime() {
@@ -240,7 +236,6 @@ export function createRealtimeService() {
       socket.disconnect();
     }
     socket = null;
-    hasBeenReady = false;
     rooms.clear();
     joinedRooms.clear();
     roomEpochs.clear();
@@ -258,7 +253,6 @@ export function createRealtimeService() {
   return {
     configureRealtime,
     getRealtimeState,
-    hasRealtimeBeenReady,
     onConnectionState,
     onReady,
     subscribe,

@@ -29,7 +29,7 @@ export function ConversationScreen({ route }: Props) {
 function ValidConversation({ conversationId }: { conversationId: string }) {
   const { strings } = useTranslation();
   const headerHeight = useHeaderHeight();
-  const { user } = useSession();
+  const { user, drafts } = useSession();
   const theme = useTheme();
   const { messages, status, errorMessage, accessError, loadingOlder, olderError, connection, retry, loadOlder, send, edit } =
     useMessages(conversationId, user?.id ?? '');
@@ -115,6 +115,7 @@ function ValidConversation({ conversationId }: { conversationId: string }) {
         {body}
       </ThemedView>
       <MessageInput
+        draftStore={drafts}
         conversationId={conversationId}
         onSend={send}
         editingMessage={editingMessage}

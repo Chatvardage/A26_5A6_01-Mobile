@@ -15,6 +15,7 @@ export type SessionState = {
 /** One session owner, with serialized persistence and cancellation by generation. */
 export class SessionManager {
   readonly realtime = createRealtimeService();
+  drafts = new Map<string, string>();
   state: SessionState = { status: 'loading', user: null, error: null };
   private session: auth.AuthResult | null = null;
   private epoch = 0;
@@ -51,6 +52,8 @@ export class SessionManager {
     this.session = null;
     this.restoration = null;
     this.renewal = null;
+    this.drafts.clear();
+    this.drafts = new Map();
     this.realtime.disconnectRealtime();
     resetHttpClient();
   }
@@ -59,6 +62,8 @@ export class SessionManager {
     invalidateHttpRequests();
     this.renewal = null;
     this.session = null;
+    this.drafts.clear();
+    this.drafts = new Map();
     this.realtime.disconnectRealtime();
     this.update({ status: 'signedOut', user: null, error: null });
     try {
@@ -80,6 +85,11 @@ export class SessionManager {
       if (epoch !== this.epoch) {
         await auth.logout(result.refresh_token).catch(() => undefined);
         return;
+      }
+      if (this.session && this.session.utilisateur.id !== result.utilisateur.id) {
+        this.drafts.clear();
+        this.drafts = new Map();
+        this.realtime.disconnectRealtime();
       }
       this.session = result;
       this.realtime.configureRealtime({
