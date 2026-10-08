@@ -103,10 +103,11 @@ les « corriger » sans nouvelle information : elles reposent sur le comportemen
   une règle maison. Le chargement initial des compteurs est une synchronisation avec un système externe (le serveur) : le
   `setState` n'a lieu qu'après la réponse, mais la règle ne peut pas le voir à travers `refresh`. Sans le commentaire, le lint
   échoue. Un `refresh` stable (`useCallback`) ne la désactive pas.
-- **Avertissement de lint connu dans `src/partage/useAsyncResource.ts`** (`react-hooks/exhaustive-deps` sur `requestId.current`
-  dans le nettoyage de l'effet). Le compteur doit être lu au moment du nettoyage pour invalider les requêtes en vol : copier sa
-  valeur dans une variable le rendrait inopérant. Ce fichier est identique dans le Frontend, qui n'a pas ce plugin ; le
-  modifier demande de reporter le même changement dans les deux dépôts (`A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh`).
+- **`src/partage/useAsyncResource.ts` : le nettoyage de l'effet passe par un alias du compteur** (`const counter = requestId`),
+  ce qui évite l'avertissement `react-hooks/exhaustive-deps` sans copier la valeur (le nettoyage doit incrémenter la valeur
+  courante pour invalider les requêtes en vol). Ne pas « simplifier » en `requestId.current` dans le nettoyage. Fichier partagé :
+  reporter le même changement dans le Frontend (`A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh`), dont la copie diffère
+  déjà de deux lignes (`setRefreshing(false)`).
 
 
 Autres points de la même revue, non appliqués :
