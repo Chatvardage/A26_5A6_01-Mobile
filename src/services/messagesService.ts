@@ -17,9 +17,12 @@ export type RawMessage = {
   updatedAt: string;
 };
 
+type MessageDates = { createdAt: string; updatedAt: string; created: number; updated: number };
+// Le cache ne retient pas les messages supprimés et se renouvelle si leurs chaînes de dates changent.
+const messageDates = new WeakMap<object, MessageDates>();
+
 function normalizeMessage(message: RawMessage, senderName?: string): ChatMessage {
-  validateMessageDates(message);
-  return {
+  const normalized = {
     id: message.id,
     senderId: message.senderId ?? message.authorId ?? '',
     senderName,
@@ -27,6 +30,8 @@ function normalizeMessage(message: RawMessage, senderName?: string): ChatMessage
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
   };
+  getMessageDates(normalized);
+  return normalized;
 }
 
 function dateValue(value: string): number {
@@ -35,29 +40,43 @@ function dateValue(value: string): number {
   return timestamp;
 }
 
-function validateMessageDates(message: Pick<ChatMessage, 'createdAt' | 'updatedAt'>): void {
-  dateValue(message.createdAt);
-  dateValue(message.updatedAt);
+function getMessageDates(message: Pick<ChatMessage, 'createdAt' | 'updatedAt'>): MessageDates {
+  const cached = messageDates.get(message);
+  if (cached && cached.createdAt === message.createdAt && cached.updatedAt === message.updatedAt) return cached;
+  const dates = {
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    created: dateValue(message.createdAt),
+    updated: dateValue(message.updatedAt),
+  };
+  messageDates.set(message, dates);
+  return dates;
 }
 
 /** Fusionne par id, conserve la version modifiée la plus récente et trie pour FlatList inversée. */
 export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
-  current.forEach(validateMessageDates);
-  incoming.forEach(validateMessageDates);
-  const byId = new Map(current.map((message) => [message.id, message]));
+  incoming.forEach(getMessageDates);
+  const byId = new Map(current.map((message) => {
+    getMessageDates(message);
+    return [message.id, message] as const;
+  }));
   for (const message of incoming) {
     const existing = byId.get(message.id);
-    if (!existing || dateValue(message.updatedAt) >= dateValue(existing.updatedAt)) {
-      byId.set(message.id, {
+    if (!existing || getMessageDates(message).updated >= getMessageDates(existing).updated) {
+      const merged = {
         ...message,
         senderName: message.senderName ?? existing?.senderName,
-      });
+      };
+      messageDates.set(merged, getMessageDates(message));
+      byId.set(message.id, merged);
     } else if (!existing.senderName && message.senderName) {
-      byId.set(message.id, { ...existing, senderName: message.senderName });
+      const enriched = { ...existing, senderName: message.senderName };
+      messageDates.set(enriched, getMessageDates(existing));
+      byId.set(message.id, enriched);
     }
   }
   return [...byId.values()].sort(
-    (a, b) => dateValue(b.createdAt) - dateValue(a.createdAt) || b.id.localeCompare(a.id),
+    (a, b) => getMessageDates(b).created - getMessageDates(a).created || b.id.localeCompare(a.id),
   );
 }
 

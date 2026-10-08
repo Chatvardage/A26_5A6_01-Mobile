@@ -18,6 +18,9 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 ## Erreurs et textes
 
 - Les services lèvent des `ApiError` typées (`kind`), jamais du texte. Le texte affiché est produit à la frontière UI par `userMessage()`.
+- Depuis les corrections de messagerie de la version 1.0.0, le kind local `validation` est supprimé : HTTP 400 produit `bad_request`. Migrer les constructions et comparaisons locales vers `bad_request` (aucun changement de contrat backend).
+- HTTP 429 produit `rate_limited`. `rate_limit` reste un alias historique distinct pour les consommateurs auth et leur texte « Trop de tentatives » ; la restauration de session gère les deux.
+- Les hooks d'envoi et de modification propagent les instances d'erreur originales; seul le composant de saisie les traduit avec `userMessage()`.
 - Une nouvelle erreur reçoit un `kind` et son message dans `ApiError.ts`; pas de texte d'erreur en dur dans un écran ou un service.
 - Textes d'interface, commentaires et documentation en français; identifiants dans la langue du code existant.
 
@@ -76,6 +79,7 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ## Documentation
 
+- Chaque changement du chat (correctif, comportement, cycle de vie, erreur, accessibilité ou limite) met à jour la section « Conversation et messagerie » du `README.md` dans le même changement. Distinguer explicitement les garanties livrées des défauts restant à corriger; ne pas présenter un scénario non vérifié comme une garantie.
 - Tout changement de commande, de variable `EXPO_PUBLIC_*`, de procédure de lancement ou de limite connue met à jour `README.md` (et `.env.example` si pertinent).
 - Modifier ce fichier si une règle de travail change.
 - Description de PR : résumé des changements, tests exécutés, impact sur les autres dépôts.

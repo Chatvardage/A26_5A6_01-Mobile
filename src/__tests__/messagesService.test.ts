@@ -106,6 +106,33 @@ describe('sendMessage et editMessage', () => {
 });
 
 describe('mergeMessages', () => {
+  it('ne parse que les deux dates du nouvel événement après 500 messages déjà chargés', () => {
+    const current = mergeMessages([], Array.from({ length: 500 }, (_, index) =>
+      baseMessage(`loaded-${index}`, '2026-10-01T10:00:00Z'),
+    ));
+    const incoming = baseMessage('live', '2026-10-02T10:00:00Z');
+    const parse = jest.spyOn(Date, 'parse');
+    try {
+      const merged = mergeMessages(current, [incoming]);
+      expect(parse).toHaveBeenCalledTimes(2);
+      expect(merged).toHaveLength(501);
+      expect(merged[0]).toEqual(incoming);
+      parse.mockClear();
+      expect(mergeMessages(merged, [incoming])).toEqual(merged);
+      expect(parse).not.toHaveBeenCalled();
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
+  it.each(['createdAt', 'updatedAt'] as const)('invalide le cache si une date %s déjà validée change', (field) => {
+    const current = mergeMessages([], [baseMessage('one', '2026-10-01T10:00:00Z')]);
+    current[0][field] = '2026-10-02T10:00:00Z';
+    expect(mergeMessages(current, [])).toEqual(current);
+    current[0][field] = 'invalide';
+    expect(() => mergeMessages(current, [])).toThrow(expect.objectContaining({ kind: 'invalid_response' }));
+  });
+
   it('déduplique, conserve la modification la plus récente, trie et départage les dates par id', () => {
     const current = [
       baseMessage('b', '2026-10-01T11:00:00Z', '2026-10-01T11:00:00Z'),

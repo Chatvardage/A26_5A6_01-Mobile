@@ -1,7 +1,7 @@
 import * as auth from '@/services/authService';
 import { ApiError, userMessage } from '@/services/ApiError';
 import { configureHttpClient, invalidateHttpRequests, resetHttpClient } from '@/services/httpClient';
-import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
+import { createRealtimeService } from '@/services/websocketService';
 import { storage } from './storage.adapter';
 import { getTranslations } from '@/i18n';
 
@@ -14,6 +14,7 @@ export type SessionState = {
 
 /** One session owner, with serialized persistence and cancellation by generation. */
 export class SessionManager {
+  readonly realtime = createRealtimeService();
   state: SessionState = { status: 'loading', user: null, error: null };
   private session: auth.AuthResult | null = null;
   private epoch = 0;
@@ -50,7 +51,7 @@ export class SessionManager {
     this.session = null;
     this.restoration = null;
     this.renewal = null;
-    disconnectRealtime();
+    this.realtime.disconnectRealtime();
     resetHttpClient();
   }
   private async clear(): Promise<void> {
@@ -58,7 +59,7 @@ export class SessionManager {
     invalidateHttpRequests();
     this.renewal = null;
     this.session = null;
-    disconnectRealtime();
+    this.realtime.disconnectRealtime();
     this.update({ status: 'signedOut', user: null, error: null });
     try {
       await this.persist(() => storage.clear());
@@ -81,7 +82,7 @@ export class SessionManager {
         return;
       }
       this.session = result;
-      configureRealtime({
+      this.realtime.configureRealtime({
         getToken: () => this.session?.jeton ?? null,
         onUnauthorized: () => {
           void this.clear();

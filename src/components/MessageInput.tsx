@@ -74,7 +74,7 @@ function MessageInputState({ conversationId, draftStore = drafts, onSend, editin
     try {
       if (editingMessage) {
         await onEdit(editingMessage.id, trimmed);
-        onCancelEdit();
+        if (mounted.current) onCancelEdit();
       } else {
         await onSend(trimmed);
         const savedDraft = draftStore.get(conversationId);

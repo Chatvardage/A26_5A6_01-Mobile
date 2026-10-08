@@ -3,13 +3,14 @@ import { storage } from '@/session/storage.adapter';
 import { SessionManager } from '@/session/SessionManager';
 import { ApiError } from '@/services/ApiError';
 import { apiFetch, resetHttpClient } from '@/services/httpClient';
-import { configureRealtime, disconnectRealtime } from '@/services/websocketService';
+import { createRealtimeService } from '@/services/websocketService';
 
 jest.mock('@/services/websocketService', () => ({
-  configureRealtime: jest.fn(),
-  disconnectRealtime: jest.fn(),
+  createRealtimeService: jest.fn(),
 }));
 
+const configureRealtime = jest.fn<void, [Parameters<ReturnType<typeof createRealtimeService>['configureRealtime']>[0]]>();
+const disconnectRealtime = jest.fn();
 jest.mock('@/session/storage.adapter', () => ({
   storage: { save: jest.fn(), load: jest.fn(), clear: jest.fn() },
 }));
@@ -47,6 +48,11 @@ beforeEach(() => {
   jest.mocked(auth.register).mockResolvedValue(session);
   jest.mocked(auth.me).mockResolvedValue(user);
   jest.mocked(auth.refresh).mockResolvedValue(renewed);
+  jest.mocked(createRealtimeService).mockReturnValue({
+    ...jest.requireActual<typeof import('@/services/websocketService')>('@/services/websocketService').createRealtimeService(),
+    configureRealtime,
+    disconnectRealtime,
+  });
   manager = new SessionManager();
 });
 afterEach(() => {

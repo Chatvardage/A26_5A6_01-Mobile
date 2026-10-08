@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Registration } from '@/services/authService';
 import { SessionManager, type SessionState } from './SessionManager';
+import type { RealtimeService } from '@/services/websocketService';
 export type { SessionStatus } from './SessionManager';
 export type Session = SessionState & {
+  realtime: RealtimeService;
   signIn: (identifiant: string, motDePasse: string) => Promise<void>;
   register: (input: Registration) => Promise<void>;
   signOut: () => Promise<void>;
@@ -21,6 +23,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionContext.Provider
       value={{
         ...state,
+        realtime: manager.realtime,
         signIn: manager.signIn,
         register: manager.register,
         signOut: manager.signOut,

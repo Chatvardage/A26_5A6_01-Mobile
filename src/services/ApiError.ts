@@ -3,7 +3,7 @@ import { getTranslations } from '@/i18n';
 export type ApiErrorKind =
   | 'network'
   | 'timeout'
-  | 'bad_request'
+  | 'bad_request' // Remplace le kind local « validation » depuis la version 1.0.0.
   | 'unauthorized'
   | 'forbidden'
   | 'not_found'

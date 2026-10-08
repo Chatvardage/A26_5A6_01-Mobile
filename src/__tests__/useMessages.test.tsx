@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useMessages } from '@/hooks/useMessages';
 import { ApiError } from '@/services/ApiError';
 import * as messageService from '@/services/messagesService';
-import * as realtime from '@/services/websocketService';
+import type { RealtimeService } from '@/services/websocketService';
 import { lookupPseudos } from '@/services/usersService';
 
 jest.mock('@/services/messagesService', () => {
@@ -11,12 +11,20 @@ jest.mock('@/services/messagesService', () => {
   return { ...actual, mergeMessages: jest.fn(actual.mergeMessages), fetchHistory: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn() };
 });
 jest.mock('@/services/usersService', () => ({ lookupPseudos: jest.fn() }));
-jest.mock('@/services/websocketService', () => ({
+jest.mock('@/session/SessionContext', () => ({
+  useSession: () => ({ realtime: mockRealtime }),
+}));
+const mockRealtime = {
+  configureRealtime: jest.fn(),
+  disconnectRealtime: jest.fn(),
   getRealtimeState: jest.fn(() => 'ready'),
   hasRealtimeBeenReady: jest.fn(() => false),
   joinRoom: jest.fn(() => Promise.resolve()),
   leaveRoom: jest.fn(() => Promise.resolve()),
-  onConnectionState: jest.fn(() => jest.fn()),
+  onConnectionState: jest.fn((handler: Parameters<RealtimeService['onConnectionState']>[0]) => {
+    handler('ready');
+    return jest.fn();
+  }),
   onReady: jest.fn((handler: () => void) => {
     mockReadyHandler = handler;
     return jest.fn();
@@ -25,7 +33,8 @@ jest.mock('@/services/websocketService', () => ({
     mockHandlers.set(event, handler);
     return () => mockHandlers.delete(event);
   }),
-}));
+} satisfies RealtimeService;
+const realtime = mockRealtime;
 
 const DM = '11111111-1111-4111-8111-111111111111';
 const ME = '33333333-3333-4333-8333-333333333333';
@@ -270,8 +279,8 @@ describe('useMessages', () => {
     sendMessage.mockResolvedValueOnce({ ...message('invalid'), updatedAt: '' });
     editMessage.mockResolvedValueOnce({ ...message('first'), createdAt: '' });
     await act(async () => {
-      await expect(result.current.send('texte')).rejects.toBe('Réponse du serveur invalide. Réessayez.');
-      await expect(result.current.edit('first', 'texte')).rejects.toBe('Réponse du serveur invalide. Réessayez.');
+      await expect(result.current.send('texte')).rejects.toMatchObject({ kind: 'invalid_response' });
+      await expect(result.current.edit('first', 'texte')).rejects.toMatchObject({ kind: 'invalid_response' });
     });
     expect(result.current.messages).toBe(before);
   });
@@ -475,15 +484,17 @@ describe('useMessages', () => {
     await waitFor(() => expect(realtime.leaveRoom).toHaveBeenCalledWith(roomId));
   });
 
-  it('transforme les erreurs d’envoi et de modification en messages utilisateur', async () => {
+  it('propage les instances originales des erreurs d’envoi et de modification', async () => {
     const { result } = await renderHook(() => useMessages(conversationId, ME));
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    sendMessage.mockRejectedValueOnce(new Error('network'));
-    await expect(result.current.send('texte')).rejects.toBe('Une erreur est survenue.');
+    const sendError = new ApiError('network', 'Erreur réseau');
+    sendMessage.mockRejectedValueOnce(sendError);
+    await expect(result.current.send('texte')).rejects.toBe(sendError);
     await act(async () => result.current.send('message envoyé'));
     expect(result.current.messages.some((item) => item.id === 'sent')).toBe(true);
-    editMessage.mockRejectedValueOnce(new ApiError('forbidden', 'forbidden'));
-    await expect(result.current.edit('first', 'modifié')).rejects.toBe('Vous n’avez pas accès à cette conversation.');
+    const editError = new ApiError('forbidden', 'Accès refusé');
+    editMessage.mockRejectedValueOnce(editError);
+    await expect(result.current.edit('first', 'modifié')).rejects.toBe(editError);
     await act(async () => result.current.edit('first', 'corrigé'));
     expect(result.current.messages.find((item) => item.id === 'first')?.content).toBe('edited');
   });

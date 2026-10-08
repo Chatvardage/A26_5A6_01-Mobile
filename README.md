@@ -41,6 +41,8 @@ npm start             # équivaut à « npx expo start », adapté automatiqueme
 
 `npm start` lance la CLI Expo installée dans le projet avec le même exécutable Node, sans appeler `npx`. Cela évite l’erreur `spawn npx ENOENT` sous Windows ou WSL. Si la CLI Expo est absente, exécuter `npm ci` dans ce dépôt.
 
+Le projet utilise React Navigation, pas Expo Router. La commande de boilerplate `reset-project` a été retirée : elle déplaçait ou supprimait `src` et `scripts`, puis générait une structure Expo Router incompatible.
+
 Scanner le QR code avec Expo Go (Android) ou l'appareil photo (iOS). Le téléphone doit être sur le même réseau que l'ordinateur.
 
 > **Port de Metro** : `.env.development` fixe `RCT_METRO_PORT=8082`, car Adminer (stack Infra) occupe déjà le 8081. Rien à faire, `npm start` et `npx expo start` le prennent en compte.
@@ -143,6 +145,7 @@ Au premier lancement, accepter l'installation de `@expo/ngrok`. `scripts/start.j
 - il suppose que le téléphone est sur le même Wi-Fi que l'ordinateur pour joindre l'API (le tunnel, lui, passe par Internet) ;
 - si `powershell.exe` est inaccessible depuis WSL, il affiche un avertissement : définir alors `EXPO_PUBLIC_API_URL` dans `.env` à la main (`http://<IP-Wi-Fi>:3006`) ;
 - plusieurs cartes réseau (VPN, VirtualBox, Hyper-V) : il choisit la carte de la route par défaut ; si l'IP détectée est mauvaise, forcer l'URL dans `.env`.
+- la présence d'une règle `netsh` ne garantit pas que le Gateway tourne ni que le téléphone peut joindre le proxy : vérifier `/api/health` depuis le téléphone avant d'utiliser l'app.
 
 ### Cas C : WSL2 en mode miroir (alternative durable)
 
@@ -234,8 +237,8 @@ Parcours : `DirectMessages` → `Conversation` ; `DirectMessages` → « Nouveau
 |---|---|---|
 | Écrans / composants | `src/screens`, `src/components` | Affichage et transmission des actions, aucun appel réseau |
 | Hooks | `src/hooks` | `useLoadable` pour les listes et `useMessages` pour l'historique, les événements temps réel et la pagination |
-| Services | `src/services` | Client HTTP, erreurs (`ApiError`), messages REST et socket unique `/messages`, utilisateurs, serveurs et salons |
-| Session | `src/session` | Contrat `useSession` (voir limites) |
+| Services | `src/services` | Client HTTP, erreurs (`ApiError`), messages REST et factory `createRealtimeService`, utilisateurs, serveurs et salons |
+| Session | `src/session` | `SessionManager` détient une instance temps réel `/messages`, exposée aux hooks par `useSession`; fermeture à la déconnexion et au démontage du provider |
 
 ## Conversation et messagerie
 
@@ -261,6 +264,41 @@ Le temps réel est configuré avant de publier une session connectée. Un renouv
 **Limites à connaître** : les brouillons restent uniquement en mémoire du processus, sans stockage sur disque ni garantie après fermeture/rechargement de l'app. Au maximum 100 brouillons non vides sont conservés : au-delà, le moins récemment ouvert ou modifié est supprimé (LRU). Un champ vidé ou composé uniquement d'espaces ne conserve pas d'entrée. Le rattrapage après reconnexion recharge une seule page récente de 50 messages, pas toute une interruption prolongée. La validation sur appareil avec deux sessions backend réelles reste nécessaire pour confirmer le défilement, le clavier et les transitions arrière-plan/réseau.
 
 Les dates `createdAt` et `updatedAt` des messages doivent être valides. Une réponse REST ou un événement temps réel contenant une date invalide est signalé comme une réponse serveur invalide, sans remplacer la liste déjà affichée.
+
+### Corrections et garanties du client chat
+
+Cette section décrit le comportement actuel, et remplace le plan historique `docs/instructionsChat.md`, supprimé après livraison. Les contrats REST et Socket.IO restent ceux du Gateway; aucune règle métier du backend n'est réimplémentée ici.
+
+| Zone | Changement effectué et comportement actuel |
+|---|---|
+| Propriétaire du socket | `createRealtimeService()` crée un état indépendant par instance. `SessionManager` détient l'instance et `SessionContext` l'expose aux hooks. Le provider ferme le temps réel à son démontage; le service n'est plus un singleton de module. |
+| Abonnements à la fermeture | Les événements du socket sont retirés avant sa fermeture. Les observateurs reçoivent une dernière transition `disconnected`, puis les abonnements d'état et de connexion prête sont vidés. Les attentes avant connexion prête sont rejetées à la fermeture. |
+| État initial | `onConnectionState` notifie immédiatement l'état courant. Une transition déclenchée pendant cette notification reste observable; si le callback lève, son abonnement est retiré avant propagation de l'erreur. |
+| Observateurs de connexion prête | `onReady` n'enregistre son callback qu'après création réussie du socket. Les callbacks sont parcourus sur une copie pour que la fermeture déclenchée par l'un d'eux n'interrompe pas silencieusement les suivants. Aucun salon n'est rejoint si la connexion a été interrompue pendant ces notifications. |
+| Renouvellement du jeton | Le socket existant est reconnecté avec le nouveau `auth.token`, en conservant les abonnements. Les notifications d'état identiques sont dédupliquées et la déconnexion volontaire ne publie pas d'état intermédiaire parasite. Dans Socket.IO 4.8.4, `disconnect()` notifie synchroniquement, uniquement si le socket était connecté. |
+| Initialisation du hook | Si un abonnement échoue, les abonnements déjà créés sont retirés. Une `ApiError` produit un état d'erreur réessayable; une exception inattendue est propagée après nettoyage. Le réessai recrée les abonnements avant de charger l'historique. |
+| Réponses asynchrones | Le compteur de génération invalide les réponses REST et les résolutions de pseudos d'une ancienne conversation. Les résultats d'envoi et de modification ne sont fusionnés que dans leur conversation d'origine encore active. |
+| Validation et fusion | Les dates invalides ou de mauvais type produisent `ApiError('invalid_response')`. La fusion est calculée avant la mise à jour de la liste, et le tampon initial n'est vidé qu'après succès. Un cache `WeakMap` évite de reparsing les dates déjà validées; une modification de leurs chaînes invalide le cache. La fusion et le tri parcourent toujours la liste : ce cache ne rend pas l'opération constante. |
+| Erreurs et migration | Les actions d'envoi/modification propagent les erreurs originales, sans lancer de chaîne localisée. `MessageInput` affiche leur traduction via `userMessage()`. Le catalogue est exhaustif au niveau TypeScript (`satisfies`). Le kind local `validation` a été retiré au profit de `bad_request` pour HTTP 400. HTTP 429 produit `rate_limited`; `rate_limit` reste compatible avec les consommateurs auth historiques et leur texte spécifique. La restauration de session gère les deux. |
+| Brouillons | Le store est injectable pour isoler les tests. Le store par défaut reste en mémoire du module, indexé par conversation, avec une limite LRU de 100 brouillons non vides. Les entrées vides sont supprimées; le mode modification ne remplace pas le brouillon de composition. |
+| Envoi et édition tardifs | Le succès d'envoi n'efface pas un texte plus récent, même saisi dans une autre instance. Un brouillon évincé pendant l'envoi n'empêche pas de vider le champ après succès. Une ancienne modification terminée après démontage ne déclenche plus `onCancelEdit` sur le parent. |
+| Accessibilité | Le bouton de réessai de pagination porte le libellé explicite « Réessayer le chargement des messages précédents ». |
+| Lisibilité et lint | Les handlers de réception/révocation et `joinFailed` sont déclarés avant leur utilisation. Le commentaire `react-hooks/set-state-in-effect` est conservé : cette règle existe dans la version installée du plugin. |
+| Maintenance du dépôt | Le script `reset-project` et sa commande npm ont été retirés car ils généraient Expo Router. Le fichier d'icône possède une newline finale. Le contrôle Xcode nettoie uniquement son répertoire temporaire via `rmSync`, y compris lorsqu'une étape échoue. |
+
+### Revue préventive du 7 octobre 2026
+
+L'audit ciblé du client chat n'a relevé aucune vulnérabilité exploitable confirmée. Ce résultat ne garantit pas l'absence de vulnérabilités et ne constitue pas un audit du Gateway, des autres services ou des dépendances. Les permissions restent vérifiées par le backend; l'absence d'un bouton dans l'UI n'est pas un contrôle d'autorisation.
+
+Les points suivants sont des **défauts fonctionnels identifiés à la lecture du code**, pas des vulnérabilités de sécurité démontrées. Ils restent à corriger et à couvrir par des tests de régression :
+
+| Priorité | Emplacement | Scénario et impact | Correction à prévoir |
+|---|---|---|---|
+| Haute | `websocketService.ts`, `leaveRoom` / `startJoin` | Quitter un salon pendant son adhésion, puis le rouvrir avant l'accusé : le nouvel écran partage l'adhésion en cours, mais l'ancien `leaveRoom` poursuit ensuite sa sortie et retire le salon pourtant rouvert. La nouvelle adhésion peut avoir réussi alors que les messages temps réel ne sont plus reçus. | Distinguer les propriétaires ou générations d'abonnement pour empêcher une ancienne sortie d'annuler une nouvelle entrée. |
+| Moyenne | `useMessages.ts`, callbacks `join` / `revoke` | Une révocation survient avant la résolution d'une adhésion déjà en cours. Le service invalide le salon, mais la promesse de cette adhésion peut encore réussir; le callback du hook vérifie seulement la génération de conversation et efface alors `accessError`. | Invalider aussi les demandes d'adhésion au niveau du hook lors d'une révocation et ignorer leurs succès tardifs. |
+| Moyenne | `useMessages.ts`, `pseudoLookups` | Après un échec réseau ou une réponse sans pseudo, l'auteur reste dans `pseudoLookups`. Les événements suivants ne retentent jamais sa résolution pendant cette conversation; le nom peut rester inconnu même après retour du réseau. | Utiliser cet ensemble pour les demandes en cours, libérer l'entrée après résolution et définir une stratégie explicite de réessai pour les réponses vides. |
+
+Le store de brouillons actuel est partagé par conversation pendant la durée du processus, et non détenu par la session. Une politique de conservation ou d'effacement au changement de compte doit être décidée avant de présenter ces brouillons comme isolés par utilisateur.
 
 ### Parcours de validation sur appareil
 

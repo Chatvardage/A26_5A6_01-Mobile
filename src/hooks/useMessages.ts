@@ -9,15 +9,7 @@ import {
   sendMessage,
   type RawMessage,
 } from '@/services/messagesService';
-import {
-  getRealtimeState,
-  hasRealtimeBeenReady,
-  joinRoom,
-  leaveRoom,
-  onConnectionState,
-  onReady,
-  subscribe,
-} from '@/services/websocketService';
+import { useSession } from '@/session/SessionContext';
 import { lookupPseudos } from '@/services/usersService';
 import type { ChatMessage } from '@/types/conversation';
 import { parseConversationId } from '@/types/conversationId';
@@ -37,6 +29,8 @@ function normalizeEvent(raw: RawMessage, senderId: string, senderName?: string):
 }
 
 export function useMessages(conversationId: string, currentUserId: string) {
+  const { realtime } = useSession();
+  const { getRealtimeState, hasRealtimeBeenReady, joinRoom, leaveRoom, onConnectionState, onReady, subscribe } = realtime;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -210,7 +204,6 @@ export function useMessages(conversationId: string, currentUserId: string) {
       return;
     }
     subscriptionFailed.current = false;
-    setConnection(getRealtimeState());
     join();
     void loadRecent();
 
@@ -221,7 +214,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       if (ref?.kind === 'room') void leaveRoom(ref.targetId).catch(() => undefined);
     };
-  }, [conversationId, currentUserId, loadRecent, subscriptionAttempt, updateMessages, updateStatus]);
+  }, [conversationId, currentUserId, getRealtimeState, hasRealtimeBeenReady, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
 
   const retry = useCallback(() => {
     if (subscriptionFailed.current) setSubscriptionAttempt((attempt) => attempt + 1);
@@ -257,12 +250,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const send = useCallback(
     async (text: string) => {
       const requestGeneration = generation.current;
-      try {
-        const sent = await sendMessage(conversationId, text);
-        if (requestGeneration === generation.current) updateMessages([sent]);
-      } catch (error) {
-        throw userMessage(error);
-      }
+      const sent = await sendMessage(conversationId, text);
+      if (requestGeneration === generation.current) updateMessages([sent]);
     },
     [conversationId, updateMessages],
   );
@@ -270,12 +259,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const edit = useCallback(
     async (messageId: string, text: string) => {
       const requestGeneration = generation.current;
-      try {
-        const edited = await editMessage(conversationId, messageId, text);
-        if (requestGeneration === generation.current) updateMessages([edited]);
-      } catch (error) {
-        throw userMessage(error);
-      }
+      const edited = await editMessage(conversationId, messageId, text);
+      if (requestGeneration === generation.current) updateMessages([edited]);
     },
     [conversationId, updateMessages],
   );

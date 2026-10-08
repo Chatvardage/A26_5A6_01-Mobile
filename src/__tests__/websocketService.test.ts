@@ -1,18 +1,18 @@
-import {
-  configureRealtime,
-  disconnectRealtime,
-  getRealtimeState,
-  joinRoom,
-  leaveRoom,
-  onConnectionState,
-  hasRealtimeBeenReady,
-  onReady,
-  subscribe,
-} from '@/services/websocketService';
+import { createRealtimeService, type RealtimeService } from '@/services/websocketService';
 import { AppState, type AppStateStatus } from 'react-native';
 
 const mockIo = jest.fn();
 jest.mock('socket.io-client', () => ({ io: (...args: unknown[]) => mockIo(...args) }));
+
+let configureRealtime: RealtimeService['configureRealtime'];
+let disconnectRealtime: RealtimeService['disconnectRealtime'];
+let getRealtimeState: RealtimeService['getRealtimeState'];
+let joinRoom: RealtimeService['joinRoom'];
+let leaveRoom: RealtimeService['leaveRoom'];
+let onConnectionState: RealtimeService['onConnectionState'];
+let hasRealtimeBeenReady: RealtimeService['hasRealtimeBeenReady'];
+let onReady: RealtimeService['onReady'];
+let subscribe: RealtimeService['subscribe'];
 
 type Listener = (...args: unknown[]) => void;
 const listeners = new Map<string, Listener[]>();
@@ -63,6 +63,7 @@ mockSocket.connect.mockImplementation(() => {
 mockSocket.removeAllListeners.mockImplementation(() => listeners.clear());
 
 beforeEach(() => {
+  ({ configureRealtime, disconnectRealtime, getRealtimeState, joinRoom, leaveRoom, onConnectionState, hasRealtimeBeenReady, onReady, subscribe } = createRealtimeService());
   listeners.clear();
   mockSocket.auth = { token: 'test-token' };
   mockSocket.connected = false;
@@ -90,6 +91,74 @@ afterEach(() => {
 });
 
 describe('websocketService', () => {
+  it('ne perd pas une transition déclenchée pendant la notification initiale', () => {
+    const states: string[] = [];
+    const unsubscribe = onConnectionState((next) => {
+      states.push(next);
+      if (next === 'disconnected') onReady(jest.fn());
+    });
+    expect(states).toEqual(['disconnected', 'connecting']);
+    trigger('connexion.prete');
+    expect(states).toEqual(['disconnected', 'connecting', 'ready']);
+    unsubscribe();
+  });
+
+  it.each(['disconnected', 'connecting', 'ready'] as const)('notifie immédiatement l’état %s et permet le désabonnement', (expected) => {
+    if (expected !== 'disconnected') onReady(jest.fn());
+    if (expected === 'ready') trigger('connexion.prete');
+    const changed = jest.fn();
+    const unsubscribe = onConnectionState(changed);
+    expect(changed.mock.calls).toEqual([[expected]]);
+    unsubscribe();
+    trigger('disconnect');
+    expect(changed.mock.calls).toEqual([[expected]]);
+  });
+
+  it('ne conserve pas un observateur dont la notification initiale lève', () => {
+    const failure = new Error('Observateur défaillant');
+    const changed = jest.fn(() => { throw failure; });
+    expect(() => onConnectionState(changed)).toThrow(failure);
+    onReady(jest.fn());
+    trigger('connexion.prete');
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('isole les états, les salons et les attentes de deux instances', async () => {
+    onReady(jest.fn());
+    trigger('connexion.prete');
+    await joinRoom('first-room');
+    const second = createRealtimeService();
+    expect(second.getRealtimeState()).toBe('disconnected');
+    expect(second.hasRealtimeBeenReady()).toBe(false);
+    expect(() => second.onReady(jest.fn())).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
+
+    const secondListeners = new Map<string, Listener>();
+    const secondSocket = {
+      ...mockSocket,
+      on: jest.fn((event: string, handler: Listener) => { secondListeners.set(event, handler); }),
+      removeAllListeners: jest.fn(() => secondListeners.clear()),
+      disconnect: jest.fn(),
+      emit: jest.fn(),
+    };
+    mockIo.mockReturnValueOnce(secondSocket);
+    second.configureRealtime({ getToken: () => 'second-token', onUnauthorized: jest.fn() });
+    const pending = second.joinRoom('second-room');
+    const assertion = expect(pending).rejects.toMatchObject({ kind: 'unauthorized' });
+    second.disconnectRealtime();
+    await assertion;
+    expect(secondSocket.emit).not.toHaveBeenCalled();
+    expect(secondSocket.disconnect).toHaveBeenCalledTimes(1);
+    expect(getRealtimeState()).toBe('ready');
+    expect(hasRealtimeBeenReady()).toBe(true);
+    mockSocket.emit.mockClear();
+    await joinRoom('first-room');
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+    trigger('disconnect');
+    trigger('connexion.prete');
+    expect(mockSocket.emit).toHaveBeenCalledWith('room-message.join', { roomId: 'first-room' }, expect.any(Function));
+    expect(mockSocket.emit).not.toHaveBeenCalledWith('room-message.join', { roomId: 'second-room' }, expect.any(Function));
+  });
+
   it('confirme que le vrai client Socket.IO émet disconnect avant le retour et ne l’émet pas deux fois', () => {
     const { Manager, Socket } = jest.requireActual<typeof import('socket.io-client')>('socket.io-client');
     const manager = new Manager({ autoConnect: false });
@@ -114,7 +183,7 @@ describe('websocketService', () => {
     configureRealtime({ getToken: () => 'renewed-token', onUnauthorized: jest.fn() });
     expect(mockSocket.connect).toHaveBeenCalledTimes(1);
     trigger('disconnect', 'transport close');
-    expect(changed.mock.calls).toEqual([['disconnected']]);
+    expect(changed.mock.calls).toEqual([['connecting'], ['disconnected']]);
   });
 
   it('renouvelle le handshake sans perdre les abonnements ni émettre avant connexion.prete', async () => {
@@ -207,7 +276,7 @@ describe('websocketService', () => {
     const changed = jest.fn();
     onConnectionState(changed);
     trigger('disconnect');
-    expect(changed.mock.calls).toEqual([['disconnected']]);
+    expect(changed.mock.calls).toEqual([['connecting'], ['disconnected']]);
   });
 
   it('crée un socket unique sur le namespace /messages avec le jeton en auth', () => {

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, act, userEvent } from '@testing-library/reac
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { ApiError } from '@/services/ApiError';
 import type { Session } from '@/session/SessionContext';
+import { createRealtimeService } from '@/services/websocketService';
 
 // Mock officiel avec chargement différé dans la factory Jest.
 jest.mock(
@@ -54,6 +55,7 @@ it('renders Android keyboard behavior on both auth screens', async () => {
 });
 beforeEach(() => {
   mockSession = {
+    realtime: createRealtimeService(),
     status: 'signedOut',
     user: null,
     error: null,

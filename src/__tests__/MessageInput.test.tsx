@@ -26,6 +26,30 @@ const renderInput = async (props: Partial<React.ComponentProps<typeof MessageInp
   );
 
 describe('MessageInput', () => {
+  it.each(['unmount', 'new-edit'] as const)('ne ferme pas une modification plus récente après un succès tardif (%s)', async (outcome) => {
+    let resolve!: () => void;
+    const onEdit = jest.fn(() => new Promise<void>((done) => { resolve = done; }));
+    const onCancelEdit = jest.fn();
+    const view = await renderInput({
+      conversationId: 'late-edit',
+      editingMessage: { id: 'old', content: 'ancien texte' },
+      onEdit,
+      onCancelEdit,
+    });
+    await fireEvent.press(screen.getByRole('button', { name: 'Enregistrer' }));
+    if (outcome === 'unmount') await view.unmount();
+    else await view.rerender(
+      <SafeAreaProvider initialMetrics={{ frame, insets }}>
+        <MessageInput conversationId="late-edit" draftStore={draftStore} editingMessage={{ id: 'new', content: 'nouvelle modification' }}
+          onEdit={onEdit} onCancelEdit={onCancelEdit} onSend={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+    await act(async () => resolve());
+    expect(onEdit).toHaveBeenCalledWith('old', 'ancien texte');
+    expect(onCancelEdit).not.toHaveBeenCalled();
+    if (outcome === 'new-edit') expect(screen.getByLabelText('Modifier le message')).toHaveDisplayValue('nouvelle modification');
+  });
+
   it('vide le champ après un envoi réussi même si son brouillon a été évincé entre-temps', async () => {
     let resolve!: () => void;
     const onSend = jest.fn(() => new Promise<void>((done) => { resolve = done; }));
