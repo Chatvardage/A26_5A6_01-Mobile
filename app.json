@@ -3,7 +3,7 @@
     "name": "A26_5A6_01-Mobile",
     "slug": "A26_5A6_01-Mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "a265a601mobile",
     "userInterfaceStyle": "automatic",
@@ -33,6 +33,7 @@
         }
       ],
       "expo-secure-store",
+      ["expo-notifications", { "color": "#0f8a6c", "defaultChannel": "messages" }],
       "expo-localization"
     ],
     "experiments": {

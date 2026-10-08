@@ -181,7 +181,7 @@ describe('useMessages', () => {
     expect(fetchHistory).toHaveBeenCalledTimes(calls);
   });
 
-  it.each(['first-event', 'second-event', 'third-event', 'state', 'ready'] as const)(
+  it.each(['first-event', 'second-event', 'third-event', 'fourth-event', 'state', 'ready'] as const)(
     'nettoie les abonnements partiels après un échec %s et les recrée au réessai',
     async (step) => {
       const unsubscribers: jest.Mock[] = [];
@@ -192,7 +192,7 @@ describe('useMessages', () => {
       const originalState = state.getMockImplementation()!;
       const originalReady = ready.getMockImplementation()!;
       const failure = new ApiError('unauthorized', 'Session absente');
-      const failAt = ['first-event', 'second-event', 'third-event'].indexOf(step);
+      const failAt = ['first-event', 'second-event', 'third-event', 'fourth-event'].indexOf(step);
       let subscriptions = 0;
       subscribe.mockImplementation((event, handler) => {
         if (subscriptions++ === failAt) throw failure;
@@ -215,7 +215,7 @@ describe('useMessages', () => {
         expect(mockHandlers.size).toBe(0);
         expect(fetchHistory).not.toHaveBeenCalled();
         expect(realtime.joinRoom).not.toHaveBeenCalled();
-        expect(unsubscribers).toHaveLength(failAt >= 0 ? failAt : step === 'state' ? 3 : 4);
+        expect(unsubscribers).toHaveLength(failAt >= 0 ? failAt : step === 'state' ? 4 : 5);
         for (const unsubscribe of unsubscribers) expect(unsubscribe).toHaveBeenCalledTimes(1);
 
         subscribe.mockImplementation(originalSubscribe);
@@ -225,7 +225,7 @@ describe('useMessages', () => {
         expect(result.current.status).toBe('ready');
         expect(result.current.errorMessage).toBeNull();
         expect(result.current.messages).toEqual([message('first')]);
-        expect(mockHandlers.size).toBe(3);
+        expect(mockHandlers.size).toBe(4);
         expect(fetchHistory).toHaveBeenCalledTimes(1);
         expect(realtime.joinRoom).toHaveBeenCalledWith(ROOM);
         await unmount();

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, userMessage } from '@/services/ApiError';
 import {
   belongsTo,
+  deleteMessage,
   editMessage,
   fetchHistory,
   mergeMessages,
@@ -15,6 +16,10 @@ import type { ChatMessage } from '@/types/conversation';
 import { parseConversationId } from '@/types/conversationId';
 
 const PAGE_SIZE = 50;
+/** Suppressions mémorisées (pour ignorer une réponse tardive qui les ramènerait) : les plus anciennes sont oubliées. */
+const MAX_DELETED_IDS = 500;
+/** Garde-fou comme le client Web : au plus 20 pages (1 000 messages) chargées pour atteindre un message. */
+const MAX_JUMP_PAGES = 20;
 type Status = 'loading' | 'error' | 'ready';
 
 function normalizeEvent(raw: RawMessage, senderId: string, senderName?: string): ChatMessage {
@@ -47,7 +52,11 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const eventBuffer = useRef<ChatMessage[]>([]);
   const pseudoCache = useRef(new Map<string, string>());
   const pseudoLookups = useRef(new Set<string>());
-  const olderRequest = useRef(false);
+  // Chargement de page ancienne en cours (loadOlder ou jumpTo) : l'autre attend ou renonce, pour ne jamais lire le même curseur.
+  const olderInFlight = useRef<Promise<void> | null>(null);
+  // Messages supprimés pendant la session : une page REST arrivée en retard ne doit pas les faire réapparaître.
+  const deletedIds = useRef(new Set<string>());
+  const hasOlderRef = useRef(false);
   const subscriptionFailed = useRef(false);
   const [subscriptionAttempt, setSubscriptionAttempt] = useState(0);
   const recentRequest = useRef(0);
@@ -59,9 +68,21 @@ export function useMessages(conversationId: string, currentUserId: string) {
 
   const updateMessages = useCallback((incoming: ChatMessage[]) => {
     // Fusion synchrone pour remonter les réponses invalides à la frontière UI avant tout changement d'état.
-    const merged = mergeMessages(messagesRef.current, incoming);
+    const merged = mergeMessages(
+      messagesRef.current,
+      incoming.filter((message) => !deletedIds.current.has(message.id)),
+    );
     messagesRef.current = merged;
     setMessages(merged);
+  }, []);
+
+  /** Retire un message supprimé (événement temps réel ou action locale), y compris du tampon de chargement. */
+  const forget = useCallback((messageId: string) => {
+    deletedIds.current.add(messageId);
+    if (deletedIds.current.size > MAX_DELETED_IDS) deletedIds.current.delete(deletedIds.current.values().next().value as string);
+    eventBuffer.current = eventBuffer.current.filter((message) => message.id !== messageId);
+    messagesRef.current = messagesRef.current.filter((message) => message.id !== messageId);
+    setMessages(messagesRef.current);
   }, []);
 
   const loadRecent = useCallback(async () => {
@@ -110,7 +131,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
     eventBuffer.current = [];
     pseudoCache.current.clear();
     pseudoLookups.current.clear();
-    olderRequest.current = false;
+    olderInFlight.current = null;
+    deletedIds.current.clear();
 
     const receive = (raw: unknown) => {
       if (currentGeneration !== generation.current) return;
@@ -151,6 +173,13 @@ export function useMessages(conversationId: string, currentUserId: string) {
         });
     };
 
+    const removed = (raw: unknown) => {
+      if (currentGeneration !== generation.current) return;
+      if (!belongsTo(conversationId, currentUserId, raw)) return;
+      const id = (raw as { id?: unknown }).id;
+      if (typeof id === 'string') forget(id);
+    };
+
     const revoke = (raw: unknown) => {
       if (currentGeneration !== generation.current) return;
       if (
@@ -169,11 +198,13 @@ export function useMessages(conversationId: string, currentUserId: string) {
         ? [
             ['room-message.created', receive],
             ['room-message.updated', receive],
+            ['room-message.deleted', removed],
             ['room-message.revoked', revoke],
           ] as const
         : [
             ['private-message.created', receive],
             ['private-message.updated', receive],
+            ['private-message.deleted', removed],
           ] as const;
 
     const join = () => {
@@ -219,7 +250,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       if (ref?.kind === 'room') void leaveRoom(ref.targetId).catch(() => undefined);
     };
-  }, [conversationId, currentUserId, getRealtimeState, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
+  }, [conversationId, currentUserId, forget, getRealtimeState, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
 
   const retry = useCallback(() => {
     if (subscriptionFailed.current) setSubscriptionAttempt((attempt) => attempt + 1);
@@ -227,13 +258,15 @@ export function useMessages(conversationId: string, currentUserId: string) {
   }, [loadRecent]);
 
   const loadOlder = useCallback(async () => {
-    if (statusRef.current !== 'ready' || olderRequest.current || !hasOlder) return;
+    if (statusRef.current !== 'ready' || olderInFlight.current || !hasOlder) return;
     const oldest = messagesRef.current.at(-1);
     if (!oldest) return;
-    olderRequest.current = true;
     setLoadingOlder(true);
     setOlderError(null);
     const requestGeneration = generation.current;
+    let release!: () => void;
+    const inFlight = new Promise<void>((resolve) => (release = resolve));
+    olderInFlight.current = inFlight;
     try {
       const page = await fetchHistory(conversationId, PAGE_SIZE, oldest.id);
       if (requestGeneration !== generation.current) return;
@@ -241,16 +274,57 @@ export function useMessages(conversationId: string, currentUserId: string) {
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
       }
       updateMessages(page);
-      setHasOlder(page.length === PAGE_SIZE);
+      hasOlderRef.current = page.length === PAGE_SIZE;
+      setHasOlder(hasOlderRef.current);
     } catch (error) {
       if (requestGeneration === generation.current) setOlderError(userMessage(error));
     } finally {
-      if (requestGeneration === generation.current) {
-        olderRequest.current = false;
-        setLoadingOlder(false);
-      }
+      if (olderInFlight.current === inFlight) olderInFlight.current = null;
+      if (requestGeneration === generation.current) setLoadingOlder(false);
+      release();
     }
   }, [conversationId, hasOlder, updateMessages]);
+
+  useEffect(() => {
+    hasOlderRef.current = hasOlder;
+  }, [hasOlder]);
+
+  /**
+   * Charge les pages plus anciennes, sans trou, jusqu'à `messageId` (résultat de recherche), comme
+   * « Charger plus » sur le Web. Retourne `false` si le message est introuvable (trop ancien ou supprimé).
+   */
+  const jumpTo = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      const requestGeneration = generation.current;
+      for (let page = 0; ; page++) {
+        // Une page ancienne déjà en cours (défilement) : l'attendre, puis réévaluer avec les messages qu'elle apporte.
+        while (olderInFlight.current) await olderInFlight.current;
+        if (requestGeneration !== generation.current) return false;
+        if (messagesRef.current.some((message) => message.id === messageId)) return true;
+        const oldest = messagesRef.current.at(-1);
+        if (statusRef.current !== 'ready' || !oldest || !hasOlderRef.current || page >= MAX_JUMP_PAGES) return false;
+        let release!: () => void;
+        const inFlight = new Promise<void>((resolve) => (release = resolve));
+        olderInFlight.current = inFlight;
+        try {
+          const previous = await fetchHistory(conversationId, PAGE_SIZE, oldest.id);
+          if (requestGeneration !== generation.current) return false;
+          for (const message of previous) {
+            if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
+          }
+          updateMessages(previous);
+          hasOlderRef.current = previous.length === PAGE_SIZE;
+          setHasOlder(hasOlderRef.current);
+        } catch {
+          return false;
+        } finally {
+          if (olderInFlight.current === inFlight) olderInFlight.current = null;
+          release();
+        }
+      }
+    },
+    [conversationId, updateMessages],
+  );
 
   const send = useCallback(
     async (text: string) => {
@@ -270,5 +344,14 @@ export function useMessages(conversationId: string, currentUserId: string) {
     [conversationId, updateMessages],
   );
 
-  return { messages, status, errorMessage, accessError, hasOlder, loadingOlder, olderError, connection, retry, loadOlder, send, edit };
+  const remove = useCallback(
+    async (messageId: string) => {
+      const requestGeneration = generation.current;
+      await deleteMessage(conversationId, messageId);
+      if (requestGeneration === generation.current) forget(messageId);
+    },
+    [conversationId, forget],
+  );
+
+  return { messages, status, errorMessage, accessError, hasOlder, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove };
 }

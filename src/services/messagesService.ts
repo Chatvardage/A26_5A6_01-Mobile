@@ -110,6 +110,7 @@ function query(limit: number, cursor?: string): string {
 /**
  * Historique récent d'une conversation, du plus récent au plus ancien (ordre attendu par une
  * FlatList inversée). L'API renvoie la page du plus ancien au plus récent : on l'inverse ici.
+ * Avec `cursor`, charge la page précédente (messages plus anciens que ce message).
  */
 export async function fetchHistory(conversationId: string, limit = 50, cursor?: string): Promise<ChatMessage[]> {
   const ref = routeFor(conversationId);
@@ -141,6 +142,20 @@ export async function sendMessage(conversationId: string, content: string): Prom
           body: JSON.stringify({ content }),
         });
   return normalizeMessage(response);
+}
+
+/**
+ * Supprime un message. Messages privés : l'expéditeur seulement (403 sinon). Salons : l'auteur, ou un
+ * modérateur, le propriétaire ou un administrateur du serveur (le client ne propose la suppression des messages
+ * des autres qu'à ceux-ci, d'après `monRole` ; l'API vérifie toujours le droit).
+ */
+export async function deleteMessage(conversationId: string, messageId: string): Promise<void> {
+  const ref = routeFor(conversationId);
+  const path =
+    ref.kind === 'dm'
+      ? `/api/messages/${encodeURIComponent(messageId)}`
+      : `/api/messages/rooms/${encodeURIComponent(ref.targetId)}/${encodeURIComponent(messageId)}`;
+  await apiFetch<unknown>(path, { method: 'DELETE' });
 }
 
 export async function editMessage(conversationId: string, messageId: string, content: string): Promise<ChatMessage> {

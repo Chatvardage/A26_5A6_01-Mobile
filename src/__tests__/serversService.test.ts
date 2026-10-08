@@ -1,5 +1,5 @@
 import * as http from '@/services/httpClient';
-import { fetchServerChannels, fetchServers } from '@/services/serversService';
+import { fetchCanModerate, fetchServerChannels, fetchServers } from '@/services/serversService';
 
 jest.mock('@/services/httpClient');
 const apiFetch = http.apiFetch as jest.Mock;
@@ -71,5 +71,48 @@ describe('fetchServerChannels', () => {
   it('propage une erreur sur le serveur lui-même', async () => {
     apiFetch.mockRejectedValue(new Error('404'));
     await expect(fetchServerChannels(S)).rejects.toThrow('404');
+  });
+});
+
+describe('fetchCanModerate', () => {
+  const other = { id: 'autre-serveur', nom: 'Autre', nombreMembres: 3, salons: [{ id: 'salon-autre', nom: 'x' }] };
+
+  it.each([
+    ['moderateur', true],
+    ['proprietaire', true],
+    ['admin', true],
+    ['membre', false],
+  ])("lit le rôle effectif du serveur du salon : %s → %s", async (monRole, expected) => {
+    apiFetch.mockResolvedValue([{ ...other, monRole: 'admin' }, { ...server, monRole }]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(expected);
+    expect(apiFetch).toHaveBeenCalledWith('/api/servers');
+  });
+
+  it('répond non pour un message privé sans appel réseau', async () => {
+    expect(await fetchCanModerate(`dm:${S}`)).toBe(false);
+    expect(await fetchCanModerate('invalide')).toBe(false);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("répond non quand le salon n'est dans aucun serveur ou que le rôle est absent", async () => {
+    apiFetch.mockResolvedValue([other]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(false);
+    apiFetch.mockResolvedValue([server]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(false);
+  });
+
+  it('propage une erreur réseau', async () => {
+    apiFetch.mockRejectedValueOnce(new Error('503'));
+    await expect(fetchCanModerate(`room:${C1}`)).rejects.toThrow('503');
+  });
+
+  it.each([[null], [{ pas: 'une liste' }], ['texte']])('répond non pour une réponse inattendue (%j)', async (reponse) => {
+    apiFetch.mockResolvedValue(reponse);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(false);
+  });
+
+  it('ignore un serveur sans liste de salons ou nul', async () => {
+    apiFetch.mockResolvedValue([null, { id: 'x', nom: 'X', nombreMembres: 1, monRole: 'admin' }, { ...server, monRole: 'moderateur' }]);
+    expect(await fetchCanModerate(`room:${C1}`)).toBe(true);
   });
 });

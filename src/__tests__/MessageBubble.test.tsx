@@ -53,4 +53,16 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Utilisateur inconnu')).toBeTruthy();
     expect(screen.getByText('Contenu')).toBeTruthy();
   });
+
+  it("rend le message d'un autre appuyable seulement pour la modération", async () => {
+    const onLongPress = jest.fn();
+    const view = await render(<MessageBubble message={message} mine={false} showAuthor moderated onLongPress={onLongPress} />);
+    await fireEvent(screen.getByRole('button', { name: 'Contenu' }), 'longPress');
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Contenu' }).props.accessibilityHint).toBe('Appui long : supprimer (modération)');
+    await view.rerender(<MessageBubble message={message} mine={false} showAuthor moderated={false} onLongPress={onLongPress} />);
+    expect(screen.queryByRole('button', { name: 'Contenu' })).toBeNull();
+    await view.rerender(<MessageBubble message={message} mine={false} showAuthor moderated />);
+    expect(screen.queryByRole('button', { name: 'Contenu' })).toBeNull();
+  });
 });

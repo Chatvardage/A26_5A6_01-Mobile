@@ -9,11 +9,12 @@ import { ServersScreen } from '@/screens/ServersScreen';
 import type { ConversationSummary } from '@/types/conversation';
 import type { ServerSummary } from '@/types/server';
 
+jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('@/hooks/useDirectMessages');
 jest.mock('@/hooks/useServerChannels');
 jest.mock('@/hooks/useServers');
 jest.mock('@/hooks/useRefreshOnFocus', () => ({ useRefreshOnFocus: jest.fn() }));
-jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' } }) }));
+jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' }, realtime: { subscribe: () => () => undefined } }) }));
 
 const SERVER_ID = '11111111-1111-4111-8111-111111111111';
 const navigate = jest.fn();
@@ -50,7 +51,7 @@ const targets = [
 beforeEach(() => jest.clearAllMocks());
 
 describe.each(targets)('Écran $name', ({ hook, loading, empty, data, button, destination, element }) => {
-  const setState = (state: unknown) => hook.mockReturnValue({ state, refreshing: false, retry, refresh });
+  const setState = (state: unknown) => hook.mockReturnValue({ state, refreshing: false, refreshError: null, retry, refresh });
 
   it('affiche chargement, erreur réessayable et résultat vide', async () => {
     setState({ status: 'loading' });
@@ -93,7 +94,7 @@ describe('Carte de nouveau message privé', () => {
     { status: 'empty' },
     { status: 'ready', data: [conversation] },
   ])('reste accessible dans l’état $status et ouvre le choix du destinataire', async (state) => {
-    jest.mocked(useDirectMessages).mockReturnValue({ state, refreshing: false, retry, refresh });
+    jest.mocked(useDirectMessages).mockReturnValue({ state, refreshing: false, refreshError: null, retry, refresh });
     await render(targets[0].element());
     const button = screen.getByRole('button', { name: 'Nouveau message privé' });
     expect(screen.queryByText('Nouveau')).toBeNull();

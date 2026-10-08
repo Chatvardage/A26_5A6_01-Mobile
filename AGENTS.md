@@ -87,3 +87,47 @@ Docs: https://docs.expo.dev/eas/index.md
 ## Documentation centrale
 
 Infra est la référence du démarrage complet, des architectures, contrats et scénarios de validation. Le README local décrit le dépôt et ses commandes; les guides détaillés sont dans `A26_5A6_01-Infra/docs/`. Toute modification de contrat doit mettre à jour la référence centrale et ses liens.
+
+## Revue de code : recommandations non retenues
+
+Décisions prises lors de la revue de la PR « recherche, notifications, reprise réseau » (6-8 octobre 2026). Ne pas
+les « corriger » sans nouvelle information : elles reposent sur le comportement réel du code.
+
+- **`lastHandledTap` (`useNotificationNavigation.ts`) reste au niveau du module et n'est pas réinitialisé au changement de
+  compte.** Les identifiants de notification sont uniques : une collision entre deux sessions est irréaliste. Surtout,
+  `getLastNotificationResponse()` renvoie encore, après une déconnexion puis une reconnexion, la notification qui a lancé
+  l'application ; réinitialiser la variable ferait rouvrir l'ancienne conversation. Le dédoublonnage protège donc la
+  session suivante au lieu de la bloquer.
+- **`// eslint-disable-next-line react-hooks/set-state-in-effect` (`UnreadContext.tsx`) est nécessaire.** `set-state-in-effect`
+  est une règle réelle de `eslint-plugin-react-hooks` (règles du compilateur React activées par `eslint-config-expo`), pas
+  une règle maison. Le chargement initial des compteurs est une synchronisation avec un système externe (le serveur) : le
+  `setState` n'a lieu qu'après la réponse, mais la règle ne peut pas le voir à travers `refresh`. Sans le commentaire, le lint
+  échoue. Un `refresh` stable (`useCallback`) ne la désactive pas.
+- **`src/partage/useAsyncResource.ts` : le nettoyage de l'effet passe par un alias du compteur** (`const counter = requestId`),
+  ce qui évite l'avertissement `react-hooks/exhaustive-deps` sans copier la valeur (le nettoyage doit incrémenter la valeur
+  courante pour invalider les requêtes en vol). Ne pas « simplifier » en `requestId.current` dans le nettoyage. Fichier partagé :
+  reporter le même changement dans le Frontend (`A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh`), dont la copie diffère
+  déjà de deux lignes (`setRefreshing(false)`).
+
+
+Autres points de la même revue, non appliqués :
+
+- **`useEffect` de `src/partage/useSearch.ts` garde `[normalized, conversationId, key, debounceMs]`.** `key` est lu dans l'effet
+  (il étiquette la réponse), donc le retirer ou le remplacer par `attempt` déclenche `react-hooks/exhaustive-deps`. Les
+  dépendances sont redondantes mais inoffensives : React ne relance l'effet qu'une fois par rendu. Ce fichier est partagé avec
+  le Frontend (`verifier-fichiers-partages.sh`).
+- **SHA épinglés de `.github/workflows/ci.yml` conservés.** `actions/checkout` v5 existe (la revue le croyait absent) ; les SHA
+  sont les mêmes que dans le CI du Frontend. À revérifier avec `gh release list --repo actions/checkout` avant de les changer.
+- **`searchService.ts` n'utilise plus `getTranslations()`** (fait, pas écarté) : il lève des `ApiError` au message technique, le
+  texte affiché vient de `userMessage` côté hook. L'auteur `system` reste sans `senderName` et `SearchResultItem` le nomme.
+  Restent dans la même situation `unreadService.ts`, `messagesService.ts` et `httpClient.ts` (hors périmètre de la revue).
+- **Bandeau de connexion de `ConversationScreen`** : l'état `connecting` affiche `connection.reconnecting` (il n'existe pas de
+  clé dédiée « connexion en cours »).
+
+- **Textes des `ApiError` de `searchService.ts` volontairement techniques et en anglais.** `userMessage()` ne lit que le `kind`
+  et ignore le message : les passer par `getTranslations()` recréerait le couplage service / i18n supprimé dans cette PR (la
+  locale peut changer entre l'appel et l'affichage). `unreadService.ts`, `messagesService.ts` et `httpClient.ts` restent à
+  migrer dans le même esprit, hors de cette PR.
+- **`useCanModerate` rafraîchit sur tout `serveur.change`, sans filtre par serveur.** La conversation ne porte que l'identifiant
+  du salon : retrouver son serveur demande la liste `GET /api/servers`, déjà relue par ce rafraîchissement. Filtrer coûterait
+  un appel de plus pour éviter un appel ; à revoir si le contrat expose le serveur du salon.

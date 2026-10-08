@@ -2,17 +2,22 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useMemo } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
+import { ContentFrame } from '@/components/ContentFrame';
 import { ConversationItem } from '@/components/ConversationItem';
-import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
+import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
+import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
 import { useServerChannels } from '@/hooks/useServerChannels';
+import { useLiveConversations } from '@/unread/liveUnread';
 import { parseServerParams, Routes, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
 import { useTranslation } from '@/i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Server'>;
+
+const NONE: ConversationSummary[] = [];
 
 export function ServerScreen({ route, navigation }: Props) {
   const { strings } = useTranslation();
@@ -25,9 +30,11 @@ export function ServerScreen({ route, navigation }: Props) {
 function ValidServer({ serverId, navigation }: { serverId: string; navigation: Props['navigation'] }) {
   const { strings } = useTranslation();
   const { user } = useSession();
-  const { state, refreshing, retry, refresh } = useServerChannels(serverId);
+  const { state, refreshing, refreshError, retry, refresh } = useServerChannels(serverId);
   useRefreshOnFocus(refresh);
+  useRefreshOnServerChange(refresh, serverId);
   const refreshProps = { refreshing, onRefresh: refresh };
+  const channels = useLiveConversations(state.status === 'ready' ? state.data.channels : NONE);
 
   const open = useCallback(
     (channel: ConversationSummary) =>
@@ -41,15 +48,18 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
 
   return (
     <ThemedView style={styles.fill}>
-      <FlatList
-        data={state.data.channels}
-        keyExtractor={(c) => c.id}
-        renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
-        ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
-        refreshing={refreshing}
-        onRefresh={refresh}
-        contentContainerStyle={styles.list}
-      />
+      <ContentFrame>
+        {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
+        <FlatList
+          data={channels}
+          keyExtractor={(c) => c.id}
+          renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
+          ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
+          refreshing={refreshing}
+          onRefresh={refresh}
+          contentContainerStyle={styles.list}
+        />
+      </ContentFrame>
     </ThemedView>
   );
 }

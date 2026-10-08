@@ -2,6 +2,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet, TextInput } from 'react-native';
 
+import { ContentFrame } from '@/components/ContentFrame';
 import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -64,21 +65,23 @@ export function NewDirectMessageScreen({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.fill}>
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Rechercher un pseudo"
-        placeholderTextColor={theme.textSecondary}
-        maxLength={SEARCH_MAX_LENGTH}
-        autoFocus
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-        accessibilityLabel="Rechercher un pseudo"
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-      />
-      {body}
+      <ContentFrame>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Rechercher un pseudo"
+          placeholderTextColor={theme.textSecondary}
+          maxLength={SEARCH_MAX_LENGTH}
+          autoFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          accessibilityLabel="Rechercher un pseudo"
+          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
+        />
+        {body}
+      </ContentFrame>
     </ThemedView>
   );
 }

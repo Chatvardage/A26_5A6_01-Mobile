@@ -5,6 +5,7 @@ import { useNewDirectMessage } from '@/hooks/useNewDirectMessage';
 import { NewDirectMessageScreen } from '@/screens/NewDirectMessageScreen';
 import { useSession } from '@/session/SessionContext';
 
+jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('@/hooks/useNewDirectMessage', () => ({ useNewDirectMessage: jest.fn() }));
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn(() => ({ user: { id: 'me' } })) }));
 

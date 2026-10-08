@@ -1,6 +1,6 @@
 import * as http from '@/services/httpClient';
 import { ApiError } from '@/services/ApiError';
-import { belongsTo, editMessage, fetchHistory, mergeMessages, sendMessage } from '@/services/messagesService';
+import { belongsTo, deleteMessage, editMessage, fetchHistory, mergeMessages, sendMessage } from '@/services/messagesService';
 
 jest.mock('@/services/httpClient');
 const apiFetch = http.apiFetch as jest.Mock;
@@ -258,5 +258,34 @@ describe('belongsTo', () => {
     expect(belongsTo('invalid', ME, {})).toBe(false);
     expect(belongsTo(`dm:${DM}`, ME, { authorId: DM, recipientId: ME })).toBe(true);
     expect(belongsTo(`dm:${DM}`, ME, {})).toBe(false);
+  });
+});
+
+describe('fetchHistory avec curseur', () => {
+  it('demande la page précédente du message privé ou du salon', async () => {
+    apiFetch.mockResolvedValue([]);
+    await fetchHistory(`dm:${ROOM}`, 50, 'm-ancien');
+    expect(apiFetch).toHaveBeenLastCalledWith(`/api/messages/history/${ROOM}?limit=50&cursor=m-ancien`);
+    await fetchHistory(`room:${ROOM}`, 20, 'a b');
+    expect(apiFetch).toHaveBeenLastCalledWith(`/api/messages/rooms/${ROOM}/history?limit=20&cursor=a+b`);
+  });
+});
+
+describe('deleteMessage', () => {
+  const MESSAGE = '44444444-4444-4444-8444-444444444444';
+  it('supprime un message privé ou un message de salon, identifiants encodés', async () => {
+    apiFetch.mockResolvedValue({ deleted: true });
+    await deleteMessage(`dm:${ROOM}`, MESSAGE);
+    expect(apiFetch).toHaveBeenLastCalledWith(`/api/messages/${MESSAGE}`, { method: 'DELETE' });
+    await deleteMessage(`room:${ROOM}`, 'a b');
+    expect(apiFetch).toHaveBeenLastCalledWith(`/api/messages/rooms/${ROOM}/a%20b`, { method: 'DELETE' });
+  });
+
+  it('refuse une conversation invalide sans appeler le réseau et propage les erreurs', async () => {
+    apiFetch.mockClear();
+    await expect(deleteMessage('room:invalide', MESSAGE)).rejects.toMatchObject({ kind: 'not_found' });
+    expect(apiFetch).not.toHaveBeenCalled();
+    apiFetch.mockRejectedValueOnce(Object.assign(new Error('403'), { kind: 'forbidden' }));
+    await expect(deleteMessage(`dm:${ROOM}`, MESSAGE)).rejects.toMatchObject({ kind: 'forbidden' });
   });
 });

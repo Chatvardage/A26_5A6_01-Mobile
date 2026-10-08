@@ -252,9 +252,11 @@ Les messages privés (`dm:<uuid>`) et les salons (`room:<uuid>`) utilisent le m�
 | Connexion WebSocket | Socket unique sur `/messages`, chemin `/socket.io`, jeton dans `auth.token`, abonnement aux salons après `connexion.prete` | `websocketService`, `SessionManager` |
 | Réception temps réel | Événements `private-message.created` et `room-message.created`, filtrage par conversation et tampon pendant le chargement initial | `useMessages` |
 | Modification | Appui long uniquement sur son propre message, préremplissage, enregistrement PATCH et annulation ; l'API reste responsable des permissions | `MessageBubble`, `MessageInput`, `messagesService` |
+| Suppression | Appui long sur son propre message : menu Modifier / Supprimer / Annuler ; dans un salon, un modérateur, le propriétaire du serveur ou un administrateur peut aussi supprimer le message d'un autre (menu Supprimer / Annuler seulement : la modification reste réservée à l'auteur, texte de confirmation propre à la modération). Le droit vient de `monRole` de `GET /api/servers` (`useCanModerate`, relu à chaque `serveur.change`) ; « Supprimer » demande une confirmation définitive, puis `DELETE` (message privé : `/api/messages/:id` ; salon : `/api/messages/rooms/:roomId/:id`). Le message disparaît de la liste, la raison d'un refus s'affiche sans retirer le message ; supprimer le message en cours de modification quitte la modification | `ConversationScreen`, `useCanModerate`, `useMessages.remove`, `messagesService.deleteMessage`, `serversService.fetchCanModerate` |
+| Réception des suppressions | Événements `private-message.deleted` et `room-message.deleted` (suppression depuis un autre appareil ou le Web) : le message est retiré de la liste et du tampon de chargement ; un message supprimé ne réapparaît pas avec une page REST arrivée en retard | `useMessages` |
 | Réception des modifications | Événements `private-message.updated` et `room-message.updated`, remplacement du contenu sans ajouter de ligne | `useMessages` |
 | Mention « modifié » | Affichée lorsque les instants `updatedAt` et `createdAt` diffèrent | `MessageBubble` |
-| Pagination | Chargement en fin de liste par pages de 50 avec le curseur du plus ancien message ; demandes simultanées bloquées, erreur réessayable sans perdre la liste | `ConversationScreen`, `useMessages` |
+| Pagination | Chargement en fin de liste par pages de 50 avec le curseur du plus ancien message ; demandes simultanées bloquées (y compris entre « charger plus » et le saut vers un résultat de recherche : `jumpTo` attend la page en cours puis réévalue, `loadOlder` est ignoré pendant qu'un saut charge une page), erreur réessayable sans perdre la liste | `ConversationScreen`, `useMessages` |
 | Suppression des doublons | Fusion par identifiant entre historique, pagination, réponses POST/PATCH et événements ; conservation de la version au `updatedAt` le plus récent | `mergeMessages` |
 | Texte non envoyé | Brouillon par conversation, restauré après navigation et passage en modification ; conservé sur erreur ou si le texte change pendant l'envoi, effacé après succès seulement | `MessageInput` |
 | Chargement et erreurs | États initial/vide/erreur avec nouvelle tentative, indicateur de pagination, erreurs d'envoi/modification et bandeau de connexion | `ConversationScreen`, `MessageInput`, `useMessages` |
@@ -306,6 +308,7 @@ Avec le Gateway et les services réels démarrés depuis Infra, connecter deux c
 
 1. Ouvrir un DM puis un salon accessible : vérifier l'historique ou l'état vide.
 2. Envoyer depuis chaque client : vérifier la réception sans rechargement et une seule ligne par message, y compris chez l'expéditeur.
+3 bis. Supprimer son message par appui long (menu, puis confirmation) : il disparaît aussitôt chez l'expéditeur et sans rechargement chez l'autre client, et la recherche ne le retrouve plus ; un refus du serveur affiche sa raison sans retirer le message. Avec un compte modérateur d'un salon, supprimer le message d'un autre membre ; avec un compte membre, aucun appui long n'est proposé sur les messages des autres.
 3. Modifier son message par appui long : vérifier le contenu et la mention « modifié » sur les deux clients ; aucun appui long de modification ne doit être proposé sur un message d'autrui.
 4. Ouvrir une conversation contenant plus de 50 messages et remonter : vérifier les pages anciennes, l'absence de doublons et la conservation de la position.
 5. Saisir un brouillon, changer de conversation puis revenir ; ouvrir et annuler une modification : vérifier que le brouillon de composition reste présent.
@@ -315,14 +318,71 @@ Avec le Gateway et les services réels démarrés depuis Infra, connecter deux c
 ## Limites connues
 
 - **Session** : SecureStore, validation au démarrage, rotation réelle via Auth-Service/Gateway, refresh partagé et retour Login après échec du renouvellement. HTTP utilise `Authorization: Bearer` et Socket.IO `auth.token` ; aucun identifiant utilisateur n'est fourni dans le handshake.
-- **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
+- **Non-lus** : les listes et les badges d'onglets utilisent `GET /api/messages/unread` (état de lecture en base, donc juste après un redémarrage). Les compteurs se rechargent au démarrage, à chaque reconnexion du canal temps réel et au retour au premier plan, et augmentent en direct à chaque message reçu hors de la conversation affichée.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
 - **Rejoindre / quitter un serveur** : non implanté ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
+- **Suppression** : le droit de modérer est déduit du rôle effectif du serveur (`monRole`, comme `peutModerer` côté Room-Service) ; il n'est proposé qu'à titre d'aide, l'API vérifie toujours le droit et répond 403 sinon (raison affichée, message conservé). Si le rôle n'a pas pu être lu (réseau), la modération n'est pas proposée. Message privé : seul l'expéditeur peut supprimer. Le menu et la confirmation sont des alertes natives : leur affichage sur appareil, et un test avec un vrai compte modérateur, restent à faire.
 - **Écran Conversation** : historique REST, envoi/modification, réception temps réel Socket.IO et pagination sont branchés pour les DM et les salons. Les scénarios de coupure réseau, d'arrière-plan et de stabilité du défilement restent à confirmer sur appareil avec le backend.
-- Notifications : non implantées.
+- **Notifications** : locales seulement (voir ci-dessous). Aucune notification push : le jeton d'appareil n'est pas enregistré côté API.
 - Comportement clavier / retour Android : vérifié par bundle Android et tests unitaires; à confirmer sur émulateur ou appareil.
 
+## Listes : cinq états et hook partagé
+
+Les listes de conversations (messages privés, serveurs, salons d'un serveur) obéissent au même contrat, porté par un hook maison, sans bibliothèque de requêtes :
+
+| État | Hook | Composant |
+|---|---|---|
+| 1. Chargement : première réponse pas encore arrivée | `state.status = 'loading'` | `LoadingState` |
+| 2. Erreur | `'error'` + `message` (raison traduite) ; `retry` | `ErrorState` : raison et bouton « Réessayer » |
+| 3. Vide : requête réussie sans conversation | `'empty'` | `EmptyState` (tirer pour rafraîchir reste possible) |
+| 4. Succès | `'ready'` + `data` | `FlatList` et ses actions (ouvrir, nouveau message) |
+| 5. Rafraîchissement | `refreshing` ; `refreshError` si la mise à jour échoue | la liste reste visible ; un échec affiche `RefreshErrorBanner` (raison + « Réessayer ») au-dessus d'elle |
+
+## Code partagé avec le client Web (`src/partage/`)
+
+Les hooks et règles réutilisables par le mobile **et** le Web vivent dans `src/partage/`, selon la convention des services (`src/partage/` : fichiers identiques à l'octet près dans plusieurs dépôts). Règle : un fichier de ce dossier n'importe que `react` et ses voisins (chemins relatifs) ; ni React Native, ni Expo, ni l'alias `@/`. Le test `partage.test.ts` le vérifie, donc un import d'application casse les tests au lieu de casser silencieusement la réutilisation.
+
+| Fichier | Rôle |
+|---|---|
+| `useAsyncResource.ts` | Hook des cinq états d'une liste (ci-dessus). Paramètres : `load`, `isEmpty`, `describeError` |
+| `useSearch.ts` | `useSearchResults({ search, describeError, debounceMs? }, conversationId?)` : délai de frappe, annulation, pagination sans doublon, états `idle`/`tooShort`/`loading`/`ready`/`empty`/`error` |
+| `search.ts` | Types `SearchResult` / `SearchPage` / `SearchInput` et règle des 2 à 100 caractères |
+| `groupResults.ts`, `highlight.ts` | Regroupement par messages privés puis par serveur, surlignage du texte cherché |
+
+Chaque application fournit seulement ce qui lui est propre. Mobile : `useLoadable` (= `useAsyncResource` + `userMessage`) et `useSearch` (= `useSearchResults` + `searchMessages` + `userMessage`). Web React : `useSearchResults({ search: rechercherMessages, describeError: messageErreur }, conversationId)`.
+
+Le Frontend (`A26_5A6_01-Frontend/src/partage/`) contient la copie identique, testée avec Vitest (`@testing-library/react`, couverture à 100 %). Toute modification se reporte à l'identique dans les deux dépôts : `A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh` compare les cinq fichiers (et la CI d'Infra le fait aussi). Les fichiers ne contiennent aucun commentaire `eslint-disable`, car les deux dépôts n'ont pas les mêmes règles ESLint. Limite : les pages de chat du Web sont en JS simple et n'utilisent pas encore ces hooks.
+
+## Écran adaptatif et rotation
+
+`app.json` n'impose plus l'orientation (`"orientation": "default"`) : l'application suit la rotation de l'appareil (portrait et paysage). Après ce changement, relancer Metro avec le cache vidé (`npm start -- -c`) ; sur une development build, l'orientation est lue au build.
+
+- `ContentFrame` (`src/components/ContentFrame.tsx`) encadre les écrans à liste (messages privés, serveurs, salons, nouveau message, conversation, recherches) : il respecte les marges latérales de la zone sûre (encoche, coins arrondis en paysage) et limite la largeur du contenu à `MaxContentWidth` (800), centré, sur tablette ou en paysage, pour garder des lignes lisibles.
+- Connexion et inscription défilent déjà (`ScrollView`, largeur limitée à 480) : le formulaire reste accessible quand le clavier prend la moitié de l'écran en paysage.
+- Les bulles de message gardent une largeur maximale de 80 % du cadre ; le bandeau de connexion respecte aussi les marges latérales.
+- Non vérifié sur appareil : le comportement du clavier et du défilement vers un message après une rotation en cours de saisie.
+
+## Recherche, réseau et notifications
+
+**Recherche** (`GET /api/messages/search`, 2 à 100 caractères, 20 résultats par page, curseur `nextCursor`)
+- Onglet **Recherche** : toutes les conversations accessibles, résultats regroupés (messages privés, puis un groupe par serveur avec le salon et l'auteur) ; le texte cherché est surligné. Toucher un résultat ouvre `Conversation` avec `{ conversationId, messageId, focusToken }` : l'écran charge les pages plus anciennes (`useMessages.jumpTo`, 20 pages au plus) jusqu'à ce message, défile jusqu'à lui et l'entoure 3 secondes, comme sur le Web ; s'il est introuvable (trop ancien ou supprimé), un avis s'affiche.
+- Bouton loupe dans l'en-tête d'une **conversation** (message privé ou salon) : route `ConversationSearch { conversationId, title? }`, recherche limitée à cette conversation (`conversationId=` côté API), comme sur le client Web. Les deux interlocuteurs d'un message privé peuvent chacun chercher dans leurs anciens messages ; dans un salon, la recherche porte sur le salon affiché. Le droit de lecture est vérifié par l'API (403 / 404). Toucher un résultat dépile jusqu'à la conversation déjà ouverte (`popTo`) et la place sur le message : plusieurs recherches de suite n'empilent donc rien, et la flèche de retour ramène directement à la liste.
+- `useSearch` : délai de frappe de 350 ms, annulation de la requête précédente, pagination sans doublon (`Plus de résultats` ou fin de liste).
+
+**Réseau** : `network.adapter` (NetInfo) + état du canal temps réel → `useConnection` (`online`, `reconnecting`, `offline`) → bandeau `ConnectionStatus` affiché au-dessus de l'application avec une session ouverte. Le service temps réel est celui de la session (`useSession().realtime`). Le canal Socket.IO se reconnecte seul ; à chaque `connexion.prete`, les compteurs de non-lus sont rechargés par l'API et l'historique de la conversation ouverte est rattrapé par `useMessages` (fusion sans doublon). Le bandeau global est masqué dans une conversation, qui affiche déjà son propre état de connexion.
+
+**Texte non envoyé** : géré par `MessageInput` et le magasin de brouillons de la session (en mémoire, effacé à la déconnexion ou au changement de compte) : un envoi qui échoue laisse le texte dans le champ. Il ne survit pas à un redémarrage de l'application.
+
+**Notifications** (`notifications.adapter`, expo-notifications)
+- Notification **locale** quand un message arrive dans une conversation qui n'est pas affichée (ou quand l'application est en arrière-plan). Elle contient le pseudo et « Nouveau message », jamais le texte ; son seul payload est `conversationId`, validé avant d'ouvrir `Conversation` (toucher pendant que l'application tourne, ou lancement à froid).
+- Permission : `granted`, `denied`, `undetermined` ou `unavailable` (web, module absent). Demandée une seule fois au premier lancement ; l'état et un bouton « Activer » / « Ouvrir les réglages » sont dans Préférences.
+- Le **badge** (onglets Messages privés et Serveurs, listes) reste fonctionnel sans permission. Le badge de l'icône n'est mis à jour que si la permission est accordée.
+
+Limites : le canal temps réel est coupé par le système peu après le passage en arrière-plan, donc aucune notification n'arrive application fermée (il faudrait du push, hors périmètre). **Expo Go sur Android (SDK 53+)** : le simple chargement d'`expo-notifications` y lève une erreur. L'adaptateur ne charge donc pas le module dans ce cas : l'application démarre, les notifications sont « indisponibles » (affiché dans Préférences) et seul le badge dans l'application fonctionne. Pour tester les notifications locales sur Android, utiliser une development build (`npx expo run:android` ou `eas build --profile development`). Sur iOS, Expo Go permet de les tester. Les salons sont rejoints pour les alertes après chaque changement de conversation (délai de 0,8 s) car l'écran d'un salon quitte sa room en se fermant.
+
 ## Vérifications
+
+La CI (`.github/workflows/ci.yml`) rejoue à chaque PR et sur `main`/`develop` : `npm ci`, `tsc`, `expo lint`, les tests avec couverture à 100 % et `expo export --platform android` (le bundle doit compiler). `npm audit` et `expo-doctor` y tournent à titre informatif, sans bloquer. Aucun APK n'est produit : le build installable (EAS) reste à faire pour le contrôle 4.
 
 ```bash
 npx tsc --noEmit

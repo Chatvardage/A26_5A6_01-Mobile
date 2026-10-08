@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConversationScreen } from '@/screens/ConversationScreen';
@@ -6,12 +7,15 @@ import { useMessages } from '@/hooks/useMessages';
 import { useSession } from '@/session/SessionContext';
 import type { ReactElement } from 'react';
 
+jest.mock('@/hooks/useCanModerate', () => ({ useCanModerate: () => false }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn(() => ({ user: { id: 'user-id' } })) }));
 jest.mock('@/hooks/useMessages', () => ({ useMessages: jest.fn() }));
 
 const DM = '11111111-1111-4111-8111-111111111111';
 const baseState = {
+  jumpTo: jest.fn(async () => true),
+  remove: jest.fn(async () => undefined),
   messages: [],
   status: 'ready',
   errorMessage: null,
@@ -139,12 +143,16 @@ describe('ConversationScreen', () => {
     });
     await renderScreen(`room:${DM}`);
     expect(screen.getByText('Alice')).toBeTruthy();
-    expect(screen.getByText('Connexion au service de messages…')).toBeTruthy();
+    expect(screen.getByText('Reconnexion en cours…')).toBeTruthy();
     expect(screen.getByRole('alert')).toHaveTextContent('Rattrapage impossible');
     await fireEvent.press(screen.getByRole('button', { name: 'Réessayer le chargement des messages précédents' }));
     expect(loadOlder).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Autre message' })).toBeNull();
+    // L'appui long ouvre le menu d'actions (Modifier / Supprimer / Annuler) ; on choisit « Modifier ».
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
+    await act(async () => alert.mock.calls[0][2]!.find((button) => button.text === 'Modifier')!.onPress!());
+    alert.mockRestore();
     expect(screen.getByLabelText('Modifier le message')).toHaveDisplayValue('Mon message');
     await fireEvent.changeText(screen.getByLabelText('Modifier le message'), 'Texte corrigé');
     await fireEvent.press(screen.getByRole('button', { name: 'Enregistrer' }));

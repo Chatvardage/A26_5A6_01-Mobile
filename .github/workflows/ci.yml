@@ -1,0 +1,49 @@
+name: CI mobile
+
+permissions:
+  contents: read
+
+# Contrôles de qualité à chaque PR et sur les branches principales : types, lint, tests (couverture à 100 %
+# exigée par la configuration Jest) et compilation du bundle Android. Aucun APK n'est produit ici : le build
+# installable (EAS) relève du contrôle 4.
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Actions épinglées sur un SHA de commit (même version que le CI du Frontend).
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          # Node 24 testé, 22.9+ requis (voir README).
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npx expo lint
+      # Seuils de couverture à 100 % : voir « jest » dans package.json.
+      - name: Tests
+        run: npm test -- --coverage --runInBand
+      # Le bundle doit compiler : une erreur d'import ou de module natif ne doit pas attendre le prochain build.
+      - name: Bundle Android
+        run: npx expo export --platform android
+      # Informatifs : `npm audit` échoue déjà à cause d'avis venant des dépendances du SDK Expo (voir README),
+      # et expo-doctor interroge le réseau. Ils signalent sans bloquer la PR.
+      - name: Audit des dépendances (informatif)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+      - name: Expo Doctor (informatif)
+        continue-on-error: true
+        run: npx expo-doctor

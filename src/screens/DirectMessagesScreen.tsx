@@ -4,12 +4,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
+import { ContentFrame } from '@/components/ContentFrame';
 import { ConversationItem } from '@/components/ConversationItem';
 import { NewDirectMessageButton } from '@/components/NewDirectMessageButton';
-import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
+import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useDirectMessages } from '@/hooks/useDirectMessages';
+import { useLiveConversations } from '@/unread/liveUnread';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
@@ -21,12 +23,15 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
+const NONE: ConversationSummary[] = [];
+
 export function DirectMessagesScreen({ navigation }: Props) {
   const { user } = useSession();
   const { strings } = useTranslation();
-  const { state, refreshing, retry, refresh } = useDirectMessages();
+  const { state, refreshing, refreshError, retry, refresh } = useDirectMessages();
   useRefreshOnFocus(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
+  const conversations = useLiveConversations(state.status === 'ready' ? state.data : NONE);
 
   const open = useCallback(
     (conversation: ConversationSummary) =>
@@ -57,16 +62,19 @@ export function DirectMessagesScreen({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.fill}>
-      <FlatList
-        data={state.data}
-        ListHeaderComponent={newMessageButton}
-        keyExtractor={(c) => c.id}
-        renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
-        ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
-        refreshing={refreshing}
-        onRefresh={refresh}
-        contentContainerStyle={styles.list}
-      />
+      <ContentFrame>
+        {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
+        <FlatList
+          data={conversations}
+          ListHeaderComponent={newMessageButton}
+          keyExtractor={(c) => c.id}
+          renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
+          ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
+          refreshing={refreshing}
+          onRefresh={refresh}
+          contentContainerStyle={styles.list}
+        />
+      </ContentFrame>
     </ThemedView>
   );
 }

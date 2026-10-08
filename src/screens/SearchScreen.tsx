@@ -1,41 +1,43 @@
-import { useState } from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useCallback } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EmptyState } from '@/components/StateViews';
-import { Spacing } from '@/constants/theme';
+import { ContentFrame } from '@/components/ContentFrame';
+import { SearchPanel } from '@/components/SearchPanel';
+import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
+import type { SearchResult } from '@/services/searchService';
 import { useTheme } from '@/hooks/use-theme';
-import { useTranslation } from '@/i18n';
 
-/** Écran de recherche : saisie et zone de résultats. L'appel de recherche sera branché sur le service dédié. */
-export function SearchScreen() {
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Search'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+/** Recherche dans toutes les conversations accessibles ; un résultat ouvre la conversation trouvée. */
+export function SearchScreen({ navigation }: Props) {
   const theme = useTheme();
-  const { strings } = useTranslation();
-  const [query, setQuery] = useState('');
+  const open = useCallback(
+    (result: SearchResult) =>
+      navigation.navigate(Routes.Conversation, {
+        conversationId: result.conversationId,
+        title: result.conversationTitle,
+        // Ouvre la conversation directement sur le message trouvé.
+        messageId: result.id,
+        focusToken: Date.now(),
+      }),
+    [navigation],
+  );
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: theme.background }]} edges={['left', 'right']}>
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder={strings.search.placeholder}
-        placeholderTextColor={theme.textSecondary}
-        returnKeyType="search"
-        autoCapitalize="none"
-        autoCorrect={false}
-        clearButtonMode="while-editing"
-        accessibilityLabel={strings.accessibility.search}
-        style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundElement }]}
-      />
-      <EmptyState
-        title={query.trim() ? strings.search.unavailable : strings.search.prompt}
-        hint={strings.search.comingSoon}
-      />
+      <ContentFrame insets={false}>
+        <SearchPanel onOpenResult={open} />
+      </ContentFrame>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  fill: { flex: 1 },
-  input: { margin: Spacing.three, borderRadius: 10, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2, fontSize: 16 },
-});
+const styles = StyleSheet.create({ fill: { flex: 1 } });

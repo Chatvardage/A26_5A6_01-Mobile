@@ -6,6 +6,7 @@ import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useLoadable } from '@/hooks/useLoadable';
 import { fetchDirectMessages } from '@/services/directMessagesService';
 import { fetchServers, fetchServerChannels } from '@/services/serversService';
+import { apiUnreadSource } from '@/services/unreadService';
 
 jest.mock('@/services/directMessagesService');
 jest.mock('@/services/serversService');
@@ -28,8 +29,8 @@ it.each([false, true])('charge les privés et serveurs, résultat vide=%s', asyn
   const servers = await renderHook(() => useServers());
   await waitFor(() => expect(dm.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
   await waitFor(() => expect(servers.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
-  expect(fetchDirectMessages).toHaveBeenCalledWith(undefined);
-  expect(fetchServers).toHaveBeenCalledWith(undefined);
+  expect(fetchDirectMessages).toHaveBeenCalledWith(apiUnreadSource);
+  expect(fetchServers).toHaveBeenCalledWith(apiUnreadSource);
 });
 it.each([false, true])('charge les salons, résultat vide=%s', async (empty) => {
   jest
@@ -40,7 +41,7 @@ it.each([false, true])('charge les salons, résultat vide=%s', async (empty) => 
     });
   const channels = await renderHook(() => useServerChannels('s'));
   await waitFor(() => expect(channels.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
-  expect(fetchServerChannels).toHaveBeenCalledWith('s', undefined);
+  expect(fetchServerChannels).toHaveBeenCalledWith('s', apiUnreadSource);
 });
 it('ne rafraîchit pas au premier focus puis rafraîchit au retour', async () => {
   const refresh = jest.fn();

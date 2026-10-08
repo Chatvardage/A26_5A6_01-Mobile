@@ -7,7 +7,16 @@ import { RootNavigator } from '@/navigation/RootNavigator';
 import { Colors } from '@/constants/theme';
 import { useSession } from '@/session/SessionContext';
 
+const mockRealtime = {
+  getRealtimeState: () => 'ready' as const,
+  onConnectionState: () => () => undefined,
+  onReady: () => () => undefined,
+  subscribe: () => () => undefined,
+  joinRoom: async () => undefined,
+  leaveRoom: async () => undefined,
+};
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }));
+jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: jest.fn(() => 'light') }));
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
@@ -80,12 +89,12 @@ beforeEach(() => {
 
 describe('RootNavigator', () => {
   it('remonte les écrans lors du changement de compte, mais pas au renouvellement du même compte', async () => {
-    jest.mocked(useSession).mockReturnValue({ status: 'signedIn', user: { id: 'alice' } } as ReturnType<typeof useSession>);
+    jest.mocked(useSession).mockReturnValue({ status: 'signedIn', user: { id: 'alice' }, realtime: mockRealtime } as unknown as ReturnType<typeof useSession>);
     const { rerender } = await render(<RootNavigator />);
     expect(mockStackMount).toHaveBeenCalledTimes(1);
     await rerender(<RootNavigator />);
     expect(mockStackMount).toHaveBeenCalledTimes(1);
-    jest.mocked(useSession).mockReturnValue({ status: 'signedIn', user: { id: 'bob' } } as ReturnType<typeof useSession>);
+    jest.mocked(useSession).mockReturnValue({ status: 'signedIn', user: { id: 'bob' }, realtime: mockRealtime } as unknown as ReturnType<typeof useSession>);
     await rerender(<RootNavigator />);
     expect(mockStackMount).toHaveBeenCalledTimes(2);
   });
@@ -104,13 +113,13 @@ describe('RootNavigator', () => {
   });
 
   it('enregistre les routes privées et leurs titres, avec le thème sombre', async () => {
-    (useSession as jest.Mock).mockReturnValue({ status: 'signedIn' });
+    (useSession as jest.Mock).mockReturnValue({ status: 'signedIn', realtime: mockRealtime });
     jest.mocked(useColorScheme).mockReturnValue('dark');
     await render(<RootNavigator />);
-    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'Server', 'Conversation', 'NewDirectMessage']);
+    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'Server', 'Conversation', 'ConversationSearch', 'NewDirectMessage']);
     expect(mockTheme.colors.background).toBe(Colors.dark.background);
     expect(mockTheme.colors.primary).toBe(Colors.dark.tint);
-    expect(mockStackScreens[3].options).toEqual({ title: 'Nouveau message', presentation: 'modal' });
+    expect(mockStackScreens[4].options).toEqual({ title: 'Nouveau message', presentation: 'modal' });
     for (const route of mockStackScreens.slice(1, 3)) {
       if (typeof route.options !== 'function') throw new Error('Options dynamiques attendues');
       expect(route.options({ route: {} }).title).toBe(route.name === 'Server' ? 'Serveur' : 'Conversation');

@@ -5,12 +5,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { LoginScreen } from '@/screens/LoginScreen';
 import { PreferencesScreen } from '@/screens/PreferencesScreen';
-import { SearchScreen } from '@/screens/SearchScreen';
 import type { RootStackParamList } from '@/navigation/routes';
 import { ApiError } from '@/services/ApiError';
 import { useSession } from '@/session/SessionContext';
 
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }));
+jest.mock('@/hooks/useNotificationPermission', () => ({
+  useNotificationPermission: () => ({ permission: 'granted', request: jest.fn(), openSettings: jest.fn() }),
+}));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const signIn = jest.fn();
@@ -94,15 +96,6 @@ it('affiche l’utilisateur connecté et déclenche la déconnexion', async () =
   expect(screen.getByText('—')).toBeTruthy();
 });
 
-it('conserve la saisie de recherche et indique la disponibilité du service', async () => {
-  await render(<SearchScreen />);
-  expect(screen.getByText('Recherchez un message')).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText('Recherche'), 'salut');
-  expect(screen.getByLabelText('Recherche')).toHaveDisplayValue('salut');
-  expect(screen.getByText('Recherche non disponible')).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText('Recherche'), '   ');
-  expect(screen.getByText('Recherchez un message')).toBeTruthy();
-});
 
 it('adapte le clavier à Android', async () => {
   const os = jest.replaceProperty(Platform, 'OS', 'android');
