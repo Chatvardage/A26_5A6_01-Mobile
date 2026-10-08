@@ -4,7 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from '@/i18n';
-import type { SearchResult } from '@/services/searchService';
+import { SYSTEM_AUTHOR, type SearchResult } from '@/services/searchService';
 import { formatMessageTime } from '@/utils/formatTime';
 import { splitHighlight } from '@/partage/highlight';
 
@@ -23,7 +23,9 @@ type Props = {
 export function SearchResultItem({ result, variant, term = '', onPress }: Props) {
   const theme = useTheme();
   const { strings } = useTranslation();
-  const sender = result.senderName ?? strings.conversation.unknownUser;
+  const sender =
+    result.senderName ??
+    (result.senderId === SYSTEM_AUTHOR ? strings.conversation.system : strings.conversation.unknownUser);
   const place =
     result.conversationTitle ?? (result.kind === 'room' ? strings.search.channel : strings.search.privateMessage);
 

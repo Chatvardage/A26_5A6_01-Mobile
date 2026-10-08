@@ -108,3 +108,17 @@ les « corriger » sans nouvelle information : elles reposent sur le comportemen
   valeur dans une variable le rendrait inopérant. Ce fichier est identique dans le Frontend, qui n'a pas ce plugin ; le
   modifier demande de reporter le même changement dans les deux dépôts (`A26_5A6_01-Infra/scripts/verifier-fichiers-partages.sh`).
 
+
+Autres points de la même revue, non appliqués :
+
+- **`useEffect` de `src/partage/useSearch.ts` garde `[normalized, conversationId, key, debounceMs]`.** `key` est lu dans l'effet
+  (il étiquette la réponse), donc le retirer ou le remplacer par `attempt` déclenche `react-hooks/exhaustive-deps`. Les
+  dépendances sont redondantes mais inoffensives : React ne relance l'effet qu'une fois par rendu. Ce fichier est partagé avec
+  le Frontend (`verifier-fichiers-partages.sh`).
+- **SHA épinglés de `.github/workflows/ci.yml` conservés.** `actions/checkout` v5 existe (la revue le croyait absent) ; les SHA
+  sont les mêmes que dans le CI du Frontend. À revérifier avec `gh release list --repo actions/checkout` avant de les changer.
+- **`searchService.ts` n'utilise plus `getTranslations()`** (fait, pas écarté) : il lève des `ApiError` au message technique, le
+  texte affiché vient de `userMessage` côté hook. L'auteur `system` reste sans `senderName` et `SearchResultItem` le nomme.
+  Restent dans la même situation `unreadService.ts`, `messagesService.ts` et `httpClient.ts` (hors périmètre de la revue).
+- **Bandeau de connexion de `ConversationScreen`** : l'état `connecting` affiche `connection.reconnecting` (il n'existe pas de
+  clé dédiée « connexion en cours »).

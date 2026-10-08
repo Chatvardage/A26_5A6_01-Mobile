@@ -4,7 +4,6 @@ import { isUuid, parseConversationId } from '@/types/conversationId';
 import { ApiError } from './ApiError';
 import { apiFetch } from './httpClient';
 import { lookupPseudos } from './usersService';
-import { getTranslations } from '@/i18n';
 
 export { MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, normalizeQuery } from '@/partage/search';
 export type { SearchPage, SearchResult } from '@/partage/search';
@@ -36,7 +35,8 @@ function parseEntry(entry: RawEntry): Base | null {
   };
 }
 
-const SYSTEM_AUTHOR = 'system';
+/** Auteur du message de bienvenue : pas un compte, donc sans pseudo ; l'interface le nomme (voir `SearchResultItem`). */
+export const SYSTEM_AUTHOR = 'system';
 
 type ChannelInfo = { channel: string; server?: string };
 
@@ -58,13 +58,14 @@ async function channelNames(): Promise<Record<string, ChannelInfo>> {
 
 /**
  * Recherche de texte dans les conversations accessibles (l'API filtre les droits). Les résultats
- * viennent du plus récent au plus ancien ; `nextCursor` pagine sans doublon.
+ * viennent du plus récent au plus ancien ; `nextCursor` pagine sans doublon. Les erreurs sont des `ApiError`
+ * au message technique : le texte affiché est choisi par l'appelant (`userMessage`), jamais par le service.
  */
 export async function searchMessages(input: SearchInput): Promise<SearchPage> {
   const q = normalizeQuery(input.q);
-  if (!q) throw new ApiError('bad_request', getTranslations().search.tooShort, 400);
+  if (!q) throw new ApiError('bad_request', 'Search query too short', 400);
   if (input.conversationId && !parseConversationId(input.conversationId)) {
-    throw new ApiError('not_found', getTranslations().errors.invalidConversationId);
+    throw new ApiError('not_found', 'Invalid conversation id');
   }
 
   const params = new URLSearchParams({ q, limit: String(input.limit ?? DEFAULT_LIMIT) });
@@ -75,7 +76,7 @@ export async function searchMessages(input: SearchInput): Promise<SearchPage> {
     { signal: input.signal },
   );
   if (!raw || !Array.isArray(raw.results)) {
-    throw new ApiError('invalid_response', getTranslations().errors.invalidResponseShort);
+    throw new ApiError('invalid_response', 'Invalid search response');
   }
 
   const entries = raw.results.map(parseEntry).filter((entry): entry is Base => entry !== null);
@@ -93,7 +94,7 @@ export async function searchMessages(input: SearchInput): Promise<SearchPage> {
     const targetId = parseConversationId(e.conversationId)!.targetId;
     return {
       ...e,
-      senderName: names[e.senderId] ?? (e.senderId === SYSTEM_AUTHOR ? getTranslations().conversation.system : undefined),
+      senderName: names[e.senderId],
       conversationTitle: e.kind === 'dm' ? names[targetId] : channels[targetId]?.channel,
       serverName: e.kind === 'room' ? channels[targetId]?.server : undefined,
     };

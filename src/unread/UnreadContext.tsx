@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import { getPermission, setAppBadge } from '@/adapters/notifications.adapter';
@@ -88,8 +88,18 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
   const roomTotal = sum(counts, 'room:');
 
   // Badge de l'icône : bonus quand la permission est accordée ; sinon le badge dans l'application suffit.
+  // La permission n'est relue que tant qu'elle n'est pas accordée (évite un appel natif par message reçu).
+  const badgeGranted = useRef(false);
   useEffect(() => {
-    void getPermission().then((permission) => (permission === 'granted' ? setAppBadge(dmTotal + roomTotal) : undefined));
+    if (badgeGranted.current) {
+      void setAppBadge(dmTotal + roomTotal);
+      return;
+    }
+    void getPermission().then((permission) => {
+      if (permission !== 'granted') return;
+      badgeGranted.current = true;
+      void setAppBadge(dmTotal + roomTotal);
+    });
   }, [dmTotal, roomTotal]);
 
   const value = useMemo<UnreadValue>(

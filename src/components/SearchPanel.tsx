@@ -85,7 +85,7 @@ export function SearchPanel({ conversationId, title, onOpenResult }: Props) {
                   {search.moreError}
                 </ThemedText>
               ) : null}
-              {!search.loadingMore ? (
+              {!search.loadingMore && search.hasMore ? (
                 <Pressable onPress={() => void search.loadMore()} accessibilityRole="button" style={styles.more}>
                   <ThemedText type="smallBold" style={{ color: theme.tint }}>
                     {strings.search.loadMore}

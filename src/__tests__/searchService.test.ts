@@ -130,7 +130,7 @@ describe('searchMessages', () => {
       message: { id: 'm3', roomId: ROOM, authorId: 'system', content: 'Bienvenue', createdAt: '2026-10-01T08:00:00Z' },
     };
 
-    it("n'envoie que des identifiants valides à l'annuaire, nomme le salon et traduit l'auteur système", async () => {
+    it("n'envoie que des identifiants valides à l'annuaire, nomme le salon et laisse l'auteur système sans pseudo", async () => {
       apiFetch.mockImplementation(async (path: string) => {
         if (path.startsWith('/api/users/lookup')) return [{ id: ME, pseudo: 'mia' }];
         if (path === '/api/servers') return SERVERS;
@@ -141,7 +141,7 @@ describe('searchMessages', () => {
       expect(lookup).toBe(`/api/users/lookup?ids=${ME}`);
       expect(page.results.map((r) => [r.senderName, r.conversationTitle, r.serverName])).toEqual([
         ['mia', '#général', 'Chatvardage'],
-        ['Système', '#général', 'Chatvardage'],
+        [undefined, '#général', 'Chatvardage'],
       ]);
     });
 

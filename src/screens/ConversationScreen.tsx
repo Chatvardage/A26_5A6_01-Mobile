@@ -230,7 +230,7 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
           {connection !== 'ready' ? (
             <View style={[styles.connectionBanner, { backgroundColor: theme.backgroundSelected }]}>
               <ThemedText type="small" themeColor="textSecondary">
-                {connection === 'connecting' ? 'Connexion au service de messages…' : 'Hors connexion — reconnexion en cours'}
+                {connection === 'connecting' ? strings.connection.reconnecting : strings.connection.offline}
               </ThemedText>
             </View>
           ) : null}
@@ -245,11 +245,11 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
             </ThemedText>
           ) : null}
           {actionError ? (
-          <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
-            {actionError}
-          </ThemedText>
-        ) : null}
-        {notice ? (
+            <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
+              {actionError}
+            </ThemedText>
+          ) : null}
+          {notice ? (
             <ThemedText type="small" themeColor="danger" accessibilityRole="alert" style={styles.liveError}>
               {notice}
             </ThemedText>
