@@ -82,14 +82,14 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 
 Hors WSL2, `npm start` met automatiquement à jour l'IP LAN du PC dans `.env` (en
 conservant le port et les autres variables). Pour effectuer cette mise à jour sans
-lancer Expo, exécuter depuis ce dépôt :
+lancer Expo, exécuter depuis ce dépôt. `npm run update-ip` force alors le port 3000 :
 
 ```bash
 npm run update-ip
 npm start -- -c
 ```
 
-Le script ne remplace que l'hôte de `EXPO_PUBLIC_API_URL`. Il choisit la première
+Sous Linux natif, le script remplace l'hôte de `EXPO_PUBLIC_API_URL` et force le port 3000. Il choisit la première
 IPv4 privée détectée (`192.168.x.x`, `10.x.x.x` ou `172.16-31.x.x`). Si plusieurs
 interfaces (VPN, VirtualBox, Wi-Fi et Ethernet) sont actives, choisir explicitement
 l'adresse correcte :

@@ -26,6 +26,14 @@ function getLocalIpv4Addresses() {
     .map((network) => network.address);
 }
 
+function isWsl() {
+  try {
+    return process.platform === 'linux' && /microsoft/i.test(fs.readFileSync('/proc/version', 'utf8'));
+  } catch {
+    return false;
+  }
+}
+
 function readConfiguredUrl(content) {
   const match = content.match(/^\s*EXPO_PUBLIC_API_URL\s*=\s*(\S+)\s*$/m);
   return match?.[1] ?? null;
@@ -37,6 +45,7 @@ function buildApiUrl(configuredUrl, ip) {
   try {
     const url = new URL(configuredUrl);
     url.hostname = ip;
+    if (process.platform === 'linux' && !isWsl()) url.port = String(DEFAULT_API_PORT);
     return url.toString().replace(/\/$/, '');
   } catch {
     throw new Error(`${API_VARIABLE} doit être une URL valide (ex. http://192.168.1.10:3000).`);
