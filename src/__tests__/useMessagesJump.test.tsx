@@ -123,6 +123,62 @@ describe('useMessages.jumpTo', () => {
     await expect(result).resolves.toBe(false);
   });
 
+  it('attend un loadOlder en cours au lieu de redemander la même page', async () => {
+    const hook = await setup(page('r', 0, 50));
+    let resolve: (messages: ChatMessage[]) => void = () => undefined;
+    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    let jumped: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      void hook.result.current.loadOlder();
+    });
+    await act(async () => {
+      jumped = hook.result.current.jumpTo(TARGET);
+    });
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    await act(async () => resolve([...page('p', 50, 49), msg(TARGET, 99)]));
+    await expect(jumped).resolves.toBe(true);
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    expect(ids(hook)).toHaveLength(new Set(ids(hook)).size);
+  });
+
+  it('ignore loadOlder tant que jumpTo charge une page, puis le réautorise', async () => {
+    const hook = await setup(page('r', 0, 50));
+    let resolve: (messages: ChatMessage[]) => void = () => undefined;
+    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    let jumped: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      jumped = hook.result.current.jumpTo(TARGET);
+    });
+    await act(async () => {
+      await hook.result.current.loadOlder();
+    });
+    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    await act(async () => resolve([...page('p', 50, 49), msg(TARGET, 99)]));
+    await expect(jumped).resolves.toBe(true);
+    fetchHistory.mockResolvedValueOnce([msg('encore', 70)]);
+    await act(async () => {
+      await hook.result.current.loadOlder();
+    });
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
+  });
+
+  it('abandonne si la conversation change pendant l\'attente d\'un loadOlder', async () => {
+    const hook = await setup(page('r', 0, 50));
+    let resolve: (messages: ChatMessage[]) => void = () => undefined;
+    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    let jumped: Promise<boolean> = Promise.resolve(true);
+    await act(async () => {
+      void hook.result.current.loadOlder();
+    });
+    await act(async () => {
+      jumped = hook.result.current.jumpTo(TARGET);
+    });
+    fetchHistory.mockResolvedValueOnce([msg('autre', 1)]);
+    await hook.rerender({ conversation: `room:${OLI}` });
+    await act(async () => resolve(page('p', 50, 50)));
+    await expect(jumped).resolves.toBe(false);
+  });
+
   it('mémorise les pseudos déjà connus des pages anciennes', async () => {
     const hook = await setup(page('r', 0, 50));
     fetchHistory.mockResolvedValueOnce([msg(TARGET, 60), { ...msg('sans-nom', 61), senderName: undefined }]);

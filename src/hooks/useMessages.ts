@@ -51,6 +51,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const pseudoCache = useRef(new Map<string, string>());
   const pseudoLookups = useRef(new Set<string>());
   const olderRequest = useRef(false);
+  // Chargement de page ancienne en cours (loadOlder ou jumpTo) : l'autre attend ou renonce, pour ne jamais lire le même curseur.
+  const olderInFlight = useRef<Promise<void> | null>(null);
   // Messages supprimés pendant la session : une page REST arrivée en retard ne doit pas les faire réapparaître.
   const deletedIds = useRef(new Set<string>());
   const hasOlderRef = useRef(false);
@@ -128,6 +130,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     pseudoCache.current.clear();
     pseudoLookups.current.clear();
     olderRequest.current = false;
+    olderInFlight.current = null;
     deletedIds.current.clear();
 
     const receive = (raw: unknown) => {
@@ -261,6 +264,9 @@ export function useMessages(conversationId: string, currentUserId: string) {
     setLoadingOlder(true);
     setOlderError(null);
     const requestGeneration = generation.current;
+    let release!: () => void;
+    const inFlight = new Promise<void>((resolve) => (release = resolve));
+    olderInFlight.current = inFlight;
     try {
       const page = await fetchHistory(conversationId, PAGE_SIZE, oldest.id);
       if (requestGeneration !== generation.current) return;
@@ -272,10 +278,12 @@ export function useMessages(conversationId: string, currentUserId: string) {
     } catch (error) {
       if (requestGeneration === generation.current) setOlderError(userMessage(error));
     } finally {
+      if (olderInFlight.current === inFlight) olderInFlight.current = null;
       if (requestGeneration === generation.current) {
         olderRequest.current = false;
         setLoadingOlder(false);
       }
+      release();
     }
   }, [conversationId, hasOlder, updateMessages]);
 
@@ -291,9 +299,16 @@ export function useMessages(conversationId: string, currentUserId: string) {
     async (messageId: string): Promise<boolean> => {
       const requestGeneration = generation.current;
       for (let page = 0; ; page++) {
+        // Une page ancienne déjà en cours (défilement) : l'attendre, puis réévaluer avec les messages qu'elle apporte.
+        while (olderInFlight.current) await olderInFlight.current;
+        if (requestGeneration !== generation.current) return false;
         if (messagesRef.current.some((message) => message.id === messageId)) return true;
         const oldest = messagesRef.current.at(-1);
         if (statusRef.current !== 'ready' || !oldest || !hasOlderRef.current || page >= MAX_JUMP_PAGES) return false;
+        olderRequest.current = true;
+        let release!: () => void;
+        const inFlight = new Promise<void>((resolve) => (release = resolve));
+        olderInFlight.current = inFlight;
         try {
           const previous = await fetchHistory(conversationId, PAGE_SIZE, oldest.id);
           if (requestGeneration !== generation.current) return false;
@@ -305,6 +320,10 @@ export function useMessages(conversationId: string, currentUserId: string) {
           setHasOlder(hasOlderRef.current);
         } catch {
           return false;
+        } finally {
+          if (olderInFlight.current === inFlight) olderInFlight.current = null;
+          if (requestGeneration === generation.current) olderRequest.current = false;
+          release();
         }
       }
     },
