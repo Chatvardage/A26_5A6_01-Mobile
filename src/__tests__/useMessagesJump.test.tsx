@@ -141,6 +141,23 @@ describe('useMessages.jumpTo', () => {
     expect(ids(hook)).toHaveLength(new Set(ids(hook)).size);
   });
 
+  it("continue après un loadOlder concurrent qui laisse d'autres pages à charger", async () => {
+    const hook = await setup(page('r', 0, 50));
+    let resolve: (messages: ChatMessage[]) => void = () => undefined;
+    fetchHistory.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    let jumped: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      void hook.result.current.loadOlder();
+    });
+    await act(async () => {
+      jumped = hook.result.current.jumpTo(TARGET);
+    });
+    fetchHistory.mockResolvedValueOnce([...page('q', 100, 49), msg(TARGET, 149)]);
+    await act(async () => resolve(page('p', 50, 50)));
+    await expect(jumped).resolves.toBe(true);
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
+  });
+
   it('ignore loadOlder tant que jumpTo charge une page, puis le réautorise', async () => {
     const hook = await setup(page('r', 0, 50));
     let resolve: (messages: ChatMessage[]) => void = () => undefined;

@@ -106,7 +106,7 @@ describe('useMessageAlerts', () => {
     expect(lookupPseudos).toHaveBeenCalledTimes(2);
   });
 
-  it("borne le cache des pseudos : au-delà de 500 expéditeurs il est vidé et la recherche reprend", async () => {
+  it("borne le cache des pseudos : au-delà de 500 expéditeurs le plus ancien est oublié et sa recherche reprend", async () => {
     await setup();
     jest.mocked(lookupPseudos).mockClear();
     for (let i = 0; i < 502; i++) {
@@ -115,7 +115,7 @@ describe('useMessageAlerts', () => {
       await act(async () => handlers.get('private-message.created')!({ id: `m${i}`, senderId, recipientId: ME }));
     }
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(502));
-    // Un expéditeur déjà vu avant le vidage doit être cherché de nouveau.
+    // Le plus ancien a été évincé : il est cherché de nouveau.
     jest.mocked(lookupPseudos).mockClear();
     await act(async () =>
       handlers.get('private-message.created')!({ id: 'again', senderId: 'expediteur-0', recipientId: ME }),
@@ -128,6 +128,35 @@ describe('useMessageAlerts', () => {
     await setup();
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledWith(expect.objectContaining({ title: 'Chatvardage' })));
+  });
+
+  it("ne relit la permission que tant qu'elle n'est pas accordée", async () => {
+    jest.mocked(getPermission).mockResolvedValue('denied');
+    await setup();
+    await act(async () => handlers.get('private-message.created')!(dmEvent()));
+    expect(showMessageNotification).not.toHaveBeenCalled();
+    jest.mocked(getPermission).mockResolvedValue('granted');
+    await act(async () => handlers.get('private-message.created')!(dmEvent()));
+    await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(1));
+    // Accordée une fois : plus relue (même si elle était retirée ensuite, la notification suit son cours).
+    jest.mocked(getPermission).mockResolvedValue('denied');
+    await act(async () => handlers.get('private-message.created')!(dmEvent()));
+    await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(2));
+  });
+
+  it('marque de nouveau lue la conversation affichée au retour au premier plan', async () => {
+    const listeners: ((state: string) => void)[] = [];
+    const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_: string, handler: (state: string) => void) => {
+      listeners.push(handler);
+      return { remove: jest.fn() };
+    }) as never);
+    await setup(`dm:${OLI}`);
+    jest.mocked(markConversationRead).mockClear();
+    await act(async () => listeners.forEach((l) => l('background')));
+    expect(markConversationRead).not.toHaveBeenCalled();
+    await act(async () => listeners.forEach((l) => l('active')));
+    expect(markConversationRead).toHaveBeenCalledWith(`dm:${OLI}`);
+    spy.mockImplementation((() => ({ remove: jest.fn() })) as never);
   });
 
   it('ne notifie pas sans permission accordée', async () => {

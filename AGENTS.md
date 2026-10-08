@@ -123,3 +123,11 @@ Autres points de la même revue, non appliqués :
   Restent dans la même situation `unreadService.ts`, `messagesService.ts` et `httpClient.ts` (hors périmètre de la revue).
 - **Bandeau de connexion de `ConversationScreen`** : l'état `connecting` affiche `connection.reconnecting` (il n'existe pas de
   clé dédiée « connexion en cours »).
+
+- **Textes des `ApiError` de `searchService.ts` volontairement techniques et en anglais.** `userMessage()` ne lit que le `kind`
+  et ignore le message : les passer par `getTranslations()` recréerait le couplage service / i18n supprimé dans cette PR (la
+  locale peut changer entre l'appel et l'affichage). `unreadService.ts`, `messagesService.ts` et `httpClient.ts` restent à
+  migrer dans le même esprit, hors de cette PR.
+- **`useCanModerate` rafraîchit sur tout `serveur.change`, sans filtre par serveur.** La conversation ne porte que l'identifiant
+  du salon : retrouver son serveur demande la liste `GET /api/servers`, déjà relue par ce rafraîchissement. Filtrer coûterait
+  un appel de plus pour éviter un appel ; à revoir si le contrat expose le serveur du salon.

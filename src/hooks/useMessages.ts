@@ -52,7 +52,6 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const eventBuffer = useRef<ChatMessage[]>([]);
   const pseudoCache = useRef(new Map<string, string>());
   const pseudoLookups = useRef(new Set<string>());
-  const olderRequest = useRef(false);
   // Chargement de page ancienne en cours (loadOlder ou jumpTo) : l'autre attend ou renonce, pour ne jamais lire le même curseur.
   const olderInFlight = useRef<Promise<void> | null>(null);
   // Messages supprimés pendant la session : une page REST arrivée en retard ne doit pas les faire réapparaître.
@@ -132,7 +131,6 @@ export function useMessages(conversationId: string, currentUserId: string) {
     eventBuffer.current = [];
     pseudoCache.current.clear();
     pseudoLookups.current.clear();
-    olderRequest.current = false;
     olderInFlight.current = null;
     deletedIds.current.clear();
 
@@ -260,10 +258,9 @@ export function useMessages(conversationId: string, currentUserId: string) {
   }, [loadRecent]);
 
   const loadOlder = useCallback(async () => {
-    if (statusRef.current !== 'ready' || olderRequest.current || !hasOlder) return;
+    if (statusRef.current !== 'ready' || olderInFlight.current || !hasOlder) return;
     const oldest = messagesRef.current.at(-1);
     if (!oldest) return;
-    olderRequest.current = true;
     setLoadingOlder(true);
     setOlderError(null);
     const requestGeneration = generation.current;
@@ -277,15 +274,13 @@ export function useMessages(conversationId: string, currentUserId: string) {
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
       }
       updateMessages(page);
-      setHasOlder(page.length === PAGE_SIZE);
+      hasOlderRef.current = page.length === PAGE_SIZE;
+      setHasOlder(hasOlderRef.current);
     } catch (error) {
       if (requestGeneration === generation.current) setOlderError(userMessage(error));
     } finally {
       if (olderInFlight.current === inFlight) olderInFlight.current = null;
-      if (requestGeneration === generation.current) {
-        olderRequest.current = false;
-        setLoadingOlder(false);
-      }
+      if (requestGeneration === generation.current) setLoadingOlder(false);
       release();
     }
   }, [conversationId, hasOlder, updateMessages]);
@@ -308,7 +303,6 @@ export function useMessages(conversationId: string, currentUserId: string) {
         if (messagesRef.current.some((message) => message.id === messageId)) return true;
         const oldest = messagesRef.current.at(-1);
         if (statusRef.current !== 'ready' || !oldest || !hasOlderRef.current || page >= MAX_JUMP_PAGES) return false;
-        olderRequest.current = true;
         let release!: () => void;
         const inFlight = new Promise<void>((resolve) => (release = resolve));
         olderInFlight.current = inFlight;
@@ -325,7 +319,6 @@ export function useMessages(conversationId: string, currentUserId: string) {
           return false;
         } finally {
           if (olderInFlight.current === inFlight) olderInFlight.current = null;
-          if (requestGeneration === generation.current) olderRequest.current = false;
           release();
         }
       }

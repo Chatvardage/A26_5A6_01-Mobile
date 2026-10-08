@@ -45,27 +45,42 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
   const active = useRef(activeConversationId);
   const unreadRef = useRef(unread);
   const titles = useRef(new Map<string, string>());
+  // La permission ne change pas en cours de session : relue seulement tant qu'elle n'est pas accordée.
+  const granted = useRef(false);
 
   useEffect(() => {
     active.current = activeConversationId;
     unreadRef.current = unread;
   });
 
-  // Ouvrir une conversation la marque lue (état en base, partagé avec les autres appareils).
+  // Ouvrir une conversation la marque lue (état en base, partagé avec les autres appareils) ; revenir au premier
+  // plan avec elle encore affichée aussi : les messages reçus en arrière-plan l'ont rendue non lue.
   useEffect(() => {
-    if (!activeConversationId) return;
-    unreadRef.current.clear(activeConversationId);
-    void markConversationRead(activeConversationId).catch(() => undefined);
+    const markActiveRead = () => {
+      if (!activeConversationId) return;
+      unreadRef.current.clear(activeConversationId);
+      void markConversationRead(activeConversationId).catch(() => undefined);
+    };
+    markActiveRead();
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') markActiveRead();
+    });
+    return () => appState.remove();
   }, [activeConversationId]);
 
   useEffect(() => {
     const notify = async (conversationId: string, senderId: string) => {
-      if ((await getPermission()) !== 'granted') return;
+      if (!granted.current) {
+        granted.current = (await getPermission()) === 'granted';
+        if (!granted.current) return;
+      }
       if (!titles.current.has(senderId)) {
         const names = await lookupPseudos([senderId]).catch(() => ({}) as Record<string, string>);
-        // Cache borné : une longue session sur un serveur très actif ne le fait pas grossir sans limite.
-        if (titles.current.size >= MAX_CACHED_TITLES) titles.current.clear();
-        if (names[senderId]) titles.current.set(senderId, names[senderId]);
+        if (names[senderId]) {
+          // Cache borné (le plus ancien est oublié) : une longue session sur un serveur très actif ne le fait pas grossir.
+          if (titles.current.size >= MAX_CACHED_TITLES) titles.current.delete(titles.current.keys().next().value as string);
+          titles.current.set(senderId, names[senderId]);
+        }
       }
       await showMessageNotification({
         conversationId,
