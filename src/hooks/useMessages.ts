@@ -18,6 +18,26 @@ import type { ChatMessage } from '@/types/conversation';
 import { parseConversationId } from '@/types/conversationId';
 
 const PAGE_SIZE = 50;
+
+/**
+ * Fenêtre autour d'un message cherché : la cible et les plus anciens (`around`), puis jusqu'à une page de
+ * messages plus récents. Une petite conversation s'affiche donc en entier, sans « Charger les messages plus
+ * récents » ; `more` ne reste vrai que s'il en existe au-delà (ou si la vérification échoue). `older` : y a-t-il
+ * encore des messages plus anciens que la fenêtre.
+ */
+async function fetchWindow(conversationId: string, messageId: string): Promise<{ page: ChatMessage[]; more: boolean; older: boolean }> {
+  const older = await fetchHistory(conversationId, PAGE_SIZE, undefined, { around: messageId });
+  const hasOlder = older.length === PAGE_SIZE;
+  if (!older[0]) return { page: older, more: false, older: false };
+  try {
+    const newer = await fetchHistory(conversationId, PAGE_SIZE, older[0].id, { direction: 'after' });
+    const more = newer.length === PAGE_SIZE ? await hasNewerMessages(conversationId, newer[0].id).catch(() => true) : false;
+    return { page: [...newer, ...older], more, older: hasOlder };
+  } catch {
+    return { page: older, more: true, older: hasOlder };
+  }
+}
+
 /** Suppressions mémorisées (pour ignorer une réponse tardive qui les ramènerait) : les plus anciennes sont oubliées. */
 const MAX_DELETED_IDS = 500;
 type Status = 'loading' | 'error' | 'ready';
@@ -101,11 +121,9 @@ export function useMessages(conversationId: string, currentUserId: string, initi
       setErrorMessage(null);
     }
     try {
-      const page = anchor.current ? await fetchHistory(conversationId, PAGE_SIZE, undefined, { around: anchor.current }) : await fetchHistory(conversationId);
-      const newest = mergeMessages(messagesRef.current, page)[0];
-      const more = anchor.current && newest
-        ? await hasNewerMessages(conversationId, newest.id).catch(() => true)
-        : false;
+      const { page, more, older } = anchor.current
+        ? await fetchWindow(conversationId, anchor.current)
+        : await fetchHistory(conversationId).then(recent => ({ page: recent, more: false, older: recent.length === PAGE_SIZE }));
       if (requestGeneration !== generation.current || requestId !== recentRequest.current) return;
       newerAvailable.current = more;
       setHasNewer(more);
@@ -117,7 +135,7 @@ export function useMessages(conversationId: string, currentUserId: string, initi
       const buffered = initial ? eventBuffer.current : [];
       updateMessages([...page, ...buffered]);
       if (initial) eventBuffer.current = [];
-      if (initial) setHasOlder(page.length === PAGE_SIZE);
+      if (initial) setHasOlder(older);
       firstLoadDone.current = true;
       updateStatus('ready');
       setErrorMessage(null);
@@ -324,8 +342,7 @@ export function useMessages(conversationId: string, currentUserId: string, initi
     setLoadingOlder(false);
     setLoadingNewer(false);
     try {
-      const page = await fetchHistory(conversationId, PAGE_SIZE, undefined, { around: messageId });
-      const more = page[0] ? await hasNewerMessages(conversationId, page[0].id).catch(() => true) : false;
+      const { page, more, older } = await fetchWindow(conversationId, messageId);
       if (requestGeneration !== generation.current || version !== windowRequest.current) return false;
       if (!page.some(message => message.id === messageId) || deletedIds.current.has(messageId)) return false;
       anchor.current = more ? messageId : null;
@@ -333,7 +350,7 @@ export function useMessages(conversationId: string, currentUserId: string, initi
       setHasNewer(more);
       messagesRef.current = [];
       updateMessages(page);
-      hasOlderRef.current = page.length === PAGE_SIZE;
+      hasOlderRef.current = older;
       setHasOlder(hasOlderRef.current);
       setLoadingOlder(false);
       setOlderError(null);

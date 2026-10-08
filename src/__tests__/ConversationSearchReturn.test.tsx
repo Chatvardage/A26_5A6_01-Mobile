@@ -45,16 +45,20 @@ it.each(['dm', 'room'])('ouvre un résultat dans la conversation %s déjà mont�
     const view = await render(<ConversationScreen {...props(kind)} />);
     await waitFor(() => expect(screen.getByText('texte recent')).toBeTruthy());
     let resolve!: (messages: ChatMessage[]) => void;
-    jest.mocked(fetchHistory).mockImplementation(() => new Promise(done => { resolve = done; }));
+    // La cible (réponse retenue), puis les messages qui la suivent (aucun).
+    jest.mocked(fetchHistory).mockImplementationOnce(() => new Promise(done => { resolve = done; })).mockResolvedValue([]);
     await view.rerender(<ConversationScreen {...props(kind, TARGET, 1)} />);
     await act(async () => resolve([message(TARGET)]));
     await waitFor(() => expect(screen.getByText(`texte ${TARGET}`)).toBeTruthy());
     expect(screen.queryByText('Chargement des messages…')).toBeNull();
-    expect(fetchHistory).toHaveBeenCalledTimes(2);
-    expect(fetchHistory).toHaveBeenLastCalledWith(`${kind}:${ID}`, 50, undefined, { around: TARGET });
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
+    expect(fetchHistory).toHaveBeenNthCalledWith(2, `${kind}:${ID}`, 50, undefined, { around: TARGET });
+    expect(fetchHistory).toHaveBeenLastCalledWith(`${kind}:${ID}`, 50, TARGET, { direction: 'after' });
+    // Rien de plus récent : pas de bouton « Charger les messages plus récents ».
+    expect(screen.queryByText('Charger les messages plus récents')).toBeNull();
     expect(scroll).toHaveBeenCalledWith({ index: 0, viewPosition: 0.5, animated: false });
     await view.rerender(<ConversationScreen {...props(kind, TARGET, 2)} />);
-    expect(fetchHistory).toHaveBeenCalledTimes(2);
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
     await view.unmount();
   } finally {
     scroll.mockRestore();
