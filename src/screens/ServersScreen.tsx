@@ -9,6 +9,7 @@ import { ContentFrame } from '@/components/ContentFrame';
 import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ServerItem } from '@/components/ServerItem';
 import { ThemedView } from '@/components/themed-view';
+import { usePendingInvitations } from '@/hooks/usePendingInvitations';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
 import { useServers } from '@/hooks/useServers';
@@ -29,6 +30,7 @@ export function ServersScreen({ navigation }: Props) {
   const { state, refreshing, refreshError, retry, refresh } = useServers();
   useRefreshOnFocus(refresh);
   useRefreshOnServerChange(refresh);
+  const invitations = usePendingInvitations();
   const refreshProps = { refreshing, onRefresh: refresh };
   const servers = useLiveServers(state.status === 'ready' ? state.data : NONE);
 
@@ -49,7 +51,7 @@ export function ServersScreen({ navigation }: Props) {
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
         <FlatList
           ListHeaderComponent={<View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 12 }}>
-            <ActionButton label={strings.control.discover} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'discover' })} />
+            <ActionButton label={strings.control.discover} badge={invitations} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'discover' })} />
             <ActionButton label={strings.control.createServer} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'create' })} />
           </View>}
           data={servers}
