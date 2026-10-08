@@ -434,3 +434,27 @@ aux outils concernés, sans considérer cette précaution comme un correctif.
 Ne pas utiliser `npm audit fix --force` : la résolution proposée inclut une
 rétrogradation incompatible vers Expo 44. Vérifier les nouveaux correctifs avec
 `npm audit` et `npx expo install --check`, puis refaire les tests avant une mise à jour.
+
+### Préférences du téléphone et accueil
+
+Le thème clair/sombre et la langue suivent automatiquement les paramètres du téléphone. La langue enregistrée dans le profil serveur ne remplace pas celle du téléphone. Le français et l’anglais sont disponibles; les autres langues utilisent l’anglais. L’onglet Accueil propose des accès aux serveurs, messages privés, recherche et paramètres.
+
+### Conversation et messagerie : suivi des nouveaux messages
+
+Les nouveaux messages replaçent la conversation en bas si la distance au dernier message ne dépasse pas une page visible. Au-delà, la position de lecture est conservée. La hauteur visible tient compte du clavier. Les droits d’écriture sont relus après reconnexion; le rôle effectif fourni par Room-Service permet la compatibilité avec les anciennes réponses sans `peutEcrire`. Une interdiction explicite du serveur reste prioritaire.
+
+Un envoi réussi remet toujours la conversation en bas, quelle que soit la position de lecture. Le seuil d’une page concerne uniquement les messages reçus. Un envoi en erreur conserve la position et le brouillon.
+
+### Membres et modération
+
+La liste des membres affiche les avatars, la présence et le rôle effectif. Depuis cette liste, un modérateur peut choisir **Expulser**, puis confirmer. Le serveur valide les permissions : seuls les membres de rang inférieur peuvent être exclus; l’auto-exclusion et l’exclusion dans le serveur Chatvardage par défaut ne sont pas proposées. Après succès, la liste est relue; un refus conserve le membre et affiche une erreur.
+
+Les avatars sont alignés en haut de la bulle; la date et les accusés apparaissent dessous. Les champs de gestion du serveur utilisent une couleur d’indication adaptée au thème et la visibilité publique est centrée dans sa ligne.
+
+La date des messages reçus est alignée à gauche sous le début de la bulle. Celle de ses propres messages reste alignée à droite.
+
+Les boutons d’envoi, de modification, de recherche de destinataires et leurs libellés d’accessibilité suivent la langue du téléphone. Le message de bienvenue d’origine et son auteur Système sont traduits à l’affichage; le contenu des utilisateurs et les messages modifiés restent inchangés.
+
+### Conversation et messagerie : résultats anciens
+
+Un résultat de recherche ouvre une page directement depuis le message choisi, avec un indicateur de chargement puis une mise en évidence instantanée. Les messages intermédiaires ne sont plus chargés. La pagination reprend depuis cette position, vers les messages plus anciens ou plus récents. Une reconstruction locale de Message-Service est nécessaire pour activer les nouveaux paramètres `around` et `direction`.
