@@ -256,6 +256,8 @@ export const fr = {
     newInvitation: 'Nouvelle invitation',
     invitedTo: (name: string) => `Vous avez reçu une invitation pour le serveur ${name}.`,
     invitedToServer: 'Vous avez reçu une invitation pour un serveur.',
+    viewInvitations: 'Toucher pour voir.',
+    dismiss: 'Fermer',
     granted: 'Activées',
     denied: 'Refusées : activez-les dans les réglages du système.',
     undetermined: 'Non activées',

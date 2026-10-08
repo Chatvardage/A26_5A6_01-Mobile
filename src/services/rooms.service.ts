@@ -15,9 +15,9 @@ const url = (id: string) => `/api/servers/${encodeURIComponent(id)}`;
 const body = (method: string, data?: unknown): RequestInit => ({ method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
 export const getServer = (id: string) => apiFetch<Server>(url(id));
 export type DiscoverPage = { serveurs: DiscoverableServer[]; total: number; suivant: number | null };
-/** Serveurs publics à rejoindre, par pages de 20 (`suivant` : décalage de la page suivante, `null` à la fin). */
+export const DISCOVER_PAGE_SIZE = 10;
+/** Serveurs publics à rejoindre, par pages de 10, les plus fréquentés d’abord (`suivant` : décalage de la page suivante, `null` à la fin). */
 export const discoverServers = (query: string, offset = 0) => apiFetch<DiscoverPage>(`/api/servers/decouvrir?q=${encodeURIComponent(query.trim().slice(0, 80))}&decalage=${offset}&limite=${DISCOVER_PAGE_SIZE}`);
-export const DISCOVER_PAGE_SIZE = 20;
 export const getInvitations = () => apiFetch<Invitation[]>('/api/servers/invitations/me');
 export const createServer = (nom: string, isPublic: boolean) => apiFetch<Server>('/api/servers', body('POST', { nom: nom.trim(), public: isPublic }));
 export const updateServer = (id: string, patch: { nom?: string; public?: boolean; icone?: string }) => apiFetch<Server>(url(id), body('PATCH', patch));
