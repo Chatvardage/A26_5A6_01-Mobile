@@ -2,16 +2,20 @@
 /**
  * Démarre Expo en adaptant la configuration au poste. Usage : `npm start [options expo]`.
  *
- * - Hors WSL2 : équivaut à `npx expo start`.
+ * - Hors WSL2 : met à jour l'IP LAN de l'API dans `.env`, puis équivaut à `npx expo start`.
  * - Sous WSL2 : ajoute `--tunnel` (le téléphone n'atteint pas Metro autrement) et, si
  *   EXPO_PUBLIC_API_URL n'est définie ni dans l'environnement ni dans `.env`, la déduit de
  *   l'IP Wi-Fi actuelle de Windows (port 3006 : voir la redirection « netsh » du README).
  */
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const WSL_API_PORT = 3006;
+const API_VARIABLE = 'EXPO_PUBLIC_API_URL';
+const DEFAULT_API_PORT = 3000;
+const ENV_FILE = path.join(__dirname, '..', '.env');
 const args = process.argv.slice(2);
 const env = { ...process.env };
 
@@ -23,9 +27,47 @@ function isWsl() {
   }
 }
 
+function isPrivateIpv4(value) {
+  const parts = value.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [first, second] = parts;
+  return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+}
+
 function isIpv4(value) {
   const parts = value.split('.');
   return parts.length === 4 && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+}
+
+function getLocalIpv4Addresses() {
+  return Object.values(os.networkInterfaces())
+    .flatMap((interfaces) => interfaces ?? [])
+    .filter((network) => network.family === 'IPv4' && !network.internal && isPrivateIpv4(network.address))
+    .map((network) => network.address);
+}
+
+function readConfiguredUrl(content) {
+  const match = content.match(/^\s*EXPO_PUBLIC_API_URL\s*=\s*(\S+)\s*$/m);
+  return match?.[1] ?? null;
+}
+
+function buildApiUrl(configuredUrl, ip) {
+  if (!configuredUrl) return `http://${ip}:${DEFAULT_API_PORT}`;
+
+  try {
+    const url = new URL(configuredUrl);
+    url.hostname = ip;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    throw new Error(`${API_VARIABLE} doit être une URL valide (ex. http://192.168.1.10:3000).`);
+  }
+}
+
+function updateEnvContent(content, apiUrl) {
+  const line = `${API_VARIABLE}=${apiUrl}`;
+  const expression = /^(\s*EXPO_PUBLIC_API_URL\s*=\s*)[^\r\n]*$/m;
+  if (expression.test(content)) return content.replace(expression, line);
+  return `${content.replace(/\s*$/, '')}\n${line}\n`;
 }
 
 function powershell(command) {
@@ -40,6 +82,24 @@ function definedInDotEnv() {
   } catch {
     return false;
   }
+}
+
+function updateApiIp() {
+  const ip = getLocalIpv4Addresses()[0];
+  if (!ip) {
+    throw new Error("Aucune IPv4 LAN détectée. Utiliser `npm run update-ip -- --ip <IPv4-du-PC>`.");
+  }
+
+  let content = '';
+  try {
+    content = fs.readFileSync(ENV_FILE, 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  const apiUrl = buildApiUrl(readConfiguredUrl(content), ip);
+  fs.writeFileSync(ENV_FILE, updateEnvContent(content, apiUrl));
+  console.log(`[start] API mise à jour : ${apiUrl}`);
 }
 
 if (isWsl()) {
@@ -64,6 +124,13 @@ if (isWsl()) {
     } else {
       console.warn("[start] IP Windows introuvable : définir EXPO_PUBLIC_API_URL dans .env (voir le README).");
     }
+  }
+} else {
+  try {
+    updateApiIp();
+  } catch (error) {
+    console.error(`[start] ${error.message}`);
+    process.exit(1);
   }
 }
 
