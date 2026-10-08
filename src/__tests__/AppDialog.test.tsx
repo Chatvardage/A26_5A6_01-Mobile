@@ -17,6 +17,10 @@ it('place Annuler à gauche et garde l’ordre des autres actions à droite', as
   expect(dialog.getByRole('header')).toHaveTextContent('Titre');
   expect(dialog.getByText('Détail')).toBeTruthy(); expect(dialog.getByText('Citation')).toBeTruthy();
   expect(dialog.getAllByRole('button').map(button => button.props.accessibilityLabel)).toEqual(['Annuler', 'Supprimer', 'Modifier']);
+  // Les trois boutons restent sur une seule ligne (pas de retour à la ligne, libellés sur une ligne).
+  expect(screen.getByTestId('app-dialog-actions')).toHaveStyle({ flexDirection: 'row' });
+  expect(screen.getByTestId('app-dialog-actions')).not.toHaveStyle({ flexWrap: 'wrap' });
+  expect(dialog.getByText('Supprimer').props.numberOfLines).toBe(1);
   await fireEvent.press(dialog.getByRole('button', { name: 'Supprimer' }));
   expect(onDelete).toHaveBeenCalledTimes(1); expect(screen.queryByTestId('app-dialog')).toBeNull();
 });
