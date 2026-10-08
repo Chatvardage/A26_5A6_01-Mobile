@@ -231,6 +231,7 @@ describe('SearchResultItem', () => {
   it.each([
     ['salon connu', { ...room, conversationTitle: '#annonces', senderName: 'Système' }, '#annonces', 'Système'],
     ['salon inconnu', { ...room, senderName: 'mia' }, 'Salon', 'mia'],
+    ['auteur système sans pseudo', { ...room, conversationTitle: undefined, senderId: 'system', senderName: undefined }, 'Salon', 'Système'],
   ] as const)('salon : le salon puis l\'auteur (%s)', async (_, result, top, detail) => {
     await render(<SearchResultItem result={result} variant="grouped" onPress={jest.fn()} />);
     expect(screen.getByText(top)).toBeTruthy();
