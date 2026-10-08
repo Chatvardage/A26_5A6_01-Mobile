@@ -151,6 +151,9 @@ export const en = {
     newConversation: 'new conversation',
   },
   navigation: {
+    searchServers: 'Search servers',
+    searchPrivateMessages: 'Search conversations',
+    noMatch: 'No results',
     showMore: 'Show more',
     messages: "Messages",
     directMessages: 'Direct messages',
@@ -280,6 +283,7 @@ export const en = {
     badgeNote: 'The unread badge stays visible in the app, even without notifications.',
   },
   control: {
+    pendingInvitations: (count: number) => `${count} pending invitation${count > 1 ? 's' : ''}`,
     transferTitle: (name: string) => `Kick ${name}, the server owner`,
     transferHint: "Choose the member who will become the owner. They will get every right on the server.",
     makeOwner: "Make owner",

@@ -33,6 +33,7 @@ import { useTranslation } from '@/i18n';
 
 import { displayName } from '@/utils/displayNames';
 import { PersistentNavigation } from '@/components/PersistentNavigation';
+import { InvitationsProvider } from '@/unread/InvitationsContext';
 import { MainTabs } from './MainTabs';
 import { parseConversationParams, Routes, type RootStackParamList, type MainTabParamList } from './routes';
 
@@ -58,7 +59,7 @@ function useNavigationTheme(): Theme {
 }
 
 function SignedInShell({ active, children }: { active: boolean; children: ReactNode }) {
-  return active ? <UnreadProvider>{children}</UnreadProvider> : <>{children}</>;
+  return active ? <UnreadProvider><InvitationsProvider>{children}</InvitationsProvider></UnreadProvider> : <>{children}</>;
 }
 
 export function RootNavigator() {

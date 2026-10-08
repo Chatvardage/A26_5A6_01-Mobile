@@ -6,6 +6,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from '@/i18n';
 import { unreadLabel } from './UnreadBadge';
 import { useUnread } from '@/unread/UnreadContext';
+import { useInvitations } from '@/unread/InvitationsContext';
 import { Routes, type MainTabParamList } from '@/navigation/routes';
 const tabs = [
   { route: Routes.Rooms, label: 'home', icon: { ios: 'house', android: 'home', web: 'home' }, fallback: '\u2302' },
@@ -17,7 +18,7 @@ const tabs = [
 /** Navigation commune a tous les ecrans authentifies, y compris les conversations. */
 export function PersistentNavigation({ selected, onNavigate }: { selected: keyof MainTabParamList; onNavigate: (tab: keyof MainTabParamList) => void }) {
   const theme = useTheme(); const { strings } = useTranslation(); const inset = useSafeAreaInsets();
-  const { dmTotal, roomTotal } = useUnread();
+  const { dmTotal, roomTotal } = useUnread(); const invitations = useInvitations().count;
   return <View style={[styles.bar, { backgroundColor: theme.card, borderTopColor: theme.textSecondary + '40', paddingBottom: Math.max(inset.bottom, 8) }]}>
     {tabs.map(tab => {
       const active = tab.route === selected;
@@ -27,8 +28,9 @@ export function PersistentNavigation({ selected, onNavigate }: { selected: keyof
         <SymbolView name={tab.icon} size={24} tintColor={active ? theme.accent : theme.textSecondary} fallback={<ThemedText>{tab.fallback}</ThemedText>} />
         <ThemedText style={{ fontSize: 10, lineHeight: 14, fontWeight: active ? '700' : '500' }}>{label}</ThemedText>
         {count > 0 ? <View style={[styles.badge, { backgroundColor: theme.primary }]}><ThemedText style={{ color: theme.onPrimary, fontSize: 10, lineHeight: 14 }}>{unreadLabel(count)}</ThemedText></View> : null}
+        {tab.route === Routes.Servers && invitations > 0 ? <View testID="invitations-tab-badge" accessibilityLabel={strings.control.pendingInvitations(invitations)} style={[styles.invitationBadge, { backgroundColor: theme.danger }]}><ThemedText style={{ color: '#ffffff', fontSize: 10, lineHeight: 14 }}>{unreadLabel(invitations)}</ThemedText></View> : null}
       </Pressable>;
     })}
   </View>;
 }
-const styles = StyleSheet.create({ bar: { flexDirection: 'row', paddingHorizontal: 6, paddingTop: 8, borderTopWidth: 1 }, tab: { flex: 1, minHeight: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 4 }, badge: { position: 'absolute', top: 0, right: 2, borderRadius: 8, paddingHorizontal: 4 } });
+const styles = StyleSheet.create({ bar: { flexDirection: 'row', paddingHorizontal: 6, paddingTop: 8, borderTopWidth: 1 }, tab: { flex: 1, minHeight: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 4 }, badge: { position: 'absolute', top: 0, right: 2, borderRadius: 8, paddingHorizontal: 4 }, invitationBadge: { position: 'absolute', top: 0, left: 2, minWidth: 16, alignItems: 'center', borderRadius: 8, paddingHorizontal: 4 } });

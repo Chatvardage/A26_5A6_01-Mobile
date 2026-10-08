@@ -15,7 +15,7 @@ jest.mock('@/hooks/useRefreshOnServerChange', () => ({ useRefreshOnServerChange:
 jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' }, realtime: { subscribe: () => () => undefined } }) }));
 
 const ready = (data: unknown[]) => ({ state: { status: 'ready', data }, refreshing: false, refreshError: null, retry: jest.fn(), refresh: jest.fn() }) as never;
-const navigation = { navigate: jest.fn() } as never;
+const navigation = { navigate: jest.fn(), setOptions: jest.fn() } as never;
 
 it('affiche 15 éléments à la fois, puis la page suivante', async () => {
   const hook = await renderHook(({ items }: { items: number[] }) => usePagedList(items), { initialProps: { items: Array.from({ length: 32 }, (_, i) => i) } });

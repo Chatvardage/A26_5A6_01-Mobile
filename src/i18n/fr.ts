@@ -151,6 +151,9 @@ export const fr = {
     newConversation: 'nouvelle conversation',
   },
   navigation: {
+    searchServers: 'Rechercher un serveur',
+    searchPrivateMessages: 'Rechercher une conversation',
+    noMatch: 'Aucun résultat',
     showMore: 'Afficher plus',
     messages: "Messages",
     directMessages: 'Messages privés',
@@ -280,6 +283,7 @@ export const fr = {
     badgeNote: 'Le badge de messages non lus reste visible dans l’application, même sans notification.',
   },
   control: {
+    pendingInvitations: (count: number) => `${count} invitation${count > 1 ? 's' : ''} en attente`,
     transferTitle: (name: string) => `Expulser ${name}, propriétaire du serveur`,
     transferHint: "Choisissez le membre qui deviendra propriétaire. Il recevra tous les droits sur le serveur.",
     makeOwner: "Nommer propriétaire",

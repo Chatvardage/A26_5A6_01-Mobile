@@ -32,17 +32,17 @@ const lists = [
   {
     name: 'messages privés', hook: useDirectMessages as jest.Mock, item: 'Alice', data: [conversation],
     loading: 'Chargement des messages privés…', empty: 'Aucun message privé',
-    element: () => <DirectMessagesScreen navigation={{ navigate } as never} route={{} as never} />,
+    element: () => <DirectMessagesScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{} as never} />,
   },
   {
     name: 'serveurs', hook: useServers as jest.Mock, item: 'Équipe', data: [server],
     loading: 'Chargement des serveurs…', empty: 'Aucun serveur',
-    element: () => <ServersScreen navigation={{ navigate } as never} route={{} as never} />,
+    element: () => <ServersScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{} as never} />,
   },
   {
     name: 'salons', hook: useServerChannels as jest.Mock, item: 'général', data: { channels: [channel] },
     loading: 'Chargement des salons…', empty: 'Aucun salon',
-    element: () => <ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: ID } } as never} />,
+    element: () => <ServerScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{ params: { serverId: ID } } as never} />,
   },
 ];
 

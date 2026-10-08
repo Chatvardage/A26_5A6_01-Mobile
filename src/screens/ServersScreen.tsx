@@ -1,15 +1,19 @@
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback } from 'react';
+import { useCallback, useLayoutEffect } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 
 import { ActionButton } from '@/components/ActionButton';
 import { ContentFrame } from '@/components/ContentFrame';
+import { HeaderSearchButton } from '@/components/HeaderSearchButton';
+import { ThemedTextInput } from '@/components/ThemedTextInput';
 import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ServerItem } from '@/components/ServerItem';
+import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { usePendingInvitations } from '@/hooks/usePendingInvitations';
+import { useListFilter } from '@/hooks/useListFilter';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
@@ -25,6 +29,7 @@ type Props = CompositeScreenProps<
 >;
 
 const NONE: ServerSummary[] = [];
+const nameOf = (item: ServerSummary) => item.name;
 
 export function ServersScreen({ navigation }: Props) {
   const { strings } = useTranslation();
@@ -34,8 +39,13 @@ export function ServersScreen({ navigation }: Props) {
   const invitations = usePendingInvitations();
   const refreshProps = { refreshing, onRefresh: refresh };
   const servers = useLiveServers(state.status === 'ready' ? state.data : NONE);
+  // Loupe de l'en-tête : filtre par nom, avant la pagination.
+  const search = useListFilter(servers, nameOf);
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerRight: () => <HeaderSearchButton label={strings.navigation.searchServers} active={search.open} onPress={search.toggle} /> });
+  }, [navigation, strings, search.open, search.toggle]);
   // 15 à la fois, les plus actifs en haut (tri du service).
-  const page = usePagedList(servers);
+  const page = usePagedList(search.filtered);
 
   const open = useCallback(
     (server: ServerSummary) => navigation.navigate(Routes.Server, { serverId: server.id, title: server.name }),
@@ -52,7 +62,9 @@ export function ServersScreen({ navigation }: Props) {
     <ThemedView style={styles.fill}>
       <ContentFrame>
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
+        {search.open ? <View style={styles.search}><ThemedTextInput autoFocus accessibilityLabel={strings.navigation.searchServers} placeholder={strings.navigation.searchServers} value={search.query} onChangeText={search.setQuery} maxLength={80} autoCorrect={false} autoCapitalize="none" returnKeyType="search" /></View> : null}
         <FlatList
+          ListEmptyComponent={search.query.trim() ? <ThemedText themeColor="textSecondary" style={styles.noMatch}>{strings.navigation.noMatch}</ThemedText> : null}
           ListHeaderComponent={<View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 20, gap: 12 }}>
             <ActionButton label={strings.control.discover} badge={invitations} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'discover' })} />
             <ActionButton label={strings.control.createServer} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'create' })} />
@@ -76,4 +88,6 @@ const styles = StyleSheet.create({
   list: { flexGrow: 1 },
   separator: { height: StyleSheet.hairlineWidth },
   more: { padding: 16 },
+  search: { paddingHorizontal: 16, paddingTop: 12 },
+  noMatch: { padding: 16, textAlign: 'center' },
 });

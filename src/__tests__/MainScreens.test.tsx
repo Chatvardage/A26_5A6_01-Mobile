@@ -50,7 +50,7 @@ let mockMessages: ChatMessage[];
 let mockMessageStatus: 'loading' | 'error' | 'ready';
 let mockMessageError: string | null;
 const id = '0b7d6f3e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
-const navigation = { navigate: jest.fn() };
+const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 const server: ServerSummary = { id, name: 'Équipe', memberCount: 2, channelIds: [id], unreadCount: 0 };
 const channel: ConversationSummary = {
   id: `room:${id}`,

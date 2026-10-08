@@ -32,19 +32,19 @@ const targets = [
     name: 'messages privés', hook: useDirectMessages as jest.Mock, loading: 'Chargement des messages privés…',
     empty: 'Aucun message privé', data: [conversation, { ...conversation, id: 'second' }], button: /Alice/,
     destination: ['Conversation', { conversationId: conversation.id, title: 'Alice' }],
-    element: () => <DirectMessagesScreen navigation={{ navigate } as never} route={{} as never} />,
+    element: () => <DirectMessagesScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{} as never} />,
   },
   {
     name: 'serveurs', hook: useServers as jest.Mock, loading: 'Chargement des serveurs…',
     empty: 'Aucun serveur', data: [server, { ...server, id: 'second' }], button: /Équipe/,
     destination: ['Server', { serverId: SERVER_ID, title: 'Équipe' }],
-    element: () => <ServersScreen navigation={{ navigate } as never} route={{} as never} />,
+    element: () => <ServersScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{} as never} />,
   },
   {
     name: 'salons', hook: useServerChannels as jest.Mock, loading: 'Chargement des salons…',
     empty: 'Aucun salon', data: { channels: [channel, { ...channel, id: 'second' }] }, button: /général/,
     destination: ['Conversation', { conversationId: channel.id, title: 'général' }],
-    element: () => <ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: SERVER_ID } } as never} />,
+    element: () => <ServerScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{ params: { serverId: SERVER_ID } } as never} />,
   },
 ];
 
@@ -82,7 +82,7 @@ describe.each(targets)('Écran $name', ({ hook, loading, empty, data, button, de
 });
 
 it('refuse un serveur invalide avant d’appeler le hook', async () => {
-  await render(<ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: 'invalide' } } as never} />);
+  await render(<ServerScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{ params: { serverId: 'invalide' } } as never} />);
   expect(screen.getByText('Ce serveur est introuvable.')).toBeTruthy();
   expect(useServerChannels).not.toHaveBeenCalled();
 });
