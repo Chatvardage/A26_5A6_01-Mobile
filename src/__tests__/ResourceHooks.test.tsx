@@ -2,12 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { useServers } from '@/hooks/useServers';
 import { useServerChannels } from '@/hooks/useServerChannels';
-import { useConversationHistory } from '@/hooks/useConversationHistory';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useLoadable } from '@/hooks/useLoadable';
 import { fetchDirectMessages } from '@/services/directMessagesService';
 import { fetchServers, fetchServerChannels } from '@/services/serversService';
-import { fetchHistory } from '@/services/messagesService';
 
 jest.mock('@/services/directMessagesService');
 jest.mock('@/services/serversService');
@@ -33,21 +31,15 @@ it.each([false, true])('charge les privés et serveurs, résultat vide=%s', asyn
   expect(fetchDirectMessages).toHaveBeenCalledWith(undefined);
   expect(fetchServers).toHaveBeenCalledWith(undefined);
 });
-it.each([false, true])('charge historique et salons, résultat vide=%s', async (empty) => {
-  jest
-    .mocked(fetchHistory)
-    .mockResolvedValue(empty ? [] : [{ id: 'm', senderId: 'u', content: 'Salut', createdAt: '', updatedAt: '' }]);
+it.each([false, true])('charge les salons, résultat vide=%s', async (empty) => {
   jest
     .mocked(fetchServerChannels)
     .mockResolvedValue({
       name: 'Équipe',
       channels: empty ? [] : [{ id: 'c', kind: 'room', title: 'Général', lastMessage: null, unreadCount: 0 }],
     });
-  const history = await renderHook(() => useConversationHistory('dm:a'));
   const channels = await renderHook(() => useServerChannels('s'));
-  await waitFor(() => expect(history.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
   await waitFor(() => expect(channels.result.current.state.status).toBe(empty ? 'empty' : 'ready'));
-  expect(fetchHistory).toHaveBeenCalledWith('dm:a');
   expect(fetchServerChannels).toHaveBeenCalledWith('s', undefined);
 });
 it('ne rafraîchit pas au premier focus puis rafraîchit au retour', async () => {

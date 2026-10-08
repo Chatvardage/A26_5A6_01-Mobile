@@ -30,7 +30,8 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
@@ -43,14 +44,20 @@
     "test-renderer": "1.2.0",
     "typescript": "~6.0.3"
   },
+  "overrides": {
+    "xcode": {
+      "uuid": "11.1.1"
+    }
+  },
   "scripts": {
     "start": "node scripts/start.js",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
+    "test:coverage": "jest --coverage --runInBand",
+    "test:dependencies": "node scripts/check-xcode.js",
     "test:auth-e2e": "node scripts/auth-e2e.cjs",
     "typecheck": "tsc --noEmit",
     "start:tunnel": "expo start --tunnel"
@@ -59,8 +66,9 @@
   "jest": {
     "preset": "jest-expo",
     "collectCoverageFrom": [
+      "index.ts",
       "src/**/*.{ts,tsx}",
-      "index.ts"
+      "!src/__tests__/**"
     ],
     "coverageThreshold": {
       "global": {

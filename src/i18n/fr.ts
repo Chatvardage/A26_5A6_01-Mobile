@@ -80,7 +80,6 @@ export const fr = {
   },
   composer: {
     writeMessage: 'Écrire un message',
-    unavailable: 'Envoi bientôt disponible',
   },
   conversation: {
     unknownUser: 'Utilisateur inconnu',
@@ -108,8 +107,11 @@ export const fr = {
   },
   errors: {
     validation: 'Vérifiez les champs du formulaire.',
+    badRequest: 'Le message est invalide. Vérifiez son contenu.',
     conflict: 'Ce pseudo ou ce courriel est déjà utilisé.',
     rateLimit: 'Trop de tentatives. Réessayez dans quelques instants.',
+    rateLimited: 'Vous envoyez des messages trop rapidement. Réessayez dans un instant.',
+    server: 'Le serveur rencontre un problème. Réessayez plus tard.',
     storage: 'Le stockage sécurisé est indisponible. Réessayez.',
     invalidResponse: 'Réponse du serveur invalide. Réessayez.',
     network: 'Impossible de joindre le serveur. Vérifiez votre connexion.',

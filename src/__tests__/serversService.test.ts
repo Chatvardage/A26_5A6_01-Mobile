@@ -20,7 +20,7 @@ const server = {
 beforeEach(() => apiFetch.mockReset());
 
 describe('fetchServers', () => {
-  it('utilise la source sans non-lus par défaut', async () => {
+  it('utilise des compteurs nuls en l’absence de source', async () => {
     apiFetch.mockResolvedValue([server]);
     expect((await fetchServers())[0].unreadCount).toBe(0);
   });

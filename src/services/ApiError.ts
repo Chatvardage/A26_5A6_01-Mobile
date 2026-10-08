@@ -3,16 +3,17 @@ import { getTranslations } from '@/i18n';
 export type ApiErrorKind =
   | 'network'
   | 'timeout'
+  | 'bad_request' // Remplace le kind local « validation » depuis la version 1.0.0.
   | 'unauthorized'
   | 'forbidden'
   | 'not_found'
+  | 'rate_limited' // HTTP 429 produit par kindFromStatus ; message orienté messagerie.
   | 'server'
   | 'unknown'
   | 'invalid_response'
   | 'storage'
   | 'conflict'
-  | 'validation'
-  | 'rate_limit';
+  | 'rate_limit'; // Compatibilité avec les consommateurs auth historiques ; message de tentatives limitées.
 
 export class ApiError extends Error {
   constructor(
@@ -26,9 +27,9 @@ export class ApiError extends Error {
 }
 
 export function kindFromStatus(status: number): ApiErrorKind {
-  if (status === 400) return 'validation';
+  if (status === 400) return 'bad_request';
   if (status === 409) return 'conflict';
-  if (status === 429) return 'rate_limit';
+  if (status === 429) return 'rate_limited';
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
@@ -40,30 +41,22 @@ export function kindFromStatus(status: number): ApiErrorKind {
 export function userMessage(error: unknown): string {
   const strings = getTranslations();
   if (error instanceof ApiError) {
-    switch (error.kind) {
-      case 'validation':
-        return strings.errors.validation;
-      case 'conflict':
-        return strings.errors.conflict;
-      case 'rate_limit':
-        return strings.errors.rateLimit;
-      case 'storage':
-        return strings.errors.storage;
-      case 'invalid_response':
-        return strings.errors.invalidResponse;
-      case 'network':
-        return strings.errors.network;
-      case 'timeout':
-        return strings.errors.timeout;
-      case 'unauthorized':
-        return strings.errors.unauthorized;
-      case 'forbidden':
-        return strings.errors.forbidden;
-      case 'not_found':
-        return strings.errors.notFound;
-      case 'server':
-        return strings.errors.generic;
-    }
+    const messages = {
+      bad_request: strings.errors.badRequest,
+      conflict: strings.errors.conflict,
+      rate_limit: strings.errors.rateLimit,
+      rate_limited: strings.errors.rateLimited,
+      storage: strings.errors.storage,
+      invalid_response: strings.errors.invalidResponse,
+      network: strings.errors.network,
+      timeout: strings.errors.timeout,
+      unauthorized: strings.errors.unauthorized,
+      forbidden: strings.errors.forbidden,
+      not_found: strings.errors.notFound,
+      server: strings.errors.server,
+      unknown: strings.errors.generic,
+    } satisfies Record<ApiErrorKind, string>;
+    return messages[error.kind];
   }
   return strings.errors.generic;
 }

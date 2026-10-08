@@ -80,7 +80,6 @@ export const en = {
   },
   composer: {
     writeMessage: 'Write a message',
-    unavailable: 'Sending will be available soon',
   },
   conversation: {
     unknownUser: 'Unknown user',
@@ -108,8 +107,11 @@ export const en = {
   },
   errors: {
     validation: 'Check the form fields.',
+    badRequest: 'The message is invalid. Check its content.',
     conflict: 'That username or email is already in use.',
     rateLimit: 'Too many attempts. Please try again shortly.',
+    rateLimited: 'You are sending messages too quickly. Please try again shortly.',
+    server: 'The server is having a problem. Please try again later.',
     storage: 'Secure storage is unavailable. Please try again.',
     invalidResponse: 'Invalid server response. Please try again.',
     network: 'Unable to reach the server. Check your connection.',

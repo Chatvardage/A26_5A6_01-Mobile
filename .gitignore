@@ -3,6 +3,8 @@
 # dependencies
 node_modules/
 coverage/
+.nyc_output/
+lcov.info
 
 # Expo
 .expo/
@@ -12,12 +14,18 @@ expo-env.d.ts
 
 # Native
 .kotlin/
+.gradle/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
+*.pfx
 *.key
 *.mobileprovision
+*.apk
+*.aab
+*.ipa
 
 # Metro
 .metro-health-check*
@@ -26,13 +34,26 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+pnpm-debug.*
+*.log
 
 # macOS
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.pem
 
-# local env files (chaque développeur a le sien, voir .env.example)
+# local env files; conserver le modele et le port Metro partage
+.env
+.env.*
+!.env.example
+!.env.development
 .env*.local
+.envrc
+
+# Identifiants locaux (EAS et registres de paquets)
+/credentials.json
+/.npmrc
 
 # typescript
 *.tsbuildinfo
@@ -45,4 +66,13 @@ example
 
 # JetBrains IDE
 .idea/
-.env
+*.iml
+*.code-workspace
+.vscode/*.local.json
+
+# Sauvegardes et restes de fusion
+*.orig
+*.rej
+*.swp
+*.swo
+*~

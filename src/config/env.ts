@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 
-const API_PORT = 3000;
-const FALLBACK_API_URL = `http://localhost:${API_PORT}`;
+const MOBILE_API_PORT = 3006;
+const GATEWAY_PORT = 3000;
+const FALLBACK_API_URL = `http://localhost:${GATEWAY_PORT}`;
 
 /** `localhost`, nom mDNS (`.local`) ou IPv4 privée / de boucle locale / lien local. */
 export function isLocalHost(host: string): boolean {
@@ -15,8 +16,7 @@ export function isLocalHost(host: string): boolean {
 /**
  * Détermine l'URL du Serveur-API, par ordre de priorité :
  * 1. `EXPO_PUBLIC_API_URL` si définie (obligatoire en tunnel, ou si le backend est sur une autre machine) ;
- * 2. la machine qui sert Metro (`hostUri`), sur le port du Gateway : le cas courant
- *    `npx expo start` avec le backend lancé sur le même poste ;
+ * 2. la machine qui sert Metro (`hostUri`), sur le port mobile du Gateway ;
  * 3. `localhost`.
  */
 export function resolveApiUrl(configured: string | undefined, hostUri: string | null | undefined): string {
@@ -26,7 +26,7 @@ export function resolveApiUrl(configured: string | undefined, hostUri: string | 
   const host = hostUri?.split(':')[0]?.trim();
   // Seule une adresse locale désigne le poste qui héberge aussi le backend : tout autre hôte
   // (tunnel exp.direct, ngrok, Cloudflare, etc.) ne donne pas accès au backend.
-  if (host && isLocalHost(host)) return `http://${host}:${API_PORT}`;
+  if (host && isLocalHost(host)) return `http://${host}:${MOBILE_API_PORT}`;
   return FALLBACK_API_URL;
 }
 

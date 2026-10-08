@@ -48,6 +48,15 @@ describe('ConversationItem', () => {
     expect(unreadLabel(120)).toBe('99+');
     expect(unreadLabel(7)).toBe('7');
   });
+
+  it('affiche le sous-titre et le résultat sans dernier message, avec retour visuel à l’appui', async () => {
+    const onPress = jest.fn();
+    await render(<ConversationItem conversation={{ ...base, subtitle: 'Salon de discussion', lastMessage: null }} onPress={onPress} />);
+    expect(screen.getByText('Salon de discussion')).toBeTruthy();
+    expect(screen.getByText('Aucun message')).toBeTruthy();
+    await userEvent.setup().press(screen.getByRole('button'));
+    expect(onPress).toHaveBeenCalledWith(expect.objectContaining({ lastMessage: null }));
+  });
 });
 
 describe('ConversationItem accessibilité', () => {

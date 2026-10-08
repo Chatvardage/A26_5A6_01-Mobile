@@ -39,9 +39,19 @@ npm test
 npm start             # équivaut à « npx expo start », adapté automatiquement à WSL2
 ```
 
+`npm start` lance la CLI Expo installée dans le projet avec le même exécutable Node, sans appeler `npx`. Cela évite l’erreur `spawn npx ENOENT` sous Windows ou WSL. Si la CLI Expo est absente, exécuter `npm ci` dans ce dépôt.
+
+Le projet utilise React Navigation, pas Expo Router. La commande de boilerplate `reset-project` a été retirée : elle déplaçait ou supprimait `src` et `scripts`, puis générait une structure Expo Router incompatible.
+
 Scanner le QR code avec Expo Go (Android) ou l'appareil photo (iOS). Le téléphone doit être sur le même réseau que l'ordinateur.
 
 > **Port de Metro** : `.env.development` fixe `RCT_METRO_PORT=8082`, car Adminer (stack Infra) occupe déjà le 8081. Rien à faire, `npm start` et `npx expo start` le prennent en compte.
+
+### Fichiers locaux et secrets
+
+Git ignore les fichiers `.env` personnels, les identifiants locaux (`credentials.json`, `.npmrc`), les clés de signature, les journaux, les rapports de couverture et les caches générés. Seuls `.env.example` (modèle sans valeur réelle) et `.env.development` (port Metro partagé uniquement) sont versionnés parmi les fichiers `.env`.
+
+Ne jamais placer de secret dans une variable `EXPO_PUBLIC_*` : sa valeur est intégrée à l'application et accessible au client. Une règle `.gitignore` ne protège pas un fichier déjà suivi ni l'historique Git ; un secret déjà publié doit être révoqué, même après suppression du fichier.
 
 ### Quelle commande utiliser ?
 
@@ -62,7 +72,7 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 1. `EXPO_PUBLIC_API_URL` dans l'environnement du shell ;
 2. `EXPO_PUBLIC_API_URL` dans le fichier `.env` personnel (ignoré par git, créé avec `cp .env.example .env`) ;
 3. sous WSL2 seulement, `npm start` fournit l'URL détectée (voir cas B) ;
-4. l'adresse de la machine qui exécute Metro, sur le port 3000 ;
+4. l'adresse de la machine qui exécute Metro, sur le port mobile 3006 ;
 5. `http://localhost:3000`.
 
 À l'étape 4, seule une adresse locale (`localhost`, `*.local`, IP privée `10.x`, `172.16-31.x`, `192.168.x`) est retenue : un tunnel (exp.direct, ngrok, Cloudflare…) ne donne pas accès au backend et est ignoré. Après toute modification de `.env`, relancer avec le cache vidé (`npm start -- -c`).
@@ -73,7 +83,27 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 npm start
 ```
 
-Aucune configuration. Metro et le backend sont joignables par l'adresse locale de l'ordinateur ; l'app la déduit et utilise le port 3000.
+Si le backend est joignable depuis le téléphone par l'adresse locale de l'ordinateur, l'app la déduit et utilise le port 3006. Ce port doit être redirigé vers le Gateway local (port 3000), comme dans les cas A et B.
+
+**Avec la stack Docker Infra**, le Gateway est volontairement publié sur `127.0.0.1:3000` : le PC peut le joindre, mais pas le téléphone. Sous Windows, créer une seule fois une redirection dédiée, sans modifier les ports des microservices. Dans **PowerShell administrateur** :
+
+```powershell
+netsh interface portproxy add v4tov4 listenport=3006 listenaddress=0.0.0.0 connectport=3000 connectaddress=127.0.0.1
+New-NetFirewallRule -DisplayName "Chatvardage API mobile 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -RemoteAddress LocalSubnet -Action Allow -Profile Any
+```
+
+La redirection et la règle ne dépendent pas de l'IP du PC : elles restent valides après un changement de réseau. Le port 3006 évite le port 3001, déjà utilisé localement par Auth-Service.
+
+Dans le fichier `.env` personnel de ce dépôt, définir `EXPO_PUBLIC_API_URL=http://<IPv4-Wi-Fi-du-PC>:3006` (ligne « Adresse IPv4 » du Wi-Fi dans `ipconfig`), puis relancer `npm start -- -c`. Cette URL explicite fonctionne aussi si Expo tourne dans WSL ou utilise un tunnel. **Si l'IP du PC change** (autre réseau, nouveau jour sur un Wi-Fi scolaire), mettre à jour seulement `.env`, puis relancer `npm start -- -c`.
+
+Tester `http://<IPv4-Wi-Fi-du-PC>:3006/api/health` dans le navigateur du téléphone : la réponse doit contenir `"status":"ok"`. Le téléphone doit être sur le même Wi-Fi ; un réseau invité ou scolaire peut isoler les appareils.
+
+Pour retirer cet accès (PowerShell administrateur) :
+
+```powershell
+netsh interface portproxy delete v4tov4 listenport=3006 listenaddress=0.0.0.0
+Remove-NetFirewallRule -DisplayName "Chatvardage API mobile 3006"
+```
 
 ### Cas B : WSL2 avec tunnel (configuration standard)
 
@@ -82,13 +112,13 @@ Sous WSL2, Metro et le backend vivent dans un réseau interne que le téléphone
 | Problème | Solution | Qui la fournit |
 |---|---|---|
 | Le téléphone n'atteint pas **Metro** (Expo Go tourne en rond) | Tunnel `--tunnel` (ngrok) | `npm start` l'ajoute seul |
-| Le téléphone n'atteint pas **l'API** (le Gateway n'écoute que sur `127.0.0.1` dans WSL) | Redirection Windows du port 3001 vers `localhost:3000` | **Une fois, à la main** (ci-dessous) |
+| Le téléphone n'atteint pas **l'API** (le Gateway n'écoute que sur `127.0.0.1` dans WSL) | Redirection Windows du port 3006 vers `localhost:3000` | **Une fois, à la main** (ci-dessous) |
 
 **Configuration, une seule fois** — dans **PowerShell administrateur** (clic droit, « Exécuter en tant qu'administrateur ») :
 
 ```powershell
-netsh interface portproxy add v4tov4 listenport=3001 listenaddress=0.0.0.0 connectport=3000 connectaddress=127.0.0.1
-New-NetFirewallRule -DisplayName "Chatvardage API 3001" -Direction Inbound -Protocol TCP -LocalPort 3001 -Action Allow -Profile Any
+netsh interface portproxy add v4tov4 listenport=3006 listenaddress=0.0.0.0 connectport=3000 connectaddress=127.0.0.1
+New-NetFirewallRule -DisplayName "Chatvardage API 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -RemoteAddress LocalSubnet -Action Allow -Profile Any
 ```
 
 La redirection survit au redémarrage de Windows. Pour la vérifier : `netsh interface portproxy show v4tov4`.
@@ -103,18 +133,19 @@ Au premier lancement, accepter l'installation de `@expo/ngrok`. `scripts/start.j
 
 1. détecte WSL2 ;
 2. ajoute `--tunnel` si aucune option de réseau (`--tunnel`, `--lan`, `--localhost`) n'est passée ;
-3. si `EXPO_PUBLIC_API_URL` n'est définie ni dans l'environnement ni dans `.env`, interroge Windows (`powershell.exe`) pour l'IP Wi-Fi **actuelle** et utilise `http://<cette IP>:3001` ; l'IP peut donc changer d'un jour à l'autre sans rien modifier ;
-4. avertit si la redirection du port 3001 est absente ;
-5. lance `npx expo start` avec les options données (`npm start -- -c` vide le cache).
+3. si `EXPO_PUBLIC_API_URL` n'est définie ni dans l'environnement ni dans `.env`, interroge Windows (`powershell.exe`) pour l'IP Wi-Fi **actuelle** et utilise `http://<cette IP>:3006` ; l'IP peut donc changer d'un jour à l'autre sans rien modifier ;
+4. avertit si la redirection du port 3006 est absente ;
+5. lance directement la CLI Expo locale avec Node et les options données (`npm start -- -c` vide le cache).
 
-**Vérification** : `http://<IP-Wi-Fi-de-Windows>:3001/api/health` doit répondre dans le navigateur du téléphone (IP visible dans le message `[start] WSL2 : API détectée à …`, ou avec `ipconfig`, ligne « Adresse IPv4 » du Wi-Fi).
+**Vérification** : `http://<IP-Wi-Fi-de-Windows>:3006/api/health` doit répondre dans le navigateur du téléphone (IP visible dans le message `[start] WSL2 : API détectée à …`, ou avec `ipconfig`, ligne « Adresse IPv4 » du Wi-Fi).
 
 **Limites du script :**
 
 - il ne peut pas créer la redirection ni la règle de pare-feu (droits administrateur) ;
 - il suppose que le téléphone est sur le même Wi-Fi que l'ordinateur pour joindre l'API (le tunnel, lui, passe par Internet) ;
-- si `powershell.exe` est inaccessible depuis WSL, il affiche un avertissement : définir alors `EXPO_PUBLIC_API_URL` dans `.env` à la main (`http://<IP-Wi-Fi>:3001`) ;
+- si `powershell.exe` est inaccessible depuis WSL, il affiche un avertissement : définir alors `EXPO_PUBLIC_API_URL` dans `.env` à la main (`http://<IP-Wi-Fi>:3006`) ;
 - plusieurs cartes réseau (VPN, VirtualBox, Hyper-V) : il choisit la carte de la route par défaut ; si l'IP détectée est mauvaise, forcer l'URL dans `.env`.
+- la présence d'une règle `netsh` ne garantit pas que le Gateway tourne ni que le téléphone peut joindre le proxy : vérifier `/api/health` depuis le téléphone avant d'utiliser l'app.
 
 ### Cas C : WSL2 en mode miroir (alternative durable)
 
@@ -136,7 +167,7 @@ Le mode miroir rend WSL directement joignable depuis le réseau : ni tunnel ni r
    npx expo start
    ```
 
-Utiliser `npx expo start` et **non** `npm start` : le script ajouterait le tunnel et le port 3001, inutiles en mode miroir. L'app déduit l'adresse du poste, port 3000. Si le test `curl.exe http://<IP-Wi-Fi>:3000/api/health` échoue dans PowerShell, c'est le pare-feu.
+Utiliser `npx expo start` et **non** `npm start` : le script ajouterait le tunnel et le port 3006, inutiles en mode miroir. Comme le mode miroir expose le Gateway directement sur le port 3000, définir `EXPO_PUBLIC_API_URL=http://<IP-Wi-Fi>:3000` dans `.env`, puis relancer Expo avec `-c`. Si le test `curl.exe http://<IP-Wi-Fi>:3000/api/health` échoue dans PowerShell, c'est le pare-feu.
 
 Prérequis : Windows 11 22H2 ou plus récent et WSL à jour (`wsl --update`).
 
@@ -146,7 +177,7 @@ Prérequis : Windows 11 22H2 ou plus récent et WSL à jour (`wsl --update`).
 npm start      # puis « a » dans le terminal
 ```
 
-Dans un émulateur, `localhost` désigne l'émulateur lui-même. Si la connexion échoue, définir dans `.env` : `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` (alias de l'ordinateur hôte). Sous WSL2, l'émulateur tourne côté Windows : voir aussi le cas B pour joindre l'API.
+Dans un émulateur Android Studio, `localhost` désigne l'émulateur lui-même. Définir dans `.env` `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` : `10.0.2.2` est l'alias de l'ordinateur hôte et le port 3000 est celui du Gateway local. Après toute modification, arrêter puis relancer Expo avec `npm start -- -c`. Cette adresse remplace celle du port 3006, réservée aux connexions depuis le réseau Wi-Fi / un téléphone physique. Sous WSL2, l'émulateur tourne côté Windows : voir aussi le cas B pour joindre l'API.
 
 ### Cas E : backend sur une autre machine
 
@@ -166,7 +197,7 @@ Puis `npm start -- -c`. Cette machine doit autoriser le port 3000 dans son pare-
 | Expo Go tourne en rond, puis page d'erreur bleue | Le téléphone n'atteint pas Metro | Sous WSL2, utiliser `npm start` (tunnel) ou le mode miroir ; sinon vérifier le Wi-Fi commun |
 | « Impossible de joindre le serveur » à la connexion | Le téléphone n'atteint pas l'API | Tester `/api/health` dans le navigateur du téléphone (cas B) ; vérifier la redirection `netsh`, le pare-feu, l'URL affichée par `npm start` |
 | Le bouton de connexion tourne puis erreur après 10 s | Délai de requête dépassé (API injoignable) | Idem ci-dessus |
-| `[start] Aucune redirection du port 3001…` | La redirection `netsh` du cas B manque | La créer (PowerShell administrateur) |
+| `[start] Aucune redirection du port 3006…` | La redirection `netsh` du cas B manque | La créer (PowerShell administrateur) |
 | `[start] IP Windows introuvable…` | `powershell.exe` inaccessible | Définir `EXPO_PUBLIC_API_URL` dans `.env` |
 | L'IP a changé (autre réseau, redémarrage du routeur) | — | Avec `npm start` : rien à faire. Avec un `.env` fixe : le mettre à jour, puis `npm start -- -c` |
 | Avertissement jaune « Cannot connect to Expo CLI » | Rechargement à chaud perdu (fréquent en tunnel) | Sans gravité : secouer le téléphone, puis *Reload* |
@@ -188,10 +219,12 @@ RootStack (native-stack)
                                        └ Preferences
                    Server        { serverId: string, title?: string }        salons d'un serveur
                    Conversation  { conversationId: string, title?: string }  messages d'un DM ou d'un salon
+                   NewDirectMessage                                          choix du destinataire d'un nouveau DM (modale)
 ```
 
-Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Conversation`.
+Parcours : `DirectMessages` → `Conversation` ; `DirectMessages` → « Nouveau » → `NewDirectMessage` → `Conversation` ; `Servers` → `Server` → `Conversation`.
 
+- **Nouveau message privé** : le bouton « Nouveau » de l'en-tête des Messages privés ouvre, comme sur le desktop, des suggestions (interlocuteurs connus et 20 premiers membres de chaque serveur, via `/api/messages/conversations`, `/api/servers` et `/api/servers/:id/members`) puis, dès qu'on tape, une recherche par début de pseudo (`GET /api/users/search`, 20 caractères et 20 résultats au plus, 250 ms après la dernière frappe). Choisir quelqu'un ouvre `Conversation` sur `dm:<id>` ; la conversation n'apparaît dans la liste qu'après le premier message envoyé.
 - `conversationId` vaut `dm:<uuid de l'interlocuteur>` ou `room:<uuid du salon>` ; `serverId` est un UUID. Les deux sont validés avant tout appel API (`parseConversationParams`, `parseServerParams`) : un identifiant invalide affiche une erreur, sans requête.
 - Chaque liste a ses propres états (chargement, vide, erreur) : la panne d'une source n'empêche pas l'autre de s'afficher.
 - Un serveur n'affiche que les salons que l'API autorise pour l'utilisateur ; la pastille d'un serveur est la somme des non-lus de ses salons.
@@ -203,17 +236,89 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 | Couche | Dossier | Rôle |
 |---|---|---|
 | Écrans / composants | `src/screens`, `src/components` | Affichage et transmission des actions, aucun appel réseau |
-| Hooks | `src/hooks` | `useLoadable` (états loading / empty / error / ready, réessai, rafraîchissement) et ses usages `useDirectMessages`, `useServers`, `useServerChannels` et `useConversationHistory` |
-| Services | `src/services` | Client HTTP, traduction des erreurs (`ApiError`), messages privés, serveurs et salons, historique |
-| Session | `src/session` | Contrat `useSession` (voir limites) |
+| Hooks | `src/hooks` | `useLoadable` pour les listes et `useMessages` pour l'historique, les événements temps réel et la pagination |
+| Services | `src/services` | Client HTTP, erreurs (`ApiError`), messages REST et factory `createRealtimeService`, utilisateurs, serveurs et salons |
+| Session | `src/session` | `SessionManager` détient une instance temps réel `/messages` et le store de brouillons, exposés aux écrans et hooks par `useSession`; nettoyage à la déconnexion et au démontage du provider |
+
+## Conversation et messagerie
+
+Les messages privés (`dm:<uuid>`) et les salons (`room:<uuid>`) utilisent le même écran et la même logique. Les fichiers du dépôt se nomment `messagesService.ts` et `websocketService.ts` (équivalents de `messages.service` et `websocket.service` dans l'énoncé).
+
+| Livraison | Comportement implanté | Zone principale |
+|---|---|---|
+| Écran Conversation | Liste inversée, saisie multiligne, adaptation au clavier, validation des paramètres avant chargement | `ConversationScreen` |
+| Historique REST | Chargement initial de 50 messages, normalisation des auteurs et ordre du plus récent au plus ancien | `messagesService`, `useMessages` |
+| Envoi | Requête POST pour un DM ou un salon, insertion de la réponse REST, refus du texte vide, bouton désactivé pendant l'envoi | `MessageInput`, `messagesService` |
+| Connexion WebSocket | Socket unique sur `/messages`, chemin `/socket.io`, jeton dans `auth.token`, abonnement aux salons après `connexion.prete` | `websocketService`, `SessionManager` |
+| Réception temps réel | Événements `private-message.created` et `room-message.created`, filtrage par conversation et tampon pendant le chargement initial | `useMessages` |
+| Modification | Appui long uniquement sur son propre message, préremplissage, enregistrement PATCH et annulation ; l'API reste responsable des permissions | `MessageBubble`, `MessageInput`, `messagesService` |
+| Réception des modifications | Événements `private-message.updated` et `room-message.updated`, remplacement du contenu sans ajouter de ligne | `useMessages` |
+| Mention « modifié » | Affichée lorsque les instants `updatedAt` et `createdAt` diffèrent | `MessageBubble` |
+| Pagination | Chargement en fin de liste par pages de 50 avec le curseur du plus ancien message ; demandes simultanées bloquées, erreur réessayable sans perdre la liste | `ConversationScreen`, `useMessages` |
+| Suppression des doublons | Fusion par identifiant entre historique, pagination, réponses POST/PATCH et événements ; conservation de la version au `updatedAt` le plus récent | `mergeMessages` |
+| Texte non envoyé | Brouillon par conversation, restauré après navigation et passage en modification ; conservé sur erreur ou si le texte change pendant l'envoi, effacé après succès seulement | `MessageInput` |
+| Chargement et erreurs | États initial/vide/erreur avec nouvelle tentative, indicateur de pagination, erreurs d'envoi/modification et bandeau de connexion | `ConversationScreen`, `MessageInput`, `useMessages` |
+
+Le temps réel est configuré avant de publier une session connectée. Un renouvellement du jeton reconnecte le socket sans supprimer les abonnements ; une déconnexion ou révocation ferme le socket. Dès la première `connexion.prete`, puis à chaque reconnexion, l'historique récent est rechargé et fusionné sans vider les pages déjà chargées. Ce rattrapage couvre la fenêtre entre le premier chargement REST et l'arrivée des événements; une ancienne requête initiale ne remplace pas le résultat du rattrapage.
+
+**Limites à connaître** : les brouillons restent uniquement en mémoire de la session, sans stockage sur disque ni garantie après fermeture/rechargement de l'app. Ils sont effacés à la déconnexion, révocation, destruction du provider ou changement de compte, mais conservés au renouvellement du même compte. Au maximum 100 brouillons non vides sont conservés : au-delà, le moins récemment ouvert ou modifié est supprimé (LRU). Un champ vidé ou composé uniquement d'espaces ne conserve pas d'entrée. Le rattrapage après reconnexion recharge une seule page récente de 50 messages, pas toute une interruption prolongée. La validation sur appareil avec deux sessions backend réelles reste nécessaire pour confirmer le défilement, le clavier et les transitions arrière-plan/réseau.
+
+Les dates `createdAt` et `updatedAt` des messages doivent être valides. Une réponse REST ou un événement temps réel contenant une date invalide est signalé comme une réponse serveur invalide, sans remplacer la liste déjà affichée.
+
+### Corrections et garanties du client chat
+
+Cette section décrit le comportement actuel, et remplace le plan historique `docs/instructionsChat.md`, supprimé après livraison. Les contrats REST et Socket.IO restent ceux du Gateway; aucune règle métier du backend n'est réimplémentée ici.
+
+| Zone | Changement effectué et comportement actuel |
+|---|---|
+| Propriétaire du socket | `createRealtimeService()` crée un état indépendant par instance. `SessionManager` détient l'instance et `SessionContext` l'expose aux hooks. Le provider ferme le temps réel à son démontage; le service n'est plus un singleton de module. |
+| Abonnements à la fermeture | Les événements du socket sont retirés avant sa fermeture. Les observateurs reçoivent une dernière transition `disconnected`, puis les abonnements d'état et de connexion prête sont vidés. Les attentes avant connexion prête sont rejetées à la fermeture. |
+| État initial | `onConnectionState` notifie immédiatement l'état courant. Une transition déclenchée pendant cette notification reste observable; si le callback lève, son abonnement est retiré avant propagation de l'erreur. |
+| Observateurs de connexion prête | `onReady` n'enregistre son callback qu'après création réussie du socket. Les callbacks sont parcourus sur une copie pour que la fermeture déclenchée par l'un d'eux n'interrompe pas silencieusement les suivants. Aucun salon n'est rejoint si la connexion a été interrompue pendant ces notifications. |
+| Renouvellement du jeton | Le socket existant est reconnecté avec le nouveau `auth.token`, en conservant les abonnements. Les notifications d'état identiques sont dédupliquées et la déconnexion volontaire ne publie pas d'état intermédiaire parasite. Dans Socket.IO 4.8.4, `disconnect()` notifie synchroniquement, uniquement si le socket était connecté. |
+| Jeton absent lors d'une reconfiguration | Si un socket existe et que `configureRealtime` reçoit un fournisseur sans jeton, le service ferme le socket, nettoie ses abonnements et attentes, puis appelle `onUnauthorized` pour déconnecter la session. Il ne conserve pas silencieusement l'ancien jeton. Sans socket, la configuration reste paresseuse : toute tentative d'abonnement sans jeton lève `ApiError('unauthorized')`. |
+| Initialisation du hook | Si un abonnement échoue, les abonnements déjà créés sont retirés. Une `ApiError` produit un état d'erreur réessayable; une exception inattendue est propagée après nettoyage. Le réessai recrée les abonnements avant de charger l'historique. |
+| Réponses asynchrones | Le compteur de génération invalide les réponses REST, les résolutions de pseudos et les callbacks temps réel d'une ancienne conversation. Parmi les chargements récents concurrents, seul le dernier demandé met à jour la liste et les états. Les résultats d'envoi et de modification ne sont fusionnés que dans leur conversation d'origine encore active. |
+| Adhésion et sortie de salon | Une sortie différée ne quitte pas un salon rouvert pendant l'adhésion. Un ACK de sortie ancien ne supprime pas la nouvelle adhésion, et un ACK d'entrée d'une connexion précédente ne marque pas le salon rejoint sur la connexion actuelle. Un `joinRoom` non configuré ne mémorise pas le salon. |
+| Révocation et reconnexion | La révocation invalide la génération d'adhésion du hook : ni un succès ni un échec tardif ne remplace son erreur d'accès. Chaque connexion prête suit l'adhésion courante, plutôt que l'ancien ACK perdu à la coupure; son expiration ne crée donc pas de fausse erreur après une reconnexion réussie. |
+| Résolution des auteurs | L'ensemble de recherches de pseudos ne contient que les demandes en cours. Après une erreur ou une réponse vide, le prochain événement de cet auteur retente la résolution. Une recherche réussie enrichit tous ses messages reçus pendant l'attente, y compris dans le tampon initial, sans requête concurrente en double. |
+| Validation et fusion | Les dates invalides ou de mauvais type produisent `ApiError('invalid_response')`. La fusion est calculée avant la mise à jour de la liste, et le tampon initial n'est vidé qu'après succès. Un cache `WeakMap` évite de reparsing les dates déjà validées; une modification de leurs chaînes invalide le cache. La fusion et le tri parcourent toujours la liste : ce cache ne rend pas l'opération constante. |
+| Erreurs et migration | Les actions d'envoi/modification propagent les erreurs originales, sans lancer de chaîne localisée. `MessageInput` affiche leur traduction via `userMessage()`. Le catalogue est exhaustif au niveau TypeScript (`satisfies`). Le kind local `validation` a été retiré au profit de `bad_request` pour HTTP 400. HTTP 429 produit `rate_limited`; `rate_limit` reste compatible avec les consommateurs auth historiques et leur texte spécifique. La restauration de session gère les deux. |
+| Erreur avec une liste conservée | Même dans le cas défensif `status === 'error'` avec des messages présents, la liste reste affichée avec l'erreur de chargement (ou le message générique) et l'éventuelle erreur d'accès distincte. Une même erreur n'est pas annoncée deux fois. Le flux initial sans messages conserve son écran d'erreur réessayable. |
+| Chemins REST et événements | Tous les identifiants interpolés dans les chemins de messagerie (conversation et message) passent par `encodeURIComponent`; les identifiants de conversation restent validés comme UUID, sans changement de contrat. `receive` se repose sur `belongsTo` pour rejeter les événements nuls, non objets ou étrangers à la conversation, sans répéter ce contrôle. |
+| Brouillons et comptes | Le store est obligatoirement injecté dans `MessageInput` depuis la session; aucune Map globale n'est partagée entre comptes. L'ancien store est vidé puis remplacé à la déconnexion/révocation, au démontage et au changement de compte, pour isoler aussi les callbacks tardifs. La navigation remonte les écrans lors d'un changement de compte, mais pas au renouvellement du même utilisateur. La limite LRU reste de 100 brouillons non vides; la modification ne remplace pas la composition. |
+| Envoi et édition tardifs | Un verrou synchrone par référence empêche deux déclenchements d'envoi/modification avant le prochain rendu, en complément du bouton désactivé. Le succès d'envoi n'efface pas un texte plus récent, même saisi dans une autre instance. Un brouillon évincé pendant l'envoi n'empêche pas de vider le champ après succès. Une ancienne modification terminée après démontage ne déclenche plus `onCancelEdit` sur le parent. |
+| Accessibilité | Le bouton de réessai de pagination porte le libellé explicite « Réessayer le chargement des messages précédents ». |
+| Lisibilité et lint | Les handlers de réception/révocation sont déclarés avant leur utilisation; les anciens indicateurs de première connexion et d'échec d'adhésion ainsi que l'API inutilisée `hasRealtimeBeenReady` ont été supprimés. Le commentaire `react-hooks/set-state-in-effect` est conservé : cette règle existe dans la version installée du plugin. |
+| Maintenance du dépôt | L'ancien `MessageComposer`, inutilisé par l'app, et son texte « Envoi bientôt disponible » ont été supprimés; la saisie active est `MessageInput`. Le script `reset-project` et sa commande npm ont été retirés car ils généraient Expo Router. Le fichier d'icône possède une newline finale. Le contrôle Xcode nettoie uniquement son répertoire temporaire via `rmSync`, y compris lorsqu'une étape échoue. |
+
+### Revues préventives et périmètre de sécurité
+
+Une revue approfondie a confirmé une fuite locale de brouillons entre comptes dans l'ancien store global. Elle est corrigée par le store détenu par la session, son effacement/remplacement et le remontage des écrans au changement de compte. La contre-revue n'a identifié aucune autre vulnérabilité exploitable dans le périmètre examiné. Ce résultat ne garantit pas l'absence de vulnérabilités et ne constitue pas un audit du Gateway, des autres services ou des dépendances. Les permissions restent vérifiées par le backend; l'absence d'un bouton dans l'UI n'est pas un contrôle d'autorisation.
+
+Les défauts fonctionnels précédemment documentés (sortie de salon rouvert, adhésion tardive masquant une révocation et pseudo jamais retenté) sont corrigés et couverts par des régressions, ainsi que le rattrapage initial, les anciens ACK après reconnexion et les doubles déclenchements d'envoi. Les garanties correspondantes sont détaillées dans le tableau ci-dessus.
+
+L'examen local des fichiers suivis et de l'historique Git disponible n'a identifié aucun secret exploitable; la contre-revue a aussi examiné le diff des corrections. Les fichiers d'environnement privés, clés, certificats et identifiants locaux sont exclus par `.gitignore`, qui n'efface toutefois pas un secret déjà suivi ou commité. Aucun contenu sensible n'a été envoyé à un scanner distant, et aucun push n'a été effectué pendant cette revue. Les branches distantes, PR, commentaires, artefacts GitHub et historiques non disponibles localement ne sont pas couverts : ce contrôle ne permet pas d'affirmer que GitHub n'a jamais reçu de secret.
+
+### Parcours de validation sur appareil
+
+Avec le Gateway et les services réels démarrés depuis Infra, connecter deux comptes dans deux clients :
+
+1. Ouvrir un DM puis un salon accessible : vérifier l'historique ou l'état vide.
+2. Envoyer depuis chaque client : vérifier la réception sans rechargement et une seule ligne par message, y compris chez l'expéditeur.
+3. Modifier son message par appui long : vérifier le contenu et la mention « modifié » sur les deux clients ; aucun appui long de modification ne doit être proposé sur un message d'autrui.
+4. Ouvrir une conversation contenant plus de 50 messages et remonter : vérifier les pages anciennes, l'absence de doublons et la conservation de la position.
+5. Saisir un brouillon, changer de conversation puis revenir ; ouvrir et annuler une modification : vérifier que le brouillon de composition reste présent.
+6. Couper puis rétablir le réseau : vérifier les erreurs, le texte conservé après échec d'envoi, la reconnexion et le rattrapage récent ; vérifier aussi le retour depuis l'arrière-plan.
+7. Saisir un brouillon puis se déconnecter : un autre compte ouvrant la même conversation ne doit voir ni ce brouillon ni une édition de l'ancien compte.
 
 ## Limites connues
 
-- **Session** : SecureStore, validation au démarrage, rotation réelle via Auth-Service/Gateway, refresh partagé et retour Login après échec. Voir ci-dessous.
+- **Session** : SecureStore, validation au démarrage, rotation réelle via Auth-Service/Gateway, refresh partagé et retour Login après échec du renouvellement. HTTP utilise `Authorization: Bearer` et Socket.IO `auth.token` ; aucun identifiant utilisateur n'est fourni dans le handshake.
 - **Non-lus** : les listes affichent `unreadCount`, mais la source (`src/services/unreadSource.ts`) retourne 0 tant que le calcul et la persistance ne sont pas branchés. L'API n'expose pas d'état de lecture.
 - **Dernier message d'un salon** : une requête `history?limit=1` par salon, seulement à l'ouverture d'un serveur (aucun endpoint dédié).
-- **Rejoindre / quitter un serveur** et **ouvrir un nouveau message privé** : non implantés ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
-- **Écran Conversation** : historique en lecture seule; l'envoi, le temps réel, la pagination et la modification ne sont pas branchés. L'écran Recherche n'a pas encore de service de recherche.
+- **Rejoindre / quitter un serveur** : non implanté ici ; l'onglet Serveurs et l'écran Server sont l'emplacement prévu.
+- **Écran Conversation** : historique REST, envoi/modification, réception temps réel Socket.IO et pagination sont branchés pour les DM et les salons. Les scénarios de coupure réseau, d'arrière-plan et de stabilité du défilement restent à confirmer sur appareil avec le backend.
 - Notifications : non implantées.
 - Comportement clavier / retour Android : vérifié par bundle Android et tests unitaires; à confirmer sur émulateur ou appareil.
 
@@ -223,81 +328,49 @@ Parcours : `DirectMessages` → `Conversation` ; `Servers` → `Server` → `Con
 npx tsc --noEmit
 npx expo lint
 npm test
+npm run test:coverage
+npm run test:dependencies
 npx expo-doctor
 ```
 
+`npm run test:coverage` lance les tests avec couverture, affiche le résumé dans le terminal
+et génère le rapport HTML dans `coverage/lcov-report/index.html`.
 
-## Authentification mobile
+La couverture inclut `index.ts` et tous les fichiers TypeScript/TSX de `src`, sauf les tests
+eux-mêmes. La commande exige **100 %** de couverture pour les lignes exécutables,
+les instructions, les branches et les fonctions. Toute régression fait échouer la commande.
+Les fichiers ne contenant que des types ou des réexportations peuvent afficher `0 %` dans
+le tableau Jest : ils ne contiennent aucune ligne exécutable à couvrir. La colonne
+« Uncovered Line #s » doit rester vide pour tous les fichiers : les chemins alternatifs
+sont couverts, pas seulement les lignes du chemin principal.
 
-Les écrans Login/Register passent par `useSession` et le service Auth existant.
-`SessionManager` porte la machine `loading / signedOut / signedIn`; le Context la
-publie à React. `storage.adapter` conserve uniquement les deux tokens et les
-champs publics de l'utilisateur dans **expo-secure-store ~57.0.4**. Aucun mot de
-passe n'est conservé. iOS utilise `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; le plugin
-SecureStore configure la sauvegarde Android. Android/iOS sont les cibles.
-
-Au lancement, la navigation affiche un indicateur de restauration jusqu'à la
-lecture SecureStore et la validation `/api/auth/me`. Un 401 provoque une rotation
-par `POST /api/auth/refresh`; tout échec termine la restauration en `signedOut`.
-Les appels publics login/register/refresh/logout n'envoient pas le Bearer.
-Les requêtes protégées partagent un seul renouvellement et ne sont reprises
-qu'une fois. Les générations de session empêchent les réponses tardives de
-réactiver une session après déconnexion, y compris en StrictMode.
-
-Logout lance immédiatement le nettoyage local indépendamment du réseau, puis
-révoque la famille via `POST /api/auth/logout`. Si l'API native de suppression
-SecureStore échoue, l'utilisateur et le token HTTP sont effacés et un message
-propose de réessayer le nettoyage; une panne physique du stockage ne peut pas
-être masquée comme une suppression réussie. La persistance est sérialisée pour
-éviter qu'une écriture en cours rétablisse une session après logout.
-
-Le backend émet des accès de 15 minutes et des familles de refresh de 30 jours
-maximum. Les rotations ne prolongent pas ces 30 jours. L'ancien refresh token
-ne peut plus renouveler mais permet encore de révoquer toute sa famille.
-Appliquer les migrations Auth avec le Compose habituel avant d'utiliser ces routes.
-Voir le [contrat central](../A26_5A6_01-Infra/docs/api/authentification.md#sessions-renouvelables--register-login-refresh-et-logout).
-
-### Validation
+### Audit des dépendances
 
 ```bash
-npm install
-npm run typecheck
-npm run lint
-npm test -- --runInBand
-npm test -- --coverage --runInBand
-npx expo-doctor
-npx expo export --platform android
+npm audit
+npm run test:dependencies
 ```
 
-Le moteur de tests `test-renderer` est fixé à 1.2.0 pour React 19.2 (la version
-1.3.0 tire react-reconciler 0.34, qui exige React 19.3).
+`xcode` utilise une surcharge ciblée de `uuid` vers **11.1.1**, qui corrige
+[GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq).
+La surcharge est conservée dans `package.json` et `package-lock.json`.
+`test:dependencies` vérifie la version réellement chargée par `xcode`, la création
+d'identifiants, l'ajout et la suppression de fichiers, et la lecture/écriture d'un
+projet Xcode temporaire. Ce test ne remplace pas une compilation iOS sur macOS.
+Retirer la surcharge lorsque `xcode` adoptera une version corrigée compatible.
 
-La couverture inclut toute la source `src/` et le point d'entrée `index.ts`.
-Les seuils Jest exigent 100 % des instructions, branches, fonctions et lignes.
-Les fichiers qui ne contiennent que des types ou réexports n'ont aucune unité
-exécutable à couvrir. Aucun fichier applicatif n'est exclu du calcul.
+Au **4 octobre 2026**, deux avis HIGH restent sans version corrigée publiée :
 
-L'intégration réseau réelle se lance avec `npm run test:auth-e2e` après build du
-Gateway et démarrage d'Auth sur une base **de test** migrée. Fournir
-`AUTH_E2E_SERVICE_URL` et `AUTH_E2E_JWT_SECRET` (clé temporaire de cette instance,
-jamais une clé de production). Ce test utilise le vrai code HTTP/Auth/session
-Mobile avec le vrai Gateway/Auth/PostgreSQL. L'API native SecureStore est remplacée
-par un adaptateur en mémoire sous Node; les tests Jest vérifient séparément son
-contrat. Des JWT expirés sont signés avec la clé temporaire pour exercer la
-restauration et les 401 concurrents sans attendre 15 minutes. Aucun credential
-n'est imprimé. Les interactions natives restent à confirmer sur appareil.
+- [`node-forge` ≤ 1.4.0](https://github.com/advisories/GHSA-86w9-cpqp-85rv) :
+  validation insuffisante des signatures RSA; utilisé par les outils Expo.
+- [`braces` ≤ 3.0.3](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) :
+  déni de service avec des motifs profondément imbriqués; utilisé via `micromatch`
+  dans les chaînes d'outillage Expo/Metro et Jest.
 
-Pour valider également l'image Docker de la Gateway, fournir
-`AUTH_E2E_GATEWAY_URL` avec l'URL de cette instance isolée. Le script utilise
-alors cette Gateway existante au lieu de démarrer une Gateway locale.
-
-### Avis npm en attente de correctif compatible
-
-Au 4 octobre 2026, `npm audit` signale des avis transitifs sur braces <=3.0.3
-(GHSA-vfj7-8cjw-p6xm), node-forge <=1.4.0 (GHSA-86w9-cpqp-85rv) et uuid <11.1.1
-(GHSA-w5hq-g745-h8pq). Les versions npm actuelles de braces/node-forge restent
-concernées. Les corrections automatiques proposées changent des versions majeures
-ou rétrogradent Expo vers SDK 44. Ne pas exécuter `npm audit fix --force` : la
-compatibilité SDK 57 doit être conservée. Réexaminer ces avis dès qu'une version
-corrigée compatible est disponible; Expo Doctor et les tests ne remplacent pas
-cet audit. Les résultats exacts de l'audit sont consignés dans le rapport de tâche.
+L'audit propage ces avis aux dépendances parentes : le nombre d'alertes n'est pas
+le nombre d'avis distincts. `npm audit` reste donc en échec; les alertes ne sont
+ni masquées ni désactivées. Éviter les motifs et certificats non fiables transmis
+aux outils concernés, sans considérer cette précaution comme un correctif.
+Ne pas utiliser `npm audit fix --force` : la résolution proposée inclut une
+rétrogradation incompatible vers Expo 44. Vérifier les nouveaux correctifs avec
+`npm audit` et `npx expo install --check`, puis refaire les tests avant une mise à jour.

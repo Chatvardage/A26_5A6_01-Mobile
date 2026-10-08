@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { ConversationScreen } from '@/screens/ConversationScreen';
+import { NewDirectMessageScreen } from '@/screens/NewDirectMessageScreen';
 import { ServerScreen } from '@/screens/ServerScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { RegisterScreen } from '@/screens/RegisterScreen';
@@ -37,7 +38,7 @@ function useNavigationTheme(): Theme {
 }
 
 export function RootNavigator() {
-  const { status, error, signOut, restoreSession } = useSession();
+  const { status, user, error, signOut, restoreSession } = useSession();
   const { strings } = useTranslation();
   const theme = useNavigationTheme();
 
@@ -98,7 +99,7 @@ export function RootNavigator() {
             </View>
           </SafeAreaView>
         ) : null}
-        <Stack.Navigator key={status}>
+        <Stack.Navigator key={`${status}:${user?.id ?? ''}`}>
           {status === 'signedIn' ? (
             <>
               <Stack.Screen name={Routes.Main} component={MainTabs} options={{ headerShown: false }} />
@@ -115,6 +116,11 @@ export function RootNavigator() {
                 options={({ route }) => ({
                   title: route.params?.title ?? strings.navigation.conversation,
                 })}
+              />
+              <Stack.Screen
+                name={Routes.NewDirectMessage}
+                component={NewDirectMessageScreen}
+                options={{ title: 'Nouveau message', presentation: 'modal' }}
               />
             </>
           ) : (

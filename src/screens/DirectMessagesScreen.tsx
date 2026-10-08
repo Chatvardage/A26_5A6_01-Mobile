@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
 import { ConversationItem } from '@/components/ConversationItem';
+import { NewDirectMessageButton } from '@/components/NewDirectMessageButton';
 import { EmptyState, ErrorState, LoadingState } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
@@ -33,16 +34,32 @@ export function DirectMessagesScreen({ navigation }: Props) {
     [navigation],
   );
 
-  if (state.status === 'loading') return <LoadingState label={strings.states.loadingPrivateMessages} />;
-  if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} refresh={refreshProps} />;
-  if (state.status === 'empty') {
-    return <EmptyState title={strings.states.noPrivateMessages} hint={strings.states.startConversation} refresh={refreshProps} />;
+  const newMessageButton = <NewDirectMessageButton onPress={() => navigation.navigate(Routes.NewDirectMessage)} />;
+
+  if (state.status !== 'ready') {
+    return (
+      <ThemedView style={styles.fill}>
+        {newMessageButton}
+        {state.status === 'loading' ? (
+          <LoadingState label={strings.states.loadingPrivateMessages} />
+        ) : state.status === 'error' ? (
+          <ErrorState message={state.message} onRetry={retry} refresh={refreshProps} />
+        ) : (
+          <EmptyState
+            title={strings.states.noPrivateMessages}
+            hint={strings.states.startConversation}
+            refresh={refreshProps}
+          />
+        )}
+      </ThemedView>
+    );
   }
 
   return (
     <ThemedView style={styles.fill}>
       <FlatList
         data={state.data}
+        ListHeaderComponent={newMessageButton}
         keyExtractor={(c) => c.id}
         renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
         ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}

@@ -3,7 +3,14 @@ import { storage } from '@/session/storage.adapter';
 import { SessionManager } from '@/session/SessionManager';
 import { ApiError } from '@/services/ApiError';
 import { apiFetch, resetHttpClient } from '@/services/httpClient';
+import { createRealtimeService } from '@/services/websocketService';
 
+jest.mock('@/services/websocketService', () => ({
+  createRealtimeService: jest.fn(),
+}));
+
+const configureRealtime = jest.fn<void, [Parameters<ReturnType<typeof createRealtimeService>['configureRealtime']>[0]]>();
+const disconnectRealtime = jest.fn();
 jest.mock('@/session/storage.adapter', () => ({
   storage: { save: jest.fn(), load: jest.fn(), clear: jest.fn() },
 }));
@@ -41,6 +48,11 @@ beforeEach(() => {
   jest.mocked(auth.register).mockResolvedValue(session);
   jest.mocked(auth.me).mockResolvedValue(user);
   jest.mocked(auth.refresh).mockResolvedValue(renewed);
+  jest.mocked(createRealtimeService).mockReturnValue({
+    ...jest.requireActual<typeof import('@/services/websocketService')>('@/services/websocketService').createRealtimeService(),
+    configureRealtime,
+    disconnectRealtime,
+  });
   manager = new SessionManager();
 });
 afterEach(() => {
@@ -54,6 +66,83 @@ const deferred = <T>() => {
   });
   return { promise, resolve };
 };
+
+it('configure le temps réel avant de publier la session restaurée', async () => {
+  jest.mocked(storage.load).mockResolvedValue(session);
+  const listener = jest.fn(() => {
+    if (manager.state.status === 'signedIn') {
+      expect(configureRealtime).toHaveBeenCalled();
+    }
+  });
+  manager.subscribe(listener);
+  await manager.start();
+  const options = jest.mocked(configureRealtime).mock.calls[0][0];
+  expect(options.getToken()).toBe(session.jeton);
+  expect(manager.state.status).toBe('signedIn');
+  await manager.refreshSession();
+  expect(options.getToken()).toBe(renewed.jeton);
+  expect(configureRealtime).toHaveBeenCalledTimes(2);
+});
+
+it.each(['signIn', 'register'] as const)('configure le temps réel après %s et efface la session révoquée', async (operation) => {
+  await manager.start();
+  expect(configureRealtime).not.toHaveBeenCalled();
+  if (operation === 'signIn') await manager.signIn('alice', 'fixture');
+  else await manager.register({ pseudo: 'alice', courriel: user.courriel, mot_de_passe: 'fixture' });
+  const options = jest.mocked(configureRealtime).mock.calls[0][0];
+  expect(options.getToken()).toBe(session.jeton);
+  jest.mocked(disconnectRealtime).mockClear();
+  options.onUnauthorized();
+  expect(manager.state).toEqual({ status: 'signedOut', user: null, error: null });
+  expect(options.getToken()).toBeNull();
+  expect(disconnectRealtime).toHaveBeenCalledTimes(1);
+});
+
+it('ferme le temps réel à la déconnexion et à la destruction du gestionnaire', async () => {
+  await manager.start();
+  await manager.signIn('alice', 'fixture');
+  jest.mocked(disconnectRealtime).mockClear();
+  await manager.signOut();
+  expect(disconnectRealtime).toHaveBeenCalledTimes(1);
+  await manager.signIn('alice', 'fixture');
+  manager.dispose();
+  expect(disconnectRealtime).toHaveBeenCalledTimes(2);
+  expect(jest.mocked(configureRealtime).mock.calls.at(-1)?.[0].getToken()).toBeNull();
+});
+
+it('efface et remplace les brouillons à la déconnexion sans partager le store avec le compte suivant', async () => {
+  await manager.start();
+  await manager.signIn('alice', 'fixture');
+  const oldStore = manager.drafts;
+  oldStore.set('shared-room', 'texte du premier compte');
+  await manager.refreshSession();
+  expect(manager.drafts).toBe(oldStore);
+  expect(manager.drafts.get('shared-room')).toBe('texte du premier compte');
+  await manager.signOut();
+  expect(oldStore.size).toBe(0);
+  expect(manager.drafts).not.toBe(oldStore);
+  jest.mocked(auth.login).mockResolvedValueOnce({ ...session, utilisateur: { ...user, id: 'other-user' } });
+  await manager.signIn('bob', 'fixture');
+  manager.drafts.set('shared-room', 'texte du second compte');
+  oldStore.delete('shared-room');
+  expect(manager.drafts.get('shared-room')).toBe('texte du second compte');
+  manager.dispose();
+  expect(manager.drafts.size).toBe(0);
+});
+
+it('remplace le store et ferme le socket si un nouveau compte est accepté sans déconnexion préalable', async () => {
+  await manager.start();
+  await manager.signIn('alice', 'fixture');
+  const oldStore = manager.drafts;
+  oldStore.set('shared-room', 'ancien brouillon');
+  jest.mocked(auth.login).mockResolvedValueOnce({ ...session, utilisateur: { ...user, id: 'other-user' } });
+  disconnectRealtime.mockClear();
+  await manager.signIn('bob', 'fixture');
+  expect(manager.drafts).not.toBe(oldStore);
+  expect(oldStore.size).toBe(0);
+  expect(manager.drafts.size).toBe(0);
+  expect(disconnectRealtime).toHaveBeenCalledTimes(1);
+});
 
 it('preserves inaccessible secure storage and validates the session after retry', async () => {
   jest
