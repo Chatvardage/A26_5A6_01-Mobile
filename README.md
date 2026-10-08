@@ -36,10 +36,15 @@ Puis, dans ce dépôt :
 ```bash
 npm ci
 npm test
-npm start             # équivaut à « npx expo start », adapté automatiquement à WSL2
+npm start             # déduit l'IP de l'API si nécessaire puis lance Expo, avec adaptation WSL2
 ```
 
-`npm start` lance la CLI Expo installée dans le projet avec le même exécutable Node, sans appeler `npx`. Cela évite l’erreur `spawn npx ENOENT` sous Windows ou WSL. Si la CLI Expo est absente, exécuter `npm ci` dans ce dépôt.
+`npm start` déduit l'IP LAN de l'API dans `.env` hors WSL2 seulement si aucune URL n'est
+encore configurée, puis lance la CLI Expo installée dans le projet avec le même exécutable
+Node, sans appeler `npx`. Une URL déjà présente dans l'environnement ou dans `.env` est
+conservée (notamment `10.0.2.2`, une adresse distante ou le mode miroir WSL2). Cela évite
+l'erreur `spawn npx ENOENT` sous Windows ou WSL. Si la CLI Expo est absente, exécuter
+`npm ci` dans ce dépôt.
 
 Le projet utilise React Navigation, pas Expo Router. La commande de boilerplate `reset-project` a été retirée : elle déplaçait ou supprimait `src` et `scripts`, puis générait une structure Expo Router incompatible.
 
@@ -76,6 +81,30 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 5. `http://localhost:3000`.
 
 À l'étape 4, seule une adresse locale (`localhost`, `*.local`, IP privée `10.x`, `172.16-31.x`, `192.168.x`) est retenue : un tunnel (exp.direct, ngrok, Cloudflare…) ne donne pas accès au backend et est ignoré. Après toute modification de `.env`, relancer avec le cache vidé (`npm start -- -c`).
+
+Hors WSL2, `npm start` déduit l'IP LAN du PC dans `.env` seulement lors de la première
+configuration (sans `EXPO_PUBLIC_API_URL` dans l'environnement ou dans `.env`). Pour
+effectuer ou refaire cette mise à jour sans lancer Expo, exécuter depuis ce dépôt.
+`npm run update-ip` force alors le port 3000 :
+
+```bash
+npm run update-ip
+npm start -- -c
+```
+
+Sous Linux natif, `npm run update-ip` remplace l'hôte de `EXPO_PUBLIC_API_URL` et force le port 3000.
+`npm start` ne modifie `.env` que si aucune URL n'est configurée et utilise alors aussi le port 3000. Le script choisit la première
+IPv4 privée détectée (`192.168.x.x`, `10.x.x.x` ou `172.16-31.x.x`). Si plusieurs
+interfaces (VPN, VirtualBox, Wi-Fi et Ethernet) sont actives, choisir explicitement
+l'adresse correcte :
+
+```bash
+npm run update-ip -- --ip 192.168.1.42
+```
+
+Cette commande modifie le fichier `.env` local, ignoré par Git. Elle ne doit pas être
+utilisée pour l'émulateur Android (`10.0.2.2`), le mode miroir WSL2 ou un backend sur
+une autre machine : dans ces cas, conserver l'URL spécifique documentée plus bas.
 
 ### Cas A : poste sans WSL2, backend sur le même poste
 
@@ -136,6 +165,10 @@ Au premier lancement, accepter l'installation de `@expo/ngrok`. `scripts/start.j
 3. si `EXPO_PUBLIC_API_URL` n'est définie ni dans l'environnement ni dans `.env`, interroge Windows (`powershell.exe`) pour l'IP Wi-Fi **actuelle** et utilise `http://<cette IP>:3006` ; l'IP peut donc changer d'un jour à l'autre sans rien modifier ;
 4. avertit si la redirection du port 3006 est absente ;
 5. lance directement la CLI Expo locale avec Node et les options données (`npm start -- -c` vide le cache).
+
+Hors WSL2, `scripts/start.js` déduit `.env` avec la première IPv4 privée détectée
+uniquement si aucune URL n'est configurée avant de lancer Expo. Cette étape n'est pas
+exécutée sous WSL2, qui utilise plutôt l'adresse Windows détectée par PowerShell.
 
 **Vérification** : `http://<IP-Wi-Fi-de-Windows>:3006/api/health` doit répondre dans le navigateur du téléphone (IP visible dans le message `[start] WSL2 : API détectée à …`, ou avec `ipconfig`, ligne « Adresse IPv4 » du Wi-Fi).
 
