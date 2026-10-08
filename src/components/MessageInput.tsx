@@ -10,6 +10,7 @@ import type { ChatMessage } from '@/types/conversation';
 
 type Props = {
   conversationId: string;
+  draftStore?: Map<string, string>;
   onSend: (text: string) => Promise<void>;
   editingMessage: Pick<ChatMessage, 'id' | 'content'> | null;
   onEdit: (messageId: string, text: string) => Promise<void>;
@@ -23,10 +24,10 @@ export function MessageInput(props: Props) {
   return <MessageInputState key={`${props.conversationId}:${editingKey}`} {...props} />;
 }
 
-function MessageInputState({ conversationId, onSend, editingMessage, onEdit, onCancelEdit }: Props) {
+function MessageInputState({ conversationId, draftStore = drafts, onSend, editingMessage, onEdit, onCancelEdit }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [text, setText] = useState(() => editingMessage?.content ?? drafts.get(conversationId) ?? '');
+  const [text, setText] = useState(() => editingMessage?.content ?? draftStore.get(conversationId) ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textRef = useRef(text);
@@ -42,7 +43,7 @@ function MessageInputState({ conversationId, onSend, editingMessage, onEdit, onC
   const changeText = (value: string) => {
     textRef.current = value;
     setText(value);
-    if (!editingMessage) drafts.set(conversationId, value);
+    if (!editingMessage) draftStore.set(conversationId, value);
     setError(null);
   };
 
@@ -59,8 +60,8 @@ function MessageInputState({ conversationId, onSend, editingMessage, onEdit, onC
         onCancelEdit();
       } else {
         await onSend(trimmed);
-        if (textRef.current === submittedText && drafts.get(conversationId) === submittedText) {
-          drafts.delete(conversationId);
+        if (textRef.current === submittedText && draftStore.get(conversationId) === submittedText) {
+          draftStore.delete(conversationId);
           if (mounted.current) {
             textRef.current = '';
             setText('');

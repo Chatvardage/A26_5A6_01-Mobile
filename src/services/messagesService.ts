@@ -18,6 +18,7 @@ export type RawMessage = {
 };
 
 function normalizeMessage(message: RawMessage, senderName?: string): ChatMessage {
+  validateMessageDates(message);
   return {
     id: message.id,
     senderId: message.senderId ?? message.authorId ?? '',
@@ -29,12 +30,20 @@ function normalizeMessage(message: RawMessage, senderName?: string): ChatMessage
 }
 
 function dateValue(value: string): number {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? 0 : timestamp;
+  const timestamp = typeof value === 'string' ? Date.parse(value) : NaN;
+  if (Number.isNaN(timestamp)) throw new ApiError('invalid_response', 'Date de message invalide');
+  return timestamp;
+}
+
+function validateMessageDates(message: Pick<ChatMessage, 'createdAt' | 'updatedAt'>): void {
+  dateValue(message.createdAt);
+  dateValue(message.updatedAt);
 }
 
 /** Fusionne par id, conserve la version modifiée la plus récente et trie pour FlatList inversée. */
 export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  current.forEach(validateMessageDates);
+  incoming.forEach(validateMessageDates);
   const byId = new Map(current.map((message) => [message.id, message]));
   for (const message of incoming) {
     const existing = byId.get(message.id);

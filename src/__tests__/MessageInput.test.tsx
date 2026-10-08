@@ -6,11 +6,16 @@ import { ApiError } from '@/services/ApiError';
 
 const frame = { x: 0, y: 0, width: 400, height: 800 };
 const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+let draftStore: Map<string, string>;
+beforeEach(() => {
+  draftStore = new Map();
+});
 const renderInput = async (props: Partial<React.ComponentProps<typeof MessageInput>> = {}) =>
   render(
     <SafeAreaProvider initialMetrics={{ frame, insets }}>
       <MessageInput
         conversationId="input-test-default"
+        draftStore={draftStore}
         onSend={jest.fn().mockResolvedValue(undefined)}
         editingMessage={null}
         onEdit={jest.fn().mockResolvedValue(undefined)}
@@ -63,16 +68,41 @@ describe('MessageInput', () => {
     await fireEvent.changeText(screen.getByLabelText('Message'), 'brouillon A');
     await rerender(
       <SafeAreaProvider initialMetrics={{ frame, insets }}>
-        <MessageInput conversationId="input-draft-b" onSend={jest.fn()} editingMessage={null} onEdit={jest.fn()} onCancelEdit={jest.fn()} />
+        <MessageInput conversationId="input-draft-b" draftStore={draftStore} onSend={jest.fn()} editingMessage={null} onEdit={jest.fn()} onCancelEdit={jest.fn()} />
       </SafeAreaProvider>,
     );
     await fireEvent.changeText(screen.getByLabelText('Message'), 'brouillon B');
     await rerender(
       <SafeAreaProvider initialMetrics={{ frame, insets }}>
-        <MessageInput conversationId="input-draft-a" onSend={jest.fn()} editingMessage={null} onEdit={jest.fn()} onCancelEdit={jest.fn()} />
+        <MessageInput conversationId="input-draft-a" draftStore={draftStore} onSend={jest.fn()} editingMessage={null} onEdit={jest.fn()} onCancelEdit={jest.fn()} />
       </SafeAreaProvider>,
     );
     expect(screen.getByLabelText('Message').props.value).toBe('brouillon A');
+  });
+
+  it('isole deux stores qui utilisent le même identifiant de conversation', async () => {
+    const firstStore = new Map<string, string>();
+    const secondStore = new Map<string, string>();
+    const first = await renderInput({ conversationId: 'same-id', draftStore: firstStore });
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'brouillon privé au premier store');
+    await first.unmount();
+    const second = await renderInput({ conversationId: 'same-id', draftStore: secondStore });
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('');
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'second brouillon');
+    await second.unmount();
+    await renderInput({ conversationId: 'same-id', draftStore: firstStore });
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('brouillon privé au premier store');
+    expect(secondStore.get('same-id')).toBe('second brouillon');
+  });
+
+  it('conserve le brouillon de production par défaut entre deux montages', async () => {
+    const first = await renderInput({ conversationId: 'default-store', draftStore: undefined });
+    await fireEvent.changeText(screen.getByLabelText('Message'), 'brouillon partagé');
+    await first.unmount();
+    await renderInput({ conversationId: 'default-store', draftStore: undefined });
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('brouillon partagé');
+    await fireEvent.press(screen.getByRole('button', { name: 'Envoyer' }));
+    expect(screen.getByLabelText('Message')).toHaveDisplayValue('');
   });
 
   it('garde le mode modification en cas d’échec et le ferme après succès', async () => {

@@ -19,6 +19,7 @@ let options: RealtimeOptions | null = null;
 let socket: Socket | null = null;
 let state: RealtimeState = 'disconnected';
 let hasBeenReady = false;
+let refreshingToken = false;
 let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
 const rooms = new Set<string>();
 const joinedRooms = new Set<string>();
@@ -29,8 +30,9 @@ const readyHandlers = new Set<ReadyHandler>();
 const stateHandlers = new Set<StateHandler>();
 
 function setState(next: RealtimeState) {
+  if (state === next) return;
   state = next;
-  for (const handler of stateHandlers) handler(next);
+  for (const handler of [...stateHandlers]) handler(next);
 }
 
 function requireSocket(): Socket {
@@ -51,13 +53,13 @@ function requireSocket(): Socket {
   current.on('disconnect', () => {
     joinedRooms.clear();
     joiningRooms.clear();
-    setState('disconnected');
+    if (!refreshingToken) setState('disconnected');
   });
   current.on('connect_error', () => setState('connecting'));
   current.on('connexion.prete', () => {
     hasBeenReady = true;
     setState('ready');
-    for (const handler of readyHandlers) handler();
+    for (const handler of [...readyHandlers]) handler();
     if (socket !== current || state !== 'ready') return;
     for (const roomId of rooms) {
       void startJoin(roomId, current);
@@ -154,8 +156,13 @@ export function configureRealtime(configuration: RealtimeOptions) {
       joinedRooms.clear();
       joiningRooms.clear();
       setState('connecting');
-      socket.disconnect();
-      socket.connect();
+      refreshingToken = true;
+      try {
+        socket.disconnect();
+        socket.connect();
+      } finally {
+        refreshingToken = false;
+      }
     }
   }
 }
@@ -175,8 +182,8 @@ export function onConnectionState(handler: StateHandler): () => void {
 
 /** Appelé à chaque connexion protocolaire prête, y compris après une reconnexion. */
 export function onReady(handler: ReadyHandler): () => void {
-  readyHandlers.add(handler);
   requireSocket();
+  readyHandlers.add(handler);
   return () => readyHandlers.delete(handler);
 }
 
@@ -219,8 +226,8 @@ export function disconnectRealtime() {
   appStateSubscription?.remove();
   appStateSubscription = null;
   if (socket) {
-    socket.disconnect();
     socket.removeAllListeners();
+    socket.disconnect();
   }
   socket = null;
   hasBeenReady = false;
@@ -234,5 +241,6 @@ export function disconnectRealtime() {
   roomWaiters.clear();
   readyHandlers.clear();
   setState('disconnected');
+  stateHandlers.clear();
   options = null;
 }

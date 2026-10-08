@@ -61,11 +61,10 @@ export function useMessages(conversationId: string, currentUserId: string) {
   }, []);
 
   const updateMessages = useCallback((incoming: ChatMessage[]) => {
-    setMessages((current) => {
-      const merged = mergeMessages(current, incoming);
-      messagesRef.current = merged;
-      return merged;
-    });
+    // Fusion synchrone pour remonter les réponses invalides à la frontière UI avant tout changement d'état.
+    const merged = mergeMessages(messagesRef.current, incoming);
+    messagesRef.current = merged;
+    setMessages(merged);
   }, []);
 
   const loadRecent = useCallback(async () => {
@@ -82,8 +81,8 @@ export function useMessages(conversationId: string, currentUserId: string) {
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
       }
       const buffered = initial ? eventBuffer.current : [];
-      if (initial) eventBuffer.current = [];
       updateMessages([...page, ...buffered]);
+      if (initial) eventBuffer.current = [];
       if (initial) setHasOlder(page.length === PAGE_SIZE);
       firstLoadDone.current = true;
       updateStatus('ready');
@@ -99,6 +98,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     const ref = parseConversationId(conversationId);
     const currentGeneration = ++generation.current;
     let firstReadyIsInitial = !hasRealtimeBeenReady();
+    let joinFailed = false;
     messagesRef.current = [];
     // La conversation est une frontière d'état: son changement invalide immédiatement la liste précédente.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -115,18 +115,6 @@ export function useMessages(conversationId: string, currentUserId: string) {
     pseudoLookups.current.clear();
     olderRequest.current = false;
 
-    const events =
-      ref?.kind === 'room'
-        ? [
-            ['room-message.created', (raw: unknown) => receive(raw)],
-            ['room-message.updated', (raw: unknown) => receive(raw)],
-            ['room-message.revoked', (raw: unknown) => revoke(raw)],
-          ] as const
-        : [
-            ['private-message.created', (raw: unknown) => receive(raw)],
-            ['private-message.updated', (raw: unknown) => receive(raw)],
-          ] as const;
-
     const receive = (raw: unknown) => {
       if (!belongsTo(conversationId, currentUserId, raw) || typeof raw !== 'object' || raw === null) return;
       const message = raw as RawMessage;
@@ -134,8 +122,14 @@ export function useMessages(conversationId: string, currentUserId: string) {
       const senderId = message.senderId ?? message.authorId;
       if (!senderId) return;
       const incoming = normalizeEvent(message, senderId, pseudoCache.current.get(senderId));
-      if (firstLoadDone.current) updateMessages([incoming]);
-      else eventBuffer.current = mergeMessages(eventBuffer.current, [incoming]);
+      try {
+        if (firstLoadDone.current) updateMessages([incoming]);
+        else eventBuffer.current = mergeMessages(eventBuffer.current, [incoming]);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.kind !== 'invalid_response') throw error;
+        setErrorMessage(userMessage(error));
+        return;
+      }
 
       if (pseudoCache.current.has(senderId) || pseudoLookups.current.has(senderId)) return;
       pseudoLookups.current.add(senderId);
@@ -165,7 +159,18 @@ export function useMessages(conversationId: string, currentUserId: string) {
       }
     };
 
-    let joinFailed = false;
+    const events =
+      ref?.kind === 'room'
+        ? [
+            ['room-message.created', receive],
+            ['room-message.updated', receive],
+            ['room-message.revoked', revoke],
+          ] as const
+        : [
+            ['private-message.created', receive],
+            ['private-message.updated', receive],
+          ] as const;
+
     const join = () => {
       if (ref?.kind !== 'room') return;
       joinFailed = false;

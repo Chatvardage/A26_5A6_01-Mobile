@@ -14,7 +14,7 @@ it('refuse les déclenchements programmatiques vides ou pendant un envoi, même 
   let resolve!: () => void;
   const onSend = jest.fn(() => new Promise<void>((done) => { resolve = done; }));
   await render(
-    <MessageInput conversationId="input-guards" onSend={onSend} editingMessage={null} onEdit={jest.fn()} onCancelEdit={jest.fn()} />,
+    <MessageInput conversationId="input-guards" draftStore={new Map()} onSend={onSend} editingMessage={null} onEdit={jest.fn()} onCancelEdit={jest.fn()} />,
   );
   const press = async () => {
     const props = jest.mocked(Pressable).mock.lastCall![0];

@@ -7,8 +7,8 @@ import * as realtime from '@/services/websocketService';
 import { lookupPseudos } from '@/services/usersService';
 
 jest.mock('@/services/messagesService', () => {
-  const actual = jest.requireActual('@/services/messagesService');
-  return { ...actual, fetchHistory: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn() };
+  const actual = jest.requireActual<typeof import('@/services/messagesService')>('@/services/messagesService');
+  return { ...actual, mergeMessages: jest.fn(actual.mergeMessages), fetchHistory: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn() };
 });
 jest.mock('@/services/usersService', () => ({ lookupPseudos: jest.fn() }));
 jest.mock('@/services/websocketService', () => ({
@@ -68,6 +68,139 @@ beforeEach(() => {
 });
 
 describe('useMessages', () => {
+  it.each(
+    (['loading', 'ready'] as const).flatMap((status) => [
+      { status, error: new Error('Erreur de fusion inattendue'), label: 'non typée' },
+      { status, error: new ApiError('network', 'Erreur typée inattendue'), label: 'typée hors invalid_response' },
+    ]),
+  )('propage une erreur $label pendant $status sans altérer la liste ni la convertir en erreur de date', async ({ status, error }) => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    if (status === 'loading') fetchHistory.mockReturnValueOnce(history.promise);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await waitFor(() => expect(result.current.status).toBe(status));
+    const before = result.current.messages;
+    const snapshot = before.map((item) => ({ ...item }));
+    const incoming = { ...message('unexpected', ME), recipientId: OTHER };
+    const receive = mockHandlers.get('private-message.created')!;
+    const merge = jest.mocked(messageService.mergeMessages);
+    merge.mockClear().mockImplementationOnce(() => {
+      throw error;
+    });
+    try {
+      await act(async () => {
+        let propagated: unknown;
+        try {
+          receive(incoming);
+        } catch (reason) {
+          propagated = reason;
+        }
+        expect(propagated).toBe(error);
+      });
+      expect(merge).toHaveBeenCalledTimes(1);
+      expect(merge).toHaveBeenCalledWith(
+        before,
+        [{ ...message('unexpected', ME), senderName: undefined }],
+      );
+      expect(result.current.messages).toBe(before);
+      expect(result.current.messages).toEqual(snapshot);
+      expect(result.current.status).toBe(status);
+      expect(result.current.errorMessage).toBeNull();
+      expect(result.current.accessError).toBeNull();
+      expect(lookupPseudos).not.toHaveBeenCalled();
+    } finally {
+      merge.mockReset().mockImplementation(
+        jest.requireActual<typeof import('@/services/messagesService')>('@/services/messagesService').mergeMessages,
+      );
+    }
+    if (status === 'loading') {
+      await act(async () => history.resolve([message('first')]));
+      expect(result.current.status).toBe('ready');
+      expect(result.current.messages).toEqual([message('first')]);
+    }
+  });
+
+  it('signale une date invalide au chargement et conserve le tampon pour le réessai', async () => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(history.promise).mockResolvedValueOnce([]);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await act(async () => {
+      mockHandlers.get('private-message.created')?.({
+        ...message('buffered'), recipientId: ME,
+      });
+      history.resolve([{ ...message('invalid'), updatedAt: 'invalide' }]);
+    });
+    expect(result.current.status).toBe('error');
+    expect(result.current.errorMessage).toBe('Réponse du serveur invalide. Réessayez.');
+    expect(result.current.messages).toEqual([]);
+    await act(async () => result.current.retry());
+    expect(result.current.status).toBe('ready');
+    expect(result.current.messages.map((item) => item.id)).toEqual(['buffered']);
+  });
+
+  it.each(['createdAt', 'updatedAt'] as const)('signale une date %s invalide reçue en direct sans changer la liste', async (field) => {
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    const before = result.current.messages;
+    await act(async () => {
+      mockHandlers.get('private-message.updated')?.({
+        ...message('first'), recipientId: ME, [field]: 'invalide', content: 'à refuser',
+      });
+    });
+    expect(result.current.messages).toBe(before);
+    expect(result.current.errorMessage).toBe('Réponse du serveur invalide. Réessayez.');
+    expect(lookupPseudos).not.toHaveBeenCalled();
+  });
+
+  it('refuse une date invalide avant le chargement sans empoisonner le tampon', async () => {
+    const history = deferred<ReturnType<typeof message>[]>();
+    fetchHistory.mockReturnValueOnce(history.promise);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await act(async () => {
+      mockHandlers.get('private-message.created')?.({
+        ...message('invalid'), recipientId: ME, createdAt: '',
+      });
+    });
+    expect(result.current.errorMessage).toBe('Réponse du serveur invalide. Réessayez.');
+    expect(lookupPseudos).not.toHaveBeenCalled();
+    await act(async () => history.resolve([message('first')]));
+    expect(result.current.status).toBe('ready');
+    expect(result.current.messages.map((item) => item.id)).toEqual(['first']);
+  });
+
+  it('préserve la liste si le rattrapage ou une ancienne page contient une date invalide', async () => {
+    const page = Array.from({ length: 50 }, (_, index) => message(`page-${index}`));
+    fetchHistory.mockResolvedValueOnce(page);
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    const before = result.current.messages;
+    fetchHistory.mockResolvedValueOnce([{ ...message('invalid'), updatedAt: '' }]);
+    await act(async () => result.current.loadOlder());
+    expect(result.current.messages).toBe(before);
+    expect(result.current.olderError).toBe('Réponse du serveur invalide. Réessayez.');
+    expect(result.current.loadingOlder).toBe(false);
+    expect(result.current.hasOlder).toBe(true);
+
+    await act(async () => mockReadyHandler?.());
+    fetchHistory.mockResolvedValueOnce([{ ...message('invalid'), createdAt: '' }]);
+    await act(async () => mockReadyHandler?.());
+    expect(result.current.messages).toBe(before);
+    expect(result.current.status).toBe('ready');
+    expect(result.current.errorMessage).toBe('Réponse du serveur invalide. Réessayez.');
+  });
+
+  it('rejette un envoi ou une modification avec une date invalide sans changer la liste', async () => {
+    const { result } = await renderHook(() => useMessages(conversationId, ME));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    const before = result.current.messages;
+    sendMessage.mockResolvedValueOnce({ ...message('invalid'), updatedAt: '' });
+    editMessage.mockResolvedValueOnce({ ...message('first'), createdAt: '' });
+    await act(async () => {
+      await expect(result.current.send('texte')).rejects.toBe('Réponse du serveur invalide. Réessayez.');
+      await expect(result.current.edit('first', 'texte')).rejects.toBe('Réponse du serveur invalide. Réessayez.');
+    });
+    expect(result.current.messages).toBe(before);
+  });
+
   it('fusionne l’écho temps réel avec la réponse REST d’un envoi sans doublon', async () => {
     const sent = { ...message('sent', ME), recipientId: OTHER, content: 'bonjour' };
     const pending = deferred<ReturnType<typeof message>>();

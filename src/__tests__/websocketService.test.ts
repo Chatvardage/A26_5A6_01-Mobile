@@ -93,11 +93,14 @@ describe('websocketService', () => {
   it('renouvelle le handshake sans perdre les abonnements ni émettre avant connexion.prete', async () => {
     const handler = jest.fn();
     const ready = jest.fn();
+    const changed = jest.fn();
+    onConnectionState(changed);
     subscribe('private-message.created', handler);
     onReady(ready);
     trigger('connexion.prete');
     await joinRoom('room-id');
     mockSocket.emit.mockClear();
+    changed.mockClear();
 
     configureRealtime({ getToken: () => 'renewed-token', onUnauthorized: jest.fn() });
 
@@ -107,7 +110,10 @@ describe('websocketService', () => {
     expect(mockIo).toHaveBeenCalledTimes(1);
     expect(mockSocket.emit).not.toHaveBeenCalled();
     expect(getRealtimeState()).not.toBe('ready');
+    trigger('connect');
+    expect(changed.mock.calls).toEqual([['connecting']]);
     trigger('connexion.prete');
+    expect(changed.mock.calls).toEqual([['connecting'], ['ready']]);
     expect(ready).toHaveBeenCalledTimes(2);
     expect(mockSocket.emit).toHaveBeenCalledWith('room-message.join', { roomId: 'room-id' }, expect.any(Function));
     trigger('private-message.created', { id: 'message' });
@@ -119,6 +125,62 @@ describe('websocketService', () => {
     configureRealtime({ getToken: () => 'test-token', onUnauthorized: jest.fn() });
     expect(mockSocket.disconnect).not.toHaveBeenCalled();
     expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
+  it('notifie la fermeture une seule fois puis oublie les observateurs de la session précédente', () => {
+    const changed = jest.fn();
+    const ready = jest.fn();
+    onConnectionState(changed);
+    onReady(ready);
+    trigger('connexion.prete');
+    changed.mockClear();
+
+    disconnectRealtime();
+    expect(changed.mock.calls).toEqual([['disconnected']]);
+    changed.mockClear();
+    ready.mockClear();
+    configureRealtime({ getToken: () => 'new-session-token', onUnauthorized: jest.fn() });
+    onReady(jest.fn());
+    trigger('connexion.prete');
+    expect(changed).not.toHaveBeenCalled();
+    expect(ready).not.toHaveBeenCalled();
+  });
+
+  it('ne conserve aucun observateur prêt après un échec de création du socket', () => {
+    disconnectRealtime();
+    const unconfigured = jest.fn();
+    expect(() => onReady(unconfigured)).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
+    configureRealtime({ getToken: () => null, onUnauthorized: jest.fn() });
+    const missingToken = jest.fn();
+    expect(() => onReady(missingToken)).toThrow(expect.objectContaining({ kind: 'unauthorized' }));
+
+    configureRealtime({ getToken: () => 'test-token', onUnauthorized: jest.fn() });
+    const ready = jest.fn();
+    onReady(ready);
+    trigger('connexion.prete');
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(unconfigured).not.toHaveBeenCalled();
+    expect(missingToken).not.toHaveBeenCalled();
+  });
+
+  it('notifie tous les observateurs prêts même si le premier ferme la session', () => {
+    onReady(disconnectRealtime);
+    const ready = jest.fn();
+    onReady(ready);
+    trigger('connexion.prete');
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(getRealtimeState()).toBe('disconnected');
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+  });
+
+  it('publie une vraie coupure après le renouvellement du jeton', () => {
+    onReady(jest.fn());
+    trigger('connexion.prete');
+    configureRealtime({ getToken: () => 'renewed-token', onUnauthorized: jest.fn() });
+    const changed = jest.fn();
+    onConnectionState(changed);
+    trigger('disconnect');
+    expect(changed.mock.calls).toEqual([['disconnected']]);
   });
 
   it('crée un socket unique sur le namespace /messages avec le jeton en auth', () => {

@@ -13,7 +13,6 @@ export type ApiErrorKind =
   | 'invalid_response'
   | 'storage'
   | 'conflict'
-  | 'validation'
   | 'rate_limit';
 
 export class ApiError extends Error {
@@ -43,8 +42,6 @@ export function userMessage(error: unknown): string {
   const strings = getTranslations();
   if (error instanceof ApiError) {
     switch (error.kind) {
-      case 'validation':
-        return strings.errors.validation;
       case 'bad_request':
         return strings.errors.badRequest;
       case 'conflict':

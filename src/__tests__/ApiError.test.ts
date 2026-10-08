@@ -8,7 +8,6 @@ it.each([
 });
 
 const cases: [ApiErrorKind, string][] = [
-  ['validation', 'Vérifiez les champs du formulaire.'],
   ['network', 'Impossible de joindre le serveur. Vérifiez votre connexion.'],
   ['timeout', 'Le serveur met trop de temps à répondre. Réessayez.'],
   ['bad_request', 'Le message est invalide. Vérifiez son contenu.'],

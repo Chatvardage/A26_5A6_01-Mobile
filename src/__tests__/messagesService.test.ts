@@ -1,4 +1,5 @@
 import * as http from '@/services/httpClient';
+import { ApiError } from '@/services/ApiError';
 import { belongsTo, editMessage, fetchHistory, mergeMessages, sendMessage } from '@/services/messagesService';
 
 jest.mock('@/services/httpClient');
@@ -29,8 +30,8 @@ describe('fetchHistory', () => {
     apiFetch.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/users/lookup')) throw new Error('503');
       return [
-        { ...msg('sans-auteur', ''), authorId: undefined },
-        { ...msg('privé', ''), senderId: 'u2' },
+        { ...msg('sans-auteur', '2026-10-01T10:00:00Z'), authorId: undefined },
+        { ...msg('privé', '2026-10-01T10:00:00Z'), senderId: 'u2' },
       ];
     });
     const result = await fetchHistory(`dm:${ROOM}`, 10);
@@ -127,10 +128,59 @@ describe('mergeMessages', () => {
     expect(mergeMessages(merged, [{ ...older, senderName: 'Autre' }])).toEqual(merged);
   });
 
-  it('préserve le pseudo connu lorsque REST ne le fournit pas et normalise les dates invalides', () => {
-    const current = { ...baseMessage('one', 'date-invalide'), senderName: 'Alice' };
+  it('préserve le pseudo connu lorsque REST ne le fournit pas', () => {
+    const current = { ...baseMessage('one', '2026-10-01T10:00:00Z'), senderName: 'Alice' };
     const incoming = { ...current, senderName: undefined, content: 'version reçue' };
     expect(mergeMessages([current], [incoming])).toEqual([{ ...incoming, senderName: 'Alice' }]);
+  });
+
+  it.each(['createdAt', 'updatedAt'] as const)('rejette une date %s invalide sans modifier les listes', (field) => {
+    const original = baseMessage('one', '2026-10-01T10:00:00Z');
+    const current = [original];
+    const incoming = [{ ...original, content: 'invalide', [field]: 'date-invalide' }];
+    const currentSnapshot = current.map((item) => ({ ...item }));
+    const incomingSnapshot = incoming.map((item) => ({ ...item }));
+    expect(() => mergeMessages(current, incoming)).toThrow(expect.objectContaining({ kind: 'invalid_response' }));
+    expect(() => mergeMessages([], incoming)).toThrow(expect.objectContaining({ kind: 'invalid_response' }));
+    expect(() => mergeMessages(incoming, [])).toThrow(expect.objectContaining({ kind: 'invalid_response' }));
+    expect(current).toEqual(currentSnapshot);
+    expect(incoming).toEqual(incomingSnapshot);
+  });
+});
+
+describe('dates des réponses REST', () => {
+  const invalidDates = [
+    { label: 'vide', value: '' },
+    { label: 'non interprétable', value: 'date-invalide' },
+    { label: 'absente', value: undefined },
+    { label: 'nulle', value: null },
+    { label: 'numérique', value: 0 },
+    { label: 'booléenne', value: true },
+    { label: 'objet', value: {} },
+    { label: 'tableau coercible en date', value: ['2026-10-01T10:00:00Z'] },
+  ];
+  it.each(
+    (['createdAt', 'updatedAt'] as const).flatMap((field) =>
+      invalidDates.map((invalidDate) => ({ field, ...invalidDate })),
+    ),
+  )('rejette une date $field $label dans toutes les réponses', async ({ field, value }) => {
+    const invalid = { ...baseMessage('one', '2026-10-01T10:00:00Z'), [field]: value };
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/users/lookup')) return [];
+      if (path.includes('/history')) return [invalid];
+      return invalid;
+    });
+    for (const conversationId of [`dm:${DM}`, `room:${ROOM}`]) {
+      for (const request of [
+        () => fetchHistory(conversationId),
+        () => sendMessage(conversationId, 'texte'),
+        () => editMessage(conversationId, 'one', 'texte'),
+      ]) {
+        const response = request();
+        await expect(response).rejects.toBeInstanceOf(ApiError);
+        await expect(response).rejects.toMatchObject({ kind: 'invalid_response' });
+      }
+    }
   });
 });
 

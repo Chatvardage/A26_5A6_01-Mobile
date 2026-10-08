@@ -260,6 +260,8 @@ Le temps réel est configuré avant de publier une session connectée. Un renouv
 
 **Limites à connaître** : les brouillons restent uniquement en mémoire du processus, sans stockage sur disque ni garantie après fermeture/rechargement de l'app. Le rattrapage après reconnexion recharge une seule page récente de 50 messages, pas toute une interruption prolongée. La validation sur appareil avec deux sessions backend réelles reste nécessaire pour confirmer le défilement, le clavier et les transitions arrière-plan/réseau.
 
+Les dates `createdAt` et `updatedAt` des messages doivent être valides. Une réponse REST ou un événement temps réel contenant une date invalide est signalé comme une réponse serveur invalide, sans remplacer la liste déjà affichée.
+
 ### Parcours de validation sur appareil
 
 Avec le Gateway et les services réels démarrés depuis Infra, connecter deux comptes dans deux clients :
