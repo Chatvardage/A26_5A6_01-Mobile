@@ -151,6 +151,7 @@ export const en = {
     newConversation: 'new conversation',
   },
   navigation: {
+    showMore: 'Show more',
     messages: "Messages",
     directMessages: 'Direct messages',
     servers: 'Servers',

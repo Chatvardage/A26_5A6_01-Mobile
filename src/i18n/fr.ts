@@ -151,6 +151,7 @@ export const fr = {
     newConversation: 'nouvelle conversation',
   },
   navigation: {
+    showMore: 'Afficher plus',
     messages: "Messages",
     directMessages: 'Messages privés',
     servers: 'Serveurs',

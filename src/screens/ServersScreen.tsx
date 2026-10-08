@@ -10,6 +10,7 @@ import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/comp
 import { ServerItem } from '@/components/ServerItem';
 import { ThemedView } from '@/components/themed-view';
 import { usePendingInvitations } from '@/hooks/usePendingInvitations';
+import { usePagedList } from '@/hooks/usePagedList';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
 import { useServers } from '@/hooks/useServers';
@@ -33,6 +34,8 @@ export function ServersScreen({ navigation }: Props) {
   const invitations = usePendingInvitations();
   const refreshProps = { refreshing, onRefresh: refresh };
   const servers = useLiveServers(state.status === 'ready' ? state.data : NONE);
+  // 15 à la fois, les plus actifs en haut (tri du service).
+  const page = usePagedList(servers);
 
   const open = useCallback(
     (server: ServerSummary) => navigation.navigate(Routes.Server, { serverId: server.id, title: server.name }),
@@ -54,7 +57,8 @@ export function ServersScreen({ navigation }: Props) {
             <ActionButton label={strings.control.discover} badge={invitations} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'discover' })} />
             <ActionButton label={strings.control.createServer} onPress={() => navigation.navigate(Routes.DiscoverServers, { mode: 'create' })} />
           </View>}
-          data={servers}
+          data={page.visible}
+          ListFooterComponent={page.hasMore ? <View style={styles.more}><ActionButton label={strings.navigation.showMore} onPress={page.showMore} /></View> : null}
           keyExtractor={(s) => s.id}
           renderItem={({ item }) => <ServerItem server={item} onPress={open} />}
           ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
@@ -71,4 +75,5 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   list: { flexGrow: 1 },
   separator: { height: StyleSheet.hairlineWidth },
+  more: { padding: 16 },
 });

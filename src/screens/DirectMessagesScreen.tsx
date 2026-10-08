@@ -2,13 +2,15 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 
+import { ActionButton } from '@/components/ActionButton';
 import { ContentFrame } from '@/components/ContentFrame';
 import { ConversationItem } from '@/components/ConversationItem';
 import { NewDirectMessageButton } from '@/components/NewDirectMessageButton';
 import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
+import { usePagedList } from '@/hooks/usePagedList';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { useLiveConversations } from '@/unread/liveUnread';
@@ -32,6 +34,8 @@ export function DirectMessagesScreen({ navigation }: Props) {
   useRefreshOnFocus(refresh);
   const refreshProps = { refreshing, onRefresh: refresh };
   const conversations = useLiveConversations(state.status === 'ready' ? state.data : NONE);
+  // 15 à la fois, les plus actifs en haut (tri du service).
+  const page = usePagedList(conversations);
 
   const open = useCallback(
     (conversation: ConversationSummary) =>
@@ -65,7 +69,8 @@ export function DirectMessagesScreen({ navigation }: Props) {
       <ContentFrame>
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
         <FlatList
-          data={conversations}
+          data={page.visible}
+          ListFooterComponent={page.hasMore ? <View style={styles.more}><ActionButton label={strings.navigation.showMore} onPress={page.showMore} /></View> : null}
           ListHeaderComponent={newMessageButton}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
@@ -83,4 +88,5 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   list: { flexGrow: 1 },
   separator: { height: StyleSheet.hairlineWidth },
+  more: { padding: 16 },
 });
