@@ -22,7 +22,12 @@ export function isLocalHost(host: string): boolean {
 export function resolveApiUrl(configured: string | undefined, hostUri: string | null | undefined, development = __DEV__): string {
   const explicit = configured?.trim();
   if (explicit) {
-    const url = new URL(explicit);
+    let url: URL;
+    try {
+      url = new URL(explicit);
+    } catch {
+      throw new Error('EXPO_PUBLIC_API_URL must be an HTTP(S) origin without credentials.');
+    }
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
       throw new Error('EXPO_PUBLIC_API_URL must be an HTTP(S) origin without credentials.');
     }

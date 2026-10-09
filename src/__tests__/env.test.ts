@@ -1,12 +1,17 @@
+import { URL as ExpoURL } from 'whatwg-url-minimum';
+
 import { isLocalHost, resolveApiUrl } from '@/config/env';
 
-describe('resolveApiUrl', () => {
+describe.each([['Node', URL], ['Expo 57', ExpoURL]])('resolveApiUrl avec %s', (_runtime, implementation) => {
+  const originalURL = global.URL;
+  beforeAll(() => { global.URL = implementation as typeof URL; });
+  afterAll(() => { global.URL = originalURL; });
   it('exige une origine HTTPS explicite en version distribuée', () => {
     expect(resolveApiUrl('https://chat.example.test/', null, false)).toBe('https://chat.example.test');
     expect(() => resolveApiUrl(undefined, '192.168.0.5:8081', false)).toThrow('required');
     expect(() => resolveApiUrl('http://chat.example.test', null, false)).toThrow('HTTPS');
   });
-  it.each(['file:///etc/passwd', 'https://u:p@chat.example.test', 'https://chat.example.test/api', 'https://chat.example.test?q=1', 'https://chat.example.test#x'])('rejette une URL ambiguë : %s', (url) => {
+  it.each(['not a URL', 'https://', 'file:///etc/passwd', 'https://u:p@chat.example.test', 'https://chat.example.test/api', 'https://chat.example.test?q=1', 'https://chat.example.test#x'])('rejette une URL ambiguë : %s', (url) => {
     expect(() => resolveApiUrl(url, null, true)).toThrow('HTTP(S) origin');
   });
   it("privilégie la variable d'environnement et retire le / final", () => {

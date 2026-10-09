@@ -535,3 +535,5 @@ L'override YAML concerne seulement l'outil `@istanbuljs/load-nyc-config`. Les ve
 ### Limites connues
 
 L'audit npm conserve des alertes élevées : [braces GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), utilisé par la chaîne Metro/Jest, et [node-forge GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv), via les outils Expo. Aucun correctif publié n'est disponible pour ces deux avis lors de l'audit du 9 octobre 2026. Les compteurs incluent les dépendants, pas autant de failles distinctes. Retirer cette exception dès une version corrigée compatible avec le SDK; le contrôle `npm audit --audit-level=high` reste actif et échoue actuellement. Voir `../A26_5A6_01-Infra/docs/audit-securite-2026-10-09.md`.
+
+Une URL de configuration syntaxiquement invalide produit le même diagnostic explicite EXPO_PUBLIC_API_URL qu’une origine interdite, sans afficher sa valeur. Expo 57 installe son implémentation WHATWG URL au chargement du runtime; aucun deuxième polyfill n’est ajouté. Les tests de configuration exécutent les deux parseurs Node et Expo 57. La validation sur appareil physique reste à effectuer.
