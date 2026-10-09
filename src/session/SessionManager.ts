@@ -23,6 +23,10 @@ export class SessionManager {
   private writes: Promise<void> = Promise.resolve();
   private renewal: Promise<void> | null = null;
   private restoration: Promise<void> | null = null;
+  // Vrai pendant qu'Authentification remplace les jetons de cet appareil (mot de passe changé, autres appareils
+  // déconnectés) : le `session.revoquee` reçu par l'ancien socket ne doit pas fermer la session, le socket se
+  // reconnecte avec le nouveau jeton (voir configureRealtime).
+  private rotating = false;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -95,7 +99,7 @@ export class SessionManager {
       this.realtime.configureRealtime({
         getToken: () => this.session?.jeton ?? null,
         onUnauthorized: () => {
-          void this.clear();
+          if (!this.rotating) void this.clear();
         },
       });
       this.update({
@@ -202,14 +206,34 @@ export class SessionManager {
   changePassword = async (currentPassword: string, newPassword: string) => {
     const user = this.session?.utilisateur;
     if (!user) throw new ApiError('unauthorized', 'Session absente');
-    await auth.changePassword(currentPassword, newPassword);
-    // Les requêtes encore en vol avec l'ancien jeton ne doivent pas tenter de renouveler la session.
-    invalidateHttpRequests();
+    this.rotating = true;
     try {
-      await this.signIn(user.courriel, newPassword);
-    } catch (error) {
-      await this.clear();
-      throw error;
+      await auth.changePassword(currentPassword, newPassword);
+      // Les requêtes encore en vol avec l'ancien jeton ne doivent pas tenter de renouveler la session.
+      invalidateHttpRequests();
+      try {
+        await this.signIn(user.courriel, newPassword);
+      } catch (error) {
+        await this.clear();
+        throw error;
+      }
+    } finally {
+      this.rotating = false;
+    }
+  };
+  /**
+   * Déconnecte tous les autres appareils : Authentification invalide toutes les sessions et renvoie une nouvelle
+   * session pour celui-ci, qui reste connecté (le socket repart avec le nouveau jeton).
+   */
+  logoutOthers = async () => {
+    const epoch = this.epoch;
+    this.rotating = true;
+    try {
+      const result = await auth.logoutOthers();
+      invalidateHttpRequests();
+      await this.accept(result, epoch);
+    } finally {
+      this.rotating = false;
     }
   };
   /** Compte supprimé : la session locale est effacée (le jeton n'existe plus côté serveur). */

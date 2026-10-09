@@ -22,6 +22,7 @@ jest.mock('@/services/authService', () => ({
   logout: jest.fn(),
   changePassword: jest.fn(),
   deleteAccount: jest.fn(),
+  logoutOthers: jest.fn(),
 }));
 const user = {
   id: 'u',
@@ -527,5 +528,43 @@ describe('compte', () => {
     expect(auth.deleteAccount).toHaveBeenLastCalledWith('mdp');
     expect(manager.state.status).toBe('signedOut');
     expect(storage.clear).toHaveBeenCalled();
+  });
+});
+
+describe('sessions des autres appareils', () => {
+  const socketRevoque = () => configureRealtime.mock.calls.at(-1)![0].onUnauthorized();
+
+  it('déconnecte les autres appareils et garde celui-ci avec la nouvelle session', async () => {
+    await manager.signIn('alice', 'mdp');
+    let resolve!: (value: typeof renewed) => void;
+    jest.mocked(auth.logoutOthers).mockReturnValue(new Promise((r) => { resolve = r; }));
+    const pending = manager.logoutOthers();
+    // L'ancien socket reçoit session.revoquee pendant le remplacement : la session reste ouverte.
+    socketRevoque();
+    resolve(renewed);
+    await pending;
+    expect(manager.state.status).toBe('signedIn');
+    expect(configureRealtime.mock.calls.at(-1)![0].getToken()).toBe('new-access-fixture');
+    expect(storage.save).toHaveBeenLastCalledWith(renewed);
+  });
+
+  it('un échec garde la session ; hors remplacement, session.revoquee déconnecte', async () => {
+    await manager.signIn('alice', 'mdp');
+    jest.mocked(auth.logoutOthers).mockRejectedValue(new ApiError('network', 'x'));
+    await expect(manager.logoutOthers()).rejects.toMatchObject({ kind: 'network' });
+    expect(manager.state.status).toBe('signedIn');
+    socketRevoque();
+    await Promise.resolve();
+    expect(manager.state.status).toBe('signedOut');
+  });
+
+  it('pendant un changement de mot de passe, la révocation de l’ancien socket ne déconnecte pas', async () => {
+    await manager.signIn('alice', 'ancien-mdp');
+    jest.mocked(auth.changePassword).mockImplementation(async () => {
+      socketRevoque();
+    });
+    jest.mocked(auth.login).mockResolvedValue(renewed);
+    await manager.changePassword('ancien-mdp', 'nouveau-mdp');
+    expect(manager.state.status).toBe('signedIn');
   });
 });

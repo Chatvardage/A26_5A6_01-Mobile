@@ -87,3 +87,13 @@ export function deleteAccount(currentPassword: string): Promise<void> {
     ),
   );
 }
+
+/**
+ * Déconnecte tous les autres appareils : Authentification invalide toutes les sessions du compte et renvoie
+ * une nouvelle session pour celui-ci.
+ */
+export async function logoutOthers(): Promise<AuthResult> {
+  const result = await apiFetch<unknown>('/api/auth/logout-others', { method: 'POST' });
+  if (!isSession(result)) throw new ApiError('invalid_response', getTranslations().errors.invalidSessionResponse);
+  return { jeton: result.jeton, refresh_token: result.refresh_token, utilisateur: result.utilisateur };
+}

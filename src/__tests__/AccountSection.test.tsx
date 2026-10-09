@@ -5,14 +5,16 @@ import { ApiError } from '@/services/ApiError';
 
 const mockChangePassword = jest.fn();
 const mockDeleteAccount = jest.fn();
+const mockLogoutOthers = jest.fn();
 jest.mock('@/session/SessionContext', () => ({
-  useSession: () => ({ changePassword: mockChangePassword, deleteAccount: mockDeleteAccount }),
+  useSession: () => ({ changePassword: mockChangePassword, deleteAccount: mockDeleteAccount, logoutOthers: mockLogoutOthers }),
 }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockChangePassword.mockResolvedValue(undefined);
   mockDeleteAccount.mockResolvedValue(undefined);
+  mockLogoutOthers.mockResolvedValue(undefined);
 });
 const fill = async (current: string, next: string, confirmation = next) => {
   await fireEvent.changeText(screen.getByLabelText('Mot de passe actuel'), current);
@@ -60,4 +62,17 @@ it('supprime le compte après confirmation, et rien si on annule', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Supprimer mon compte' }));
   await fireEvent.press(dialog().getByRole('button', { name: 'Supprimer mon compte' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Mot de passe actuel incorrect.');
+});
+
+it('déconnecte les autres appareils après confirmation', async () => {
+  await render(<AccountSection cardStyle={{}} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Déconnecter les autres appareils' }));
+  const dialog = () => within(screen.getByTestId('app-dialog'));
+  expect(dialog().getByRole('header')).toHaveTextContent('Déconnecter les autres appareils ?');
+  await fireEvent.press(dialog().getByRole('button', { name: 'Annuler' }));
+  expect(mockLogoutOthers).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Déconnecter les autres appareils' }));
+  await fireEvent.press(dialog().getByRole('button', { name: 'Déconnecter les autres appareils' }));
+  expect(mockLogoutOthers).toHaveBeenCalled();
+  expect(screen.getByText('Les autres appareils ont été déconnectés.')).toBeTruthy();
 });

@@ -1,4 +1,4 @@
-import { changePassword, deleteAccount, login } from '@/services/authService';
+import { changePassword, deleteAccount, login, logoutOthers } from '@/services/authService';
 import { apiFetch } from '@/services/httpClient';
 import { ApiError } from '@/services/ApiError';
 
@@ -42,4 +42,13 @@ it('traduit le refus du mot de passe actuel et laisse passer les autres erreurs'
   const network = new ApiError('network', 'x');
   jest.mocked(apiFetch).mockRejectedValueOnce(network);
   await expect(deleteAccount('faux')).rejects.toBe(network);
+});
+
+it('déconnecte les autres appareils et renvoie la nouvelle session de celui-ci', async () => {
+  const session = { jeton: 'nouveau', refresh_token: 'refresh', utilisateur: { id: 'alice', pseudo: 'Alice', courriel: 'alice@example.test', role: 'utilisateur' } };
+  jest.mocked(apiFetch).mockResolvedValueOnce(session);
+  await expect(logoutOthers()).resolves.toEqual(session);
+  expect(apiFetch).toHaveBeenLastCalledWith('/api/auth/logout-others', { method: 'POST' });
+  jest.mocked(apiFetch).mockResolvedValueOnce({ jeton: '' });
+  await expect(logoutOthers()).rejects.toMatchObject({ kind: 'invalid_response' });
 });

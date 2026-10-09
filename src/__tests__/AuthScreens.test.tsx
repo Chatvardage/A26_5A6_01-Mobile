@@ -65,6 +65,7 @@ beforeEach(() => {
     signOut: jest.fn(),
     changePassword: jest.fn(),
     deleteAccount: jest.fn(),
+    logoutOthers: jest.fn(),
     refreshSession: jest.fn(),
     restoreSession: jest.fn(),
   };

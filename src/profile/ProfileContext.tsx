@@ -24,7 +24,8 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     finally { if (generation === epoch.current) setLoading(false); }
   }, [apply]);
   const save = useCallback(async (patch: ProfilePatch) => { const generation = epoch.current; apply(await updateProfile(patch), generation); realtime?.publishProfile?.(); }, [apply, realtime]);
-  const presence = useCallback(async (value: Profile['statutPresence']) => { const generation = epoch.current; apply(await updatePresence(value), generation); realtime?.publishPresence?.(value === 'enLigne' ? 'en-ligne' : 'hors-ligne'); }, [apply, realtime]);
+  // Présence choisie : diffusée aux autres, et annoncée comme un changement de profil pour que mes autres appareils la relisent.
+  const presence = useCallback(async (value: Profile['statutPresence']) => { const generation = epoch.current; apply(await updatePresence(value), generation); realtime?.publishPresence?.(value === 'enLigne' ? 'en-ligne' : 'hors-ligne'); realtime?.publishProfile?.(); }, [apply, realtime]);
   const userId = user?.id;
   useEffect(() => {
     const counter = epoch;
@@ -36,10 +37,17 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       const publish = () => realtime?.publishPresence?.(current.current?.statutPresence === 'enLigne' ? 'en-ligne' : 'hors-ligne');
       let offReady: (() => void) | undefined;
       try { offReady = realtime?.onReady?.(publish); } catch { /* La presence sera publiee au prochain signe de vie. */ }
+      // Mon profil modifié sur un autre appareil (alias, photo, présence) : relu ici aussitôt, sans recharger l'app.
+      let offProfile: (() => void) | undefined;
+      try {
+        offProfile = realtime?.subscribe?.('profil.changed', raw => {
+          if (typeof raw === 'object' && raw !== null && (raw as { userId?: unknown }).userId === userId) void reload();
+        });
+      } catch { /* Sans canal temps réel, le profil est relu au retour au premier plan. */ }
       const heartbeat = () => { if (alive && AppState.currentState === 'active' && current.current?.statutPresence === 'enLigne') void updatePresence('enLigne').then(publish).catch(() => undefined); };
       const timer = setInterval(heartbeat, 20_000);
       const listener = AppState.addEventListener('change', value => { if (value === 'active') { void reload(); heartbeat(); } });
-      return () => { alive = false; counter.current++; clearInterval(timer); listener.remove(); offReady?.(); };
+      return () => { alive = false; counter.current++; clearInterval(timer); listener.remove(); offReady?.(); offProfile?.(); };
     }
     // Nettoyer les préférences avant le compte suivant.
     setProfile(null); setError(null); setLoading(false);
