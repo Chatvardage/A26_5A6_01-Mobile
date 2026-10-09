@@ -62,7 +62,7 @@ export function useAsyncResource<T>(
   );
 
   useEffect(() => {
-    // Alias du compteur (et non copie de sa valeur) : le nettoyage doit incrémenter la valeur courante.
+    // Alias du compteur : le nettoyage doit incrémenter la valeur courante.
     const counter = requestId;
     const id = ++counter.current;
     let cancelled = false;
@@ -74,9 +74,13 @@ export function useAsyncResource<T>(
     };
   }, [loadInto]);
 
+  // Pas de garde `isCancelled` ici : le nettoyage de l'effet incrémente `requestId`, ce qui invalide un retry en vol
+  // après démontage ou changement de `load`.
   const retry = useCallback(async () => {
     const id = ++requestId.current;
     setRefreshError(null);
+    // Un rafraîchissement en cours est remplacé : la liste n'est plus affichée, donc plus de « refreshing ».
+    setRefreshing(false);
     setRemote(null);
     await loadInto(id);
   }, [loadInto]);

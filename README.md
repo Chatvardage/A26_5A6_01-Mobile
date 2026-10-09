@@ -511,3 +511,13 @@ La recherche générale montre les comptes par personne et serveur, avec « Voir
 ### Conversation et messagerie : fin des messages récents
 
 Après une ouverture ciblée ou un saut de recherche, le mobile vérifie avec une requête d'historique limitée à un message si un résultat existe après le dernier message affiché. Le bouton « Charger les messages plus récents » est masqué quand cette borne est atteinte, y compris si la dernière page contient exactement 50 messages. La vérification ne résout pas les pseudos. Une panne de cette vérification conserve la possibilité de charger pour ne pas masquer des messages inconnus. Les régressions couvrent les DM, salons et pages pleines; validation manuelle sur appareil non effectuée.
+
+## Renforcement sécurité — 9 octobre 2026
+
+Un build de diffusion exige une origine explicite `EXPO_PUBLIC_API_URL=https://...`, sans identifiants, chemin, paramètres ou fragment. La déduction depuis Metro et HTTP sont réservés au développement. La recherche paginée partagée annule les requêtes remplacées et déduplique les résultats d'une même page; les fichiers partagés restent identiques au Frontend.
+
+L'override YAML concerne seulement l'outil `@istanbuljs/load-nyc-config`. Les versions Expo restent alignées sur le SDK 57 (`expo install --check`); ne pas utiliser `npm audit fix --force`.
+
+### Limites connues
+
+L'audit npm conserve des alertes élevées : [braces GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), utilisé par la chaîne Metro/Jest, et [node-forge GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv), via les outils Expo. Aucun correctif publié n'est disponible pour ces deux avis lors de l'audit du 9 octobre 2026. Les compteurs incluent les dépendants, pas autant de failles distinctes. Retirer cette exception dès une version corrigée compatible avec le SDK; le contrôle `npm audit --audit-level=high` reste actif et échoue actuellement. Voir `../A26_5A6_01-Infra/docs/audit-securite-2026-10-09.md`.

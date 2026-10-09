@@ -138,7 +138,7 @@ describe('pagination', () => {
 
   it('charge la page suivante sans doublon et s\'arrête à la fin', async () => {
     const hook = await start();
-    search.mockResolvedValueOnce({ results: [result('b'), result('c')], nextCursor: null });
+    search.mockResolvedValueOnce({ results: [result('b'), result('c'), result('c')], nextCursor: null });
     await act(async () => hook.result.current.loadMore());
     expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'bonjour', cursor: 'c1' }));
     expect(hook.result.current.results.map((r) => r.id)).toEqual(['a', 'b', 'c']);
@@ -222,4 +222,23 @@ describe('useSearchResults (hook commun, dépendances injectées)', () => {
     await act(async () => jest.advanceTimersByTimeAsync(500));
     expect(calls).toEqual(['bonjour']);
   });
+});
+
+it('annule la pagination et ignore son erreur après une nouvelle recherche', async () => {
+  search.mockResolvedValueOnce({ results: [result('a')], nextCursor: 'c1' });
+  const hook = await renderHook(() => useSearch());
+  await type(hook, 'premier');
+  await settle();
+  let reject!: (error: Error) => void;
+  search.mockImplementationOnce(() => new Promise((_, failure) => { reject = failure; }));
+  await act(async () => void hook.result.current.loadMore());
+  const signal = search.mock.calls[1][0].signal;
+  search.mockResolvedValueOnce({ results: [result('nouveau')], nextCursor: null });
+  await type(hook, 'second');
+  expect(signal?.aborted).toBe(true);
+  await settle();
+  await act(async () => reject(new Error('requête annulée')));
+  expect(hook.result.current.moreError).toBeNull();
+  expect(hook.result.current.loadingMore).toBe(false);
+  expect(hook.result.current.results.map((item) => item.id)).toEqual(['nouveau']);
 });
