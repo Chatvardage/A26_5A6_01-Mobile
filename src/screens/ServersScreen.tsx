@@ -16,6 +16,7 @@ import { usePendingInvitations } from '@/hooks/usePendingInvitations';
 import { useListFilter } from '@/hooks/useListFilter';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
 import { useServers } from '@/hooks/useServers';
 import { useLiveServers } from '@/unread/liveUnread';
@@ -33,11 +34,12 @@ const nameOf = (item: ServerSummary) => item.name;
 
 export function ServersScreen({ navigation }: Props) {
   const { strings } = useTranslation();
-  const { state, refreshing, refreshError, retry, refresh } = useServers();
+  const { state, refreshError, retry, refresh } = useServers();
   useRefreshOnFocus(refresh);
   useRefreshOnServerChange(refresh);
   const invitations = usePendingInvitations();
-  const refreshProps = { refreshing, onRefresh: refresh };
+  // Spinner seulement quand l'utilisateur tire la liste : les mises à jour en arrière-plan restent invisibles.
+  const refreshProps = usePullToRefresh(refresh);
   const servers = useLiveServers(state.status === 'ready' ? state.data : NONE);
   // Loupe de l'en-tête : filtre par nom, avant la pagination.
   const search = useListFilter(servers, nameOf);
@@ -74,8 +76,8 @@ export function ServersScreen({ navigation }: Props) {
           keyExtractor={(s) => s.id}
           renderItem={({ item }) => <ServerItem server={item} onPress={open} />}
           ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
-          refreshing={refreshing}
-          onRefresh={refresh}
+          refreshing={refreshProps.refreshing}
+          onRefresh={refreshProps.onRefresh}
           contentContainerStyle={styles.list}
         />
       </ContentFrame>

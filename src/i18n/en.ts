@@ -409,6 +409,16 @@ export const en = {
     clearSession: 'Unable to clear the session.',
     clearSessionLogout: 'Secure storage could not be cleared. Please try signing out again.',
   },
+  profileCard: {
+    title: 'Profile',
+    view: (name: string) => `View ${name}'s profile`,
+    alias: 'Alias',
+    pseudo: 'Username',
+    noAlias: 'No alias',
+    message: 'Direct message',
+    close: 'Close',
+    hint: 'Hold to view the profile',
+  },
 } as const;
 
 export type EnglishTranslations = typeof en;

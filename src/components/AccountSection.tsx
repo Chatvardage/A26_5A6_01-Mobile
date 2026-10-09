@@ -8,6 +8,7 @@ import { ThemedTextInput } from '@/components/ThemedTextInput';
 import { useTranslation } from '@/i18n';
 import { userMessage } from '@/services/ApiError';
 import { useSession } from '@/session/SessionContext';
+import { useBusyAction } from '@/hooks/useBusyAction';
 
 /** Même borne qu'à l'inscription (Authentification : 8 à 128 caractères). */
 const validPassword = (value: string) => value.length >= 8 && value.length <= 128;
@@ -23,11 +24,11 @@ export function AccountSection({ cardStyle }: { cardStyle: object }) {
   const { show, dialog } = useAppDialog();
   const [current, setCurrent] = useState(''); const [next, setNext] = useState(''); const [confirmation, setConfirmation] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
-  const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [changed, setChanged] = useState(false); const [othersSignedOut, setOthersSignedOut] = useState(false);
+  const { busy, start, finish } = useBusyAction(); const [error, setError] = useState<string | null>(null); const [changed, setChanged] = useState(false); const [othersSignedOut, setOthersSignedOut] = useState(false);
 
   async function run(action: () => Promise<void>, onSuccess?: () => void) {
-    if (busy) return; setBusy(true); setError(null); setChanged(false); setOthersSignedOut(false);
-    try { await action(); onSuccess?.(); } catch (e) { setError(userMessage(e)); } finally { setBusy(false); }
+    if (!start()) return; setError(null); setChanged(false); setOthersSignedOut(false);
+    try { await action(); onSuccess?.(); } catch (e) { setError(userMessage(e)); } finally { finish(); }
   }
   function submitPassword() {
     if (!validPassword(next)) return setError(validation.password);

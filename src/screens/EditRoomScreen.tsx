@@ -12,6 +12,7 @@ import { parseRoomParams, type RootStackParamList } from '@/navigation/routes';
 import { userMessage } from '@/services/ApiError';
 import { canManageRooms, getServer, updateRoom, type RoomInput } from '@/services/rooms.service';
 import { displayName } from '@/utils/displayNames';
+import { useBusyAction } from '@/hooks/useBusyAction';
 type Props = NativeStackScreenProps<RootStackParamList, 'EditRoom'>;
 
 /** Modification d'un salon, sur son propre écran depuis la gestion du serveur (retour : annuler). */
@@ -23,15 +24,15 @@ function Editor({ serverId, roomId, navigation }: { serverId: string; roomId: st
   const { strings } = useTranslation(); const t = strings.control;
   const load = useCallback(() => getServer(serverId), [serverId]);
   const { state, retry } = useLoadable(load, () => false);
-  const [busy, setBusy] = useState(false); const [error, setError] = useState<unknown>(null);
+  const { busy, start, finish } = useBusyAction(); const [error, setError] = useState<unknown>(null);
   async function save(input: RoomInput) {
-    if (busy) return false; setBusy(true); setError(null);
+    if (!start()) return false; setError(null);
     try { await updateRoom(roomId, input); navigation.goBack(); return true; }
-    catch (e) { setError(e); return false; } finally { setBusy(false); }
+    catch (e) { setError(e); return false; } finally { finish(); }
   }
-  if (state.status === 'loading') return <LoadingState />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} />;
-  if (state.status !== 'ready') return null;
+  // `empty` n'arrive pas (`isEmpty` toujours faux) : chargement en attendant les données.
+  if (state.status !== 'ready') return <LoadingState />;
   if (!canManageRooms(state.data)) return <ErrorState message={strings.errors.forbidden} />;
   const room = state.data.salons.find(salon => salon.id === roomId);
   if (!room) return <ErrorState message={strings.states.roomNotFound} />;

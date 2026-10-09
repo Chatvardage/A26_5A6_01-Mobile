@@ -7,29 +7,38 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { UserChoice } from '@/services/usersService';
 
-type Props = { user: UserChoice; hasConversation: boolean; onPress: (user: UserChoice) => void };
+/** `alias` : nom d'affichage choisi dans le profil, montré à la place du pseudo (qui reste en second). */
+type Props = { user: UserChoice; alias?: string | null; hasConversation: boolean; onPress: (user: UserChoice) => void };
 
-function UserChoiceItemBase({ user, hasConversation, onPress }: Props) {
+function UserChoiceItemBase({ user, alias, hasConversation, onPress }: Props) {
   const theme = useTheme();
   const { strings } = useTranslation();
   const t = strings.directMessage;
   const action = hasConversation ? t.open : t.new;
+  const name = alias || user.pseudo;
   return (
     <Pressable
       onPress={() => onPress(user)}
       accessibilityRole="button"
-      accessibilityLabel={`${user.pseudo}, ${hasConversation ? t.openConversation : t.newConversation}`}
+      accessibilityLabel={`${name}, ${hasConversation ? t.openConversation : t.newConversation}`}
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >
       <View style={[styles.avatar, { backgroundColor: theme.tint }]}>
         <ThemedText type="smallBold" style={styles.avatarText}>
-          {user.pseudo.slice(0, 1).toUpperCase()}
+          {name.slice(0, 1).toUpperCase()}
         </ThemedText>
       </View>
-      <ThemedText type="smallBold" numberOfLines={1} style={styles.name}>
-        {user.pseudo}
-      </ThemedText>
+      <View style={styles.name}>
+        <ThemedText type="smallBold" numberOfLines={1}>
+          {name}
+        </ThemedText>
+        {alias ? (
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+            @{user.pseudo}
+          </ThemedText>
+        ) : null}
+      </View>
       <ThemedText type="small" themeColor="textSecondary">
         {action}
       </ThemedText>

@@ -25,6 +25,7 @@ jest.mock('@/screens/SearchScreen', () => ({ SearchScreen: () => <MockText>Reche
 jest.mock('@/screens/PreferencesScreen', () => ({
   PreferencesScreen: () => <MockText>Préférences ouvertes</MockText>,
 }));
+jest.mock('@/screens/NewDirectMessageScreen', () => ({ NewDirectMessageScreen: () => <MockText>Nouveau message ouvert</MockText> }));
 jest.mock('@/screens/ServerScreen', () => ({ ServerScreen: () => <MockText>Serveur ouvert</MockText> }));
 jest.mock('@/screens/ConversationScreen', () => ({
   ConversationScreen: () => <MockText>Conversation ouverte</MockText>,
@@ -35,6 +36,7 @@ function MockLinks() {
   return (
     <>
       <Button title="Ouvrir serveur" onPress={() => nav.navigate('Server', mockParams!)} />
+      <Button title="Écrire" onPress={() => nav.navigate('NewDirectMessage')} />
       <Button
         title="Ouvrir conversation"
         onPress={() =>
@@ -70,4 +72,15 @@ it('ouvre les quatre onglets avec leurs icônes', async () => {
   expect(screen.getByText('Préférences ouvertes')).toBeTruthy();
   await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   expect(screen.getByText('Ouvrir serveur')).toBeTruthy();
+});
+
+it('garde l’onglet Messages sélectionné sur le choix du destinataire', async () => {
+  await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Serveurs' }));
+  expect(screen.getByRole('tab', { name: 'Serveurs' })).toBeSelected();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
+  await fireEvent.press(screen.getByText('Écrire'));
+  expect(screen.getByText('Nouveau message ouvert')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Messages' })).toBeSelected();
 });

@@ -18,11 +18,12 @@ import { getInvitations } from '@/services/rooms.service';
 import { resetNotificationNavigationForTests, useNotificationNavigation } from '@/hooks/useNotificationNavigation';
 import { useNotificationPermission } from '@/hooks/useNotificationPermission';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
+import { useRefreshOnProfileChange } from '@/hooks/useRefreshOnProfileChange';
 import { useRoomSubscriptions } from '@/hooks/useRoomSubscriptions';
 import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import { fetchServers } from '@/services/serversService';
 import { fetchUnreadCounts, markConversationRead } from '@/services/unreadService';
-import { lookupPseudos } from '@/services/usersService';
+import { lookupDisplayNames } from '@/services/usersService';
 import { UnreadProvider } from '@/unread/UnreadContext';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -64,7 +65,7 @@ beforeEach(() => {
   jest.mocked(markConversationRead).mockResolvedValue();
   jest.mocked(fetchUnreadCounts).mockResolvedValue({});
   jest.mocked(onReady).mockReturnValue(jest.fn());
-  jest.mocked(lookupPseudos).mockResolvedValue({ [OLI]: 'oli' });
+  jest.mocked(lookupDisplayNames).mockResolvedValue({ [OLI]: 'oli' });
   jest.mocked(showMessageNotification).mockResolvedValue(true);
 });
 
@@ -102,37 +103,48 @@ describe('useMessageAlerts', () => {
   });
 
   it('notifie un message de salon avec le nom de la marque quand le pseudo est inconnu, puis réutilise le pseudo', async () => {
-    jest.mocked(lookupPseudos).mockResolvedValueOnce({});
+    jest.mocked(lookupDisplayNames).mockResolvedValueOnce({});
     await setup();
     await act(async () => handlers.get('room-message.created')!(roomEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(1));
     expect(showMessageNotification).toHaveBeenLastCalledWith({ conversationId: `room:${ROOM}`, title: 'Chatvardage', body: 'Nouveau message' });
-    jest.mocked(lookupPseudos).mockResolvedValue({ [OLI]: 'oli' });
+    jest.mocked(lookupDisplayNames).mockResolvedValue({ [OLI]: 'oli' });
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(3));
-    expect(lookupPseudos).toHaveBeenCalledTimes(2);
+    expect(lookupDisplayNames).toHaveBeenCalledTimes(2);
   });
 
   it("borne le cache des pseudos : au-delà de 500 expéditeurs le plus ancien est oublié et sa recherche reprend", async () => {
     await setup();
-    jest.mocked(lookupPseudos).mockClear();
+    jest.mocked(lookupDisplayNames).mockClear();
     for (let i = 0; i < 502; i++) {
       const senderId = `expediteur-${i}`;
-      jest.mocked(lookupPseudos).mockResolvedValueOnce({ [senderId]: `pseudo-${i}` });
+      jest.mocked(lookupDisplayNames).mockResolvedValueOnce({ [senderId]: `pseudo-${i}` });
       await act(async () => handlers.get('private-message.created')!({ id: `m${i}`, senderId, recipientId: ME }));
     }
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(502));
     // Le plus ancien a été évincé : il est cherché de nouveau.
-    jest.mocked(lookupPseudos).mockClear();
+    jest.mocked(lookupDisplayNames).mockClear();
     await act(async () =>
       handlers.get('private-message.created')!({ id: 'again', senderId: 'expediteur-0', recipientId: ME }),
     );
-    await waitFor(() => expect(lookupPseudos).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(lookupDisplayNames).toHaveBeenCalledTimes(1));
+  });
+
+  it('ne notifie plus après le démontage pendant la recherche du pseudo', async () => {
+    let names!: (value: Record<string, string>) => void;
+    jest.mocked(lookupDisplayNames).mockReturnValueOnce(new Promise(done => { names = done; }));
+    const hook = await setup();
+    await act(async () => handlers.get('private-message.created')!(dmEvent()));
+    await waitFor(() => expect(lookupDisplayNames).toHaveBeenCalled());
+    await hook.unmount();
+    await act(async () => names({ [OLI]: 'oli' }));
+    expect(showMessageNotification).not.toHaveBeenCalled();
   });
 
   it('tolère un annuaire des pseudos indisponible', async () => {
-    jest.mocked(lookupPseudos).mockRejectedValue(new Error('503'));
+    jest.mocked(lookupDisplayNames).mockRejectedValue(new Error('503'));
     await setup();
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledWith(expect.objectContaining({ title: 'Chatvardage' })));
@@ -576,4 +588,21 @@ it.each(['discret','aucune'])('ne présente pas de notification système en mode
   await renderHook(()=>useMessageAlerts(ME,null),{wrapper:UnreadProvider});
   await act(async()=>handlers.get('private-message.created')!(dmEvent()));
   expect(showMessageNotification).not.toHaveBeenCalled();
+});
+
+describe('useRefreshOnProfileChange', () => {
+  it('relit la liste à chaque changement de profil et se désabonne', async () => {
+    const refresh = jest.fn();
+    const hook = await renderHook(() => useRefreshOnProfileChange(refresh));
+    await act(async () => handlers.get('profil.changed')!({ userId: 'bob' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await hook.unmount();
+    expect(handlers.has('profil.changed')).toBe(false);
+  });
+
+  it('ne plante pas sans canal temps réel', async () => {
+    jest.mocked(subscribe).mockImplementationOnce(() => { throw new Error('non configuré'); });
+    await renderHook(() => useRefreshOnProfileChange(jest.fn()));
+    expect(handlers.has('profil.changed')).toBe(false);
+  });
 });

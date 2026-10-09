@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { UserChoiceItem } from '@/components/UserChoiceItem';
 import { Spacing } from '@/constants/theme';
 import { useNewDirectMessage } from '@/hooks/useNewDirectMessage';
+import { usePublicProfiles } from '@/hooks/usePublicProfiles';
 import { useTheme } from '@/hooks/use-theme';
 import { useTranslation } from '@/i18n';
 import { Routes, type RootStackParamList } from '@/navigation/routes';
@@ -27,14 +28,18 @@ export function NewDirectMessageScreen({ navigation }: Props) {
   const { query, setQuery, searching, search, retrySearch, suggestions, retrySuggestions, hasConversationWith } =
     useNewDirectMessage(user?.id ?? '');
 
+  // Alias des personnes proposées : affiché à la place du pseudo, qui reste visible en second.
+  const shown = searching ? (search.status === 'ready' ? search.users : []) : suggestions.status === 'ready' ? suggestions.data : [];
+  const profiles = usePublicProfiles(shown.map((choice) => choice.id));
+
   // La conversation n'existe côté serveur qu'au premier message : on ouvre simplement `dm:<id>`.
   const open = useCallback(
     (choice: UserChoice) =>
       navigation.replace(Routes.Conversation, {
         conversationId: toConversationId({ kind: 'dm', targetId: choice.id }),
-        title: choice.pseudo,
+        title: profiles[choice.id]?.alias || choice.pseudo,
       }),
-    [navigation],
+    [navigation, profiles],
   );
 
   const list = (title: string, users: UserChoice[]) => (
@@ -48,7 +53,7 @@ export function NewDirectMessageScreen({ navigation }: Props) {
         </ThemedText>
       }
       renderItem={({ item }) => (
-        <UserChoiceItem user={item} hasConversation={hasConversationWith(item.id)} onPress={open} />
+        <UserChoiceItem user={item} alias={profiles[item.id]?.alias} hasConversation={hasConversationWith(item.id)} onPress={open} />
       )}
     />
   );

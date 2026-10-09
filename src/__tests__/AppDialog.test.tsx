@@ -33,3 +33,14 @@ it('se ferme sans action avec le retour Android', async () => {
   expect(screen.queryByTestId('app-dialog')).toBeNull();
   expect(onDelete).not.toHaveBeenCalled(); expect(onEdit).not.toHaveBeenCalled();
 });
+
+it('sans message, n’affiche que le titre et ses actions', async () => {
+  function Bare() {
+    const { show, dialog } = useAppDialog();
+    return <View><Pressable accessibilityRole="button" onPress={() => show({ title: 'Seul', actions: [{ label: 'OK' }] })}><Text>Ouvrir</Text></Pressable>{dialog}</View>;
+  }
+  await render(<Bare />);
+  await fireEvent.press(screen.getByText('Ouvrir'));
+  const dialog = within(screen.getByTestId('app-dialog'));
+  expect(dialog.getAllByText(/./).map(node => node.props.children)).toEqual(['Seul', 'OK']);
+});

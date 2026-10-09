@@ -15,9 +15,11 @@ type Props = {
   conversation: ConversationSummary;
   currentUserId?: string;
   onPress: (conversation: ConversationSummary) => void;
+  /** Appui long : fiche de profil de l'autre personne (messages privés). */
+  onLongPress?: (conversation: ConversationSummary) => void;
 };
 
-function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
+function ConversationItemBase({ conversation, currentUserId, onPress, onLongPress }: Props) {
   const theme = useTheme();
   const { strings } = useTranslation();
   const { subtitle, lastMessage, unreadCount } = conversation;
@@ -30,6 +32,8 @@ function ConversationItemBase({ conversation, currentUserId, onPress }: Props) {
   return (
     <Pressable
       onPress={() => onPress(conversation)}
+      onLongPress={onLongPress ? () => onLongPress(conversation) : undefined}
+      accessibilityHint={onLongPress ? strings.profileCard.hint : undefined}
       accessibilityRole="button"
       accessibilityLabel={`${title}${hasUnread ? `, ${strings.conversation.unread(unreadCount)}` : ''}. ${preview}`}
       android_ripple={{ color: theme.backgroundSelected }}

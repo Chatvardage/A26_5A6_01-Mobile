@@ -304,3 +304,23 @@ describe('deleteMessage', () => {
     await expect(deleteMessage(`dm:${ROOM}`, MESSAGE)).rejects.toMatchObject({ kind: 'forbidden' });
   });
 });
+
+describe('fenêtre autour d’un message et accusés de réception', () => {
+  it('demande la page autour d’un message ou après lui, et garde la date de réception', async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.startsWith('/api/users/lookup') ? [] : [{ ...msg('reçu', '2026-10-01T10:00:00Z'), deliveredAt: '2026-10-01T10:00:05Z' }],
+    );
+    const [message] = await fetchHistory(`dm:${DM}`, 50, undefined, { around: 'cible' });
+    expect(apiFetch).toHaveBeenCalledWith(`/api/messages/history/${DM}?limit=50&around=cible`);
+    expect(message.deliveredAt).toBe('2026-10-01T10:00:05Z');
+    await fetchHistory(`room:${ROOM}`, 50, 'cible', { direction: 'after' });
+    expect(apiFetch).toHaveBeenCalledWith(`/api/messages/rooms/${ROOM}/history?limit=50&cursor=cible&direction=after`);
+  });
+
+  it('une mise à jour sans date de réception garde celle déjà connue', () => {
+    const delivered = { ...baseMessage('m', '2026-10-01T10:00:00Z'), deliveredAt: '2026-10-01T10:00:05Z' };
+    const edited = { ...baseMessage('m', '2026-10-01T10:00:00Z', '2026-10-01T10:05:00Z'), content: 'modifié' };
+    const [merged] = mergeMessages([delivered], [edited]);
+    expect(merged).toMatchObject({ content: 'modifié', deliveredAt: '2026-10-01T10:00:05Z' });
+  });
+});

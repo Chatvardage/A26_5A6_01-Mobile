@@ -17,6 +17,7 @@ import { useTranslation } from '@/i18n';
 import { parseServerParams, Routes, type RootStackParamList } from '@/navigation/routes';
 import { userMessage } from '@/services/ApiError';
 import { canManageRooms, canManageServer, createRoom, deleteRoom, deleteServer, getServer, updateServer } from '@/services/rooms.service';
+import { useBusyAction } from '@/hooks/useBusyAction';
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageServer'>;
 export function ManageServerScreen({ route, navigation }: Props) {
   const { strings } = useTranslation(); const params = parseServerParams(route.params);
@@ -29,19 +30,19 @@ function Manager({ serverId, navigation }: { serverId: string; navigation: Props
   // Retour de l'écran de modification d'un salon : la liste reflète le nouveau nom.
   useRefreshOnFocus(refresh);
   const [serverName, setServerName] = useState(''); const [isPublic, setPublic] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false); const [error, setError] = useState<unknown>(null);
+  const { busy, start, finish } = useBusyAction(); const [error, setError] = useState<unknown>(null);
   const { show, dialog } = useAppDialog();
   async function run(action: () => Promise<unknown>, exit = false) {
-    if (busy) return false; setBusy(true); setError(null);
+    if (!start()) return false; setError(null);
     try { await action(); if (exit) navigation.popTo('Main', { screen: 'Servers' }); else await refresh(); return true; }
-    catch (e) { setError(e); return false; } finally { setBusy(false); }
+    catch (e) { setError(e); return false; } finally { finish(); }
   }
   function confirm(title: string, action: () => Promise<unknown>, exit = false) {
     show({ title, message: t.deleteHint, actions: [{ label: t.cancel, kind: 'cancel' }, { label: t.delete, kind: 'danger', onPress: () => void run(action, exit) }] });
   }
-  if (state.status === 'loading') return <LoadingState />;
   if (state.status === 'error') return <ErrorState message={state.message} onRetry={retry} />;
-  if (state.status !== 'ready') return null;
+  // `empty` n'arrive pas (`isEmpty` toujours faux) : chargement en attendant les données.
+  if (state.status !== 'ready') return <LoadingState />;
   const server = state.data;
   if (!canManageRooms(server)) return <ErrorState message={strings.errors.forbidden} />;
   return <ThemedView style={{ flex: 1 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 20, maxWidth: 700, width: '100%', alignSelf: 'center' }}>

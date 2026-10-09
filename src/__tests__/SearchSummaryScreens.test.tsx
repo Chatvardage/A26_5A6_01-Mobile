@@ -94,3 +94,20 @@ it('rejette une route serveur invalide sans charger de résumé', async () => {
   await render(<ServerSearchScreen {...serverProps({ serverId: 'invalide', query: 'bonjour' })} />);
   expect(useSearchSummary).not.toHaveBeenCalled();
 });
+
+it('nomme une conversation ou un serveur sans titre et garde Réessayer sur une erreur sans raison', async () => {
+  mockState.data = {
+    directMessages: [{ ...match(0), title: undefined }],
+    servers: [{ ...data.servers[0], title: undefined, channels: [{ ...match(1, 'room'), title: undefined }] }],
+  };
+  const view = await render(<SearchScreen {...globalProps} />);
+  expect(screen.getByText('cette conversation')).toBeTruthy();
+  expect(screen.getByText('Serveur')).toBeTruthy();
+  await view.rerender(<ServerSearchScreen {...serverProps({ serverId: data.servers[0].serverId, query: 'bonjour' })} />);
+  // En-tête (serveur sans nom) et salon sans nom.
+  expect(screen.getAllByText('Salons')).toHaveLength(2);
+  mockState = { ...mockState, status: 'error', error: null };
+  await view.rerender(<SearchScreen {...globalProps} />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Réessayer' }));
+  expect(mockState.retry).toHaveBeenCalledTimes(1);
+});

@@ -16,6 +16,10 @@ import { ThemedView } from '@/components/themed-view';
 import { useListFilter } from '@/hooks/useListFilter';
 import { usePagedList } from '@/hooks/usePagedList';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
+import { useRefreshOnProfileChange } from '@/hooks/useRefreshOnProfileChange';
+import { useProfileSheet } from '@/components/ProfileSheet';
+import { usePublicProfiles } from '@/hooks/usePublicProfiles';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { useLiveConversations } from '@/unread/liveUnread';
 import { Routes, type MainTabParamList, type RootStackParamList } from '@/navigation/routes';
@@ -35,9 +39,11 @@ const nameOf = (item: ConversationSummary) => item.title;
 export function DirectMessagesScreen({ navigation }: Props) {
   const { user } = useSession();
   const { strings } = useTranslation();
-  const { state, refreshing, refreshError, retry, refresh } = useDirectMessages();
+  const { state, refreshError, retry, refresh } = useDirectMessages();
   useRefreshOnFocus(refresh);
-  const refreshProps = { refreshing, onRefresh: refresh };
+  useRefreshOnProfileChange(refresh);
+  // Spinner seulement quand l'utilisateur tire la liste : les mises à jour en arrière-plan restent invisibles.
+  const refreshProps = usePullToRefresh(refresh);
   const conversations = useLiveConversations(state.status === 'ready' ? state.data : NONE);
   // Loupe de l'en-tête : filtre par nom, avant la pagination.
   const search = useListFilter(conversations, nameOf);
@@ -51,6 +57,18 @@ export function DirectMessagesScreen({ navigation }: Props) {
     (conversation: ConversationSummary) =>
       navigation.navigate(Routes.Conversation, { conversationId: conversation.id, title: conversation.title }),
     [navigation],
+  );
+
+  // Appui long sur une conversation : fiche de profil de l'autre personne (alias, pseudo, photo).
+  // Présence et photo des personnes de la liste, partagées avec la fiche (un seul suivi de présence).
+  const profiles = usePublicProfiles(conversations.map(conversation => conversation.id.slice('dm:'.length)));
+  const { show: showSheet, sheet: profileSheet } = useProfileSheet({
+    profiles,
+    onMessage: (userId, name) => navigation.navigate(Routes.Conversation, { conversationId: `dm:${userId}`, title: name }),
+  });
+  const showProfile = useCallback(
+    (conversation: ConversationSummary) => showSheet({ userId: conversation.id.slice('dm:'.length) }),
+    [showSheet],
   );
 
   const newMessageButton = <NewDirectMessageButton onPress={() => navigation.navigate(Routes.NewDirectMessage)} />;
@@ -85,13 +103,14 @@ export function DirectMessagesScreen({ navigation }: Props) {
           ListFooterComponent={page.hasMore ? <View style={styles.more}><ActionButton label={strings.navigation.showMore} onPress={page.showMore} /></View> : null}
           ListHeaderComponent={newMessageButton}
           keyExtractor={(c) => c.id}
-          renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
+          renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} onLongPress={showProfile} />}
           ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
-          refreshing={refreshing}
-          onRefresh={refresh}
+          refreshing={refreshProps.refreshing}
+          onRefresh={refreshProps.onRefresh}
           contentContainerStyle={styles.list}
         />
       </ContentFrame>
+      {profileSheet}
     </ThemedView>
   );
 }

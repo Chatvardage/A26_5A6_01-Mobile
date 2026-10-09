@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { useServerChannels } from '@/hooks/useServerChannels';
@@ -14,6 +14,8 @@ jest.mock('@/hooks/useDirectMessages');
 jest.mock('@/hooks/useServerChannels');
 jest.mock('@/hooks/useServers');
 jest.mock('@/hooks/useRefreshOnFocus', () => ({ useRefreshOnFocus: jest.fn() }));
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => ({}) }));
+jest.mock('@/services/usersService', () => ({ ...jest.requireActual('@/services/usersService'), lookupPseudos: jest.fn(async () => ({ [SERVER_ID]: 'alice42' })) }));
 jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' }, realtime: { subscribe: () => () => undefined } }) }));
 
 const SERVER_ID = '11111111-1111-4111-8111-111111111111';
@@ -65,7 +67,6 @@ describe.each(targets)('Écran $name', ({ hook, loading, empty, data, button, de
     setState({ status: 'empty' });
     await view.rerender(element());
     expect(screen.getByText(empty)).toBeTruthy();
-    expect(screen.getByTestId('refreshable-state').props.refreshControl.props.onRefresh).toBe(refresh);
     await act(async () => { screen.getByTestId('refreshable-state').props.refreshControl.props.onRefresh(); });
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -105,4 +106,23 @@ describe('Carte de nouveau message privé', () => {
     await fireEvent.press(button);
     expect(navigate).toHaveBeenCalledWith('NewDirectMessage');
   });
+});
+
+it('la liste des serveurs ouvre la création d’un serveur', async () => {
+  jest.mocked(useServers).mockReturnValue({ state: { status: 'ready', data: [server] }, refreshing: false, refreshError: null, retry, refresh });
+  await render(targets[1].element());
+  await fireEvent.press(screen.getByRole('button', { name: 'Créer un serveur' }));
+  expect(navigate).toHaveBeenCalledWith('DiscoverServers', { mode: 'create' });
+});
+
+it('un appui long sur un message privé ouvre la fiche de profil, qui ouvre la conversation', async () => {
+  jest.mocked(useDirectMessages).mockReturnValue({ state: { status: 'ready', data: [conversation] }, refreshing: false, refreshError: null, retry, refresh });
+  await render(targets[0].element());
+  const item = screen.getByRole('button', { name: /^Alice/ });
+  expect(item.props.accessibilityHint).toBe('Maintenir pour voir le profil');
+  await fireEvent(item, 'longPress');
+  const sheet = within(screen.getByTestId('profile-sheet'));
+  expect(await sheet.findByText('@alice42')).toBeTruthy();
+  await fireEvent.press(sheet.getByRole('button', { name: 'Message privé' }));
+  expect(navigate).toHaveBeenCalledWith('Conversation', { conversationId: `dm:${SERVER_ID}`, title: 'alice42' });
 });

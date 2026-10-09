@@ -1,6 +1,6 @@
 import { useHeaderHeight } from '@react-navigation/elements';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAppDialog } from '@/components/AppDialog';
@@ -12,7 +12,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useCanModerate } from '@/hooks/useCanModerate';
 import { useMessages } from '@/hooks/useMessages';
-import { parseConversationParams, type RootStackParamList } from '@/navigation/routes';
+import { useMessageScrollTarget } from '@/hooks/useMessageScrollTarget';
+import { parseConversationParams, Routes, type RootStackParamList } from '@/navigation/routes';
+import { useProfileSheet } from '@/components/ProfileSheet';
+import { parseConversationId } from '@/types/conversationId';
 import { userMessage } from '@/services/ApiError';
 import { useSession } from '@/session/SessionContext';
 import type { ChatMessage } from '@/types/conversation';
@@ -27,7 +30,7 @@ import { useTranslation } from '@/i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Conversation'>;
 
-export function ConversationScreen({ route }: Props) {
+export function ConversationScreen({ route, navigation }: Props) {
   const { strings } = useTranslation();
   // Paramètres validés avant tout chargement : un identifiant invalide n'appelle jamais l'API.
   const params = useMemo(() => parseConversationParams(route.params), [route.params]);
@@ -38,16 +41,18 @@ export function ConversationScreen({ route }: Props) {
       conversationId={params.conversationId}
       messageId={params.messageId}
       focusToken={params.focusToken}
+      title={params.title}
+      navigation={navigation}
     />
   );
 }
 
-type ValidProps = { conversationId: string; messageId?: string; focusToken?: number };
+type ValidProps = { conversationId: string; messageId?: string; focusToken?: number; title?: string; navigation: Props['navigation'] };
 
 /** Durée de la mise en évidence d'un message atteint depuis la recherche (3 s comme sur le Web). */
 export const HIGHLIGHT_MS = 3000;
 
-function ValidConversation({ conversationId, messageId, focusToken }: ValidProps) {
+function ValidConversation({ conversationId, messageId, focusToken, title, navigation }: ValidProps) {
   const { strings } = useTranslation();
   const headerHeight = useHeaderHeight();
   const { user, drafts } = useSession();
@@ -58,8 +63,21 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   const { hasNewer, loadingNewer, loadNewer, jumping, messages, status, errorMessage, accessError, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove } =
     useMessages(conversationId, user?.id ?? '', initialMessageId);
   const readers = useReadReceipts(conversationId);
-  const profiles = usePublicProfiles(messages.map(message => message.senderId));
   const isRoom = conversationId.startsWith('room:');
+  // Message privé (identifiant déjà validé) : l'autre personne est suivie même sans message, pour le titre (son alias s'il en a un).
+  const partnerId = isRoom ? null : parseConversationId(conversationId)!.targetId;
+  const profiles = usePublicProfiles([...messages.map(message => message.senderId), ...(partnerId ? [partnerId] : [])]);
+  const partnerAlias = partnerId ? profiles[partnerId]?.alias : null;
+  const partnerPseudo = messages.find(message => message.senderId === partnerId)?.senderName;
+  const headerTitle = partnerAlias || partnerPseudo || title;
+  useLayoutEffect(() => {
+    if (partnerId && headerTitle) navigation.setOptions({ title: headerTitle });
+  }, [navigation, partnerId, headerTitle]);
+  const profileSheet = useProfileSheet({
+    profiles,
+    currentConversationId: conversationId,
+    onMessage: (userId, name) => navigation.push(Routes.Conversation, { conversationId: `dm:${userId}`, title: name }),
+  });
   const canModerate = useCanModerate(conversationId);
   const canWrite = useCanWrite(conversationId);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
@@ -81,44 +99,48 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
     return () => { cancelAnimationFrame(firstFrame); if (secondFrame !== undefined) cancelAnimationFrame(secondFrame); };
   }, [latestId, scrollRequest]);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  const { scrollTarget, prepareScroll, clearScroll, positionScroll, hasPendingScroll, onListLayout, onListContentSizeChange, onViewableItemsChanged, onScrollToIndexFailed } = useMessageScrollTarget(listRef, setHighlightedId);
   const [messageNotFound, setMessageNotFound] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const ready = status === 'ready';
+  const [preparedRequest, setPreparedRequest] = useState<{ messageId: string; focusToken?: number } | null>(null);
+  // Les nouveaux paramètres arrivent avant les effets. Ce rendu doit déjà afficher le chargement,
+  // plutôt que peindre une image de l'ancienne liste puis la masquer au rendu suivant.
+  const navigationPending = !!messageId && (preparedRequest === null || preparedRequest.messageId !== messageId || preparedRequest.focusToken !== focusToken);
 
   // Message demandé par la recherche : on charge sa page directement, puis on y défile.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!messageId || !ready) return;
     let cancelled = false;
     followLatest.current = false;
     // Nouvelle cible de navigation : conserver sa position de lecture.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFollowing(false);
+    prepareScroll(messageId);
+    setPreparedRequest({ messageId, focusToken });
+    setHighlightedId(null);
     // Nouvelle demande : l'avis précédent ne vaut plus.
     setMessageNotFound(false);
     void jumpTo(messageId).then((found) => {
       if (cancelled) return;
-      if (found) {
-        setHighlightedId(messageId);
-        setScrollTarget(messageId);
-      } else {
+      if (!found) {
+        clearScroll();
         setMessageNotFound(true);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [messageId, focusToken, ready, jumpTo]);
+  }, [messageId, focusToken, ready, jumpTo, prepareScroll, clearScroll]);
 
-  // Défilement une fois le message présent dans la liste (les pages anciennes viennent d'être ajoutées).
+  // Attendre aussi la fin du saut : pendant jumping, la liste est démontée et sa référence est vide.
+  // Un rendu intermédiaire ne doit donc pas consommer la cible avant de pouvoir défiler.
   useEffect(() => {
-    if (!scrollTarget) return;
+    if (!scrollTarget || jumping) return;
     const index = messages.findIndex((m) => m.id === scrollTarget);
     if (index === -1) return;
-    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setScrollTarget(null);
-  }, [scrollTarget, messages]);
+    positionScroll(index);
+  }, [scrollTarget, focusToken, messages, jumping, positionScroll]);
 
   useEffect(() => {
     if (!highlightedId) return;
@@ -169,26 +191,8 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
     [strings, deleteMessage, showDialog],
   );
 
-  // Hauteurs variables : si l'index n'est pas encore mesuré, on s'en approche puis on réessaie. Le délai est
-  // annulé au démontage (ou remplacé par une nouvelle tentative) pour ne jamais agir sur un écran fermé.
-  const scrollRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (scrollRetryTimer.current) clearTimeout(scrollRetryTimer.current);
-    },
-    [],
-  );
-  const onScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
-    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-    if (scrollRetryTimer.current) clearTimeout(scrollRetryTimer.current);
-    scrollRetryTimer.current = setTimeout(
-      () => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: false }),
-      100,
-    );
-  }, []);
-
   let body;
-  if (status === 'loading' || jumping) body = <LoadingState label={strings.states.loadingMessages} />;
+  if (status === 'loading' || jumping || (ready && navigationPending)) body = <LoadingState label={strings.states.loadingMessages} />;
   else if (status === 'error' && messages.length === 0) {
     body = <ErrorState message={errorMessage ?? strings.errors.generic} onRetry={retry} />;
   } else if (messages.length === 0) {
@@ -196,22 +200,32 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
   }
   else {
     body = (
+      <View style={styles.fill}>
       <FlatList
         ref={listRef}
+        style={scrollTarget ? styles.hiddenList : undefined}
+        pointerEvents={scrollTarget ? 'none' : 'auto'}
+        accessibilityElementsHidden={!!scrollTarget}
+        importantForAccessibility={scrollTarget ? 'no-hide-descendants' : 'auto'}
         // Liste inversée : le plus récent est en bas et le clavier ne le masque pas.
         inverted
-        maintainVisibleContentPosition={following ? undefined : { minIndexForVisible: 0 }}
-        onLayout={event => { viewportHeight.current = event.nativeEvent.layout.height; }}
-        onScroll={event => { const next = !hasNewer && shouldFollowMessages(event.nativeEvent.contentOffset.y, event.nativeEvent.layoutMeasurement?.height ?? viewportHeight.current); followLatest.current = next; setFollowing(next); }}
+        maintainVisibleContentPosition={following || scrollTarget ? undefined : { minIndexForVisible: 0 }}
+        onLayout={event => { viewportHeight.current = event.nativeEvent.layout.height; onListLayout(); }}
+        onScroll={event => { if (hasPendingScroll()) return; const next = !hasNewer && shouldFollowMessages(event.nativeEvent.contentOffset.y, event.nativeEvent.layoutMeasurement?.height ?? viewportHeight.current); followLatest.current = next; setFollowing(next); }}
         scrollEventThrottle={16}
-        onContentSizeChange={() => { if (followLatest.current && !scrollTarget ) listRef.current?.scrollToOffset({ offset: 0, animated: true }); }}
+        onContentSizeChange={() => { onListContentSizeChange(); if (followLatest.current && !hasPendingScroll()) listRef.current?.scrollToOffset({ offset: 0, animated: true }); }}
+        onViewableItemsChanged={onViewableItemsChanged}
         testID="messages-list"
         data={messages}
+        // Une fenêtre de saut contient au plus 101 messages : la mesurer en une fois évite les
+        // ajouts par lots après la révélation. Garder ce nombre stable pendant la lecture.
+        initialNumToRender={messageId ? 101 : 10}
         keyExtractor={(m) => m.id}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         onScrollToIndexFailed={onScrollToIndexFailed}
-        onEndReached={() => { if (!scrollTarget && !jumping) void loadOlder(); }}
+        // Les approximations de placement ne doivent pas déclencher la pagination.
+        onEndReached={() => { if (!hasPendingScroll()) void loadOlder(); }}
         onEndReachedThreshold={0.5}
         ListHeaderComponent={hasNewer ? <View style={styles.pagination}>
           {loadingNewer ? <ActivityIndicator color={theme.tint} /> : <Pressable accessibilityRole="button" accessibilityLabel={strings.composer.loadNewer} onPress={() => void loadNewer()}><ThemedText style={{color:theme.tint}}>{strings.composer.loadNewer}</ThemedText></Pressable>}
@@ -250,6 +264,7 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
             showAuthor={isRoom}
             highlighted={item.id === highlightedId}
             moderated={item.senderId !== user?.id && canModerate}
+            onAvatarPress={item.senderId === 'system' ? undefined : () => profileSheet.show({ userId: item.senderId, pseudo: item.senderName })}
             onLongPress={
               item.senderId === user?.id
                 ? () => openActions(item, false)
@@ -261,6 +276,8 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
         )}
         contentContainerStyle={styles.list}
       />
+      {scrollTarget ? <View style={StyleSheet.absoluteFill} testID="message-positioning"><LoadingState label={strings.states.loadingMessages} /></View> : null}
+      </View>
     );
   }
 
@@ -316,12 +333,14 @@ function ValidConversation({ conversationId, messageId, focusToken }: ValidProps
         /> : <ThemedText style={{ padding: 16 }}>{strings.control.readOnly}</ThemedText>}
       </ContentFrame>
       {dialog}
+      {profileSheet.sheet}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  hiddenList: { opacity: 0 },
   list: { paddingVertical: 8 },
   connectionBanner: { alignItems: 'center', paddingVertical: Spacing.one },
   liveError: { paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },

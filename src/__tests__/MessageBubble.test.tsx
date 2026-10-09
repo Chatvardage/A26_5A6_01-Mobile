@@ -71,3 +71,14 @@ it('aligne l avatar au debut de la bulle plutot qu au pied des accuses', async (
   await render(<MessageBubble message={message} mine={false} showAuthor readerCount={3} />);
   expect(screen.getByTestId('message-row')).toHaveStyle({alignItems:'flex-start'});
 });
+
+describe('MessageBubble : accusés', () => {
+  it.each([
+    ['sent', 'Envoyé', '✓'],
+    ['delivered', 'Livré', '✓✓'],
+    ['read', 'Lu', '✓✓'],
+  ] as const)('affiche l’accusé %s', async (receipt, label, mark) => {
+    await render(<MessageBubble message={message} mine showAuthor={false} receipt={receipt} />);
+    expect(screen.getByLabelText(label)).toHaveTextContent(mark);
+  });
+});

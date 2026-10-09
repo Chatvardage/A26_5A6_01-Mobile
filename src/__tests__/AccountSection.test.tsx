@@ -76,3 +76,16 @@ it('déconnecte les autres appareils après confirmation', async () => {
   expect(mockLogoutOthers).toHaveBeenCalled();
   expect(screen.getByText('Les autres appareils ont été déconnectés.')).toBeTruthy();
 });
+
+it('ignore une seconde action pendant qu’une autre est en cours', async () => {
+  let finish!: () => void;
+  mockChangePassword.mockReturnValueOnce(new Promise<void>((done) => { finish = done; }));
+  await render(<AccountSection cardStyle={{}} />);
+  // Dialogue ouvert avant que le changement de mot de passe ne commence.
+  await fireEvent.press(screen.getByRole('button', { name: 'Déconnecter les autres appareils' }));
+  await fill('ancien-mdp', 'nouveau-mdp');
+  await fireEvent.press(within(screen.getByTestId('app-dialog')).getByRole('button', { name: 'Déconnecter les autres appareils' }));
+  expect(mockLogoutOthers).not.toHaveBeenCalled();
+  finish();
+  expect(await screen.findByText('Mot de passe modifié.')).toBeTruthy();
+});

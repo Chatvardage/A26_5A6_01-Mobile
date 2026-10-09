@@ -25,3 +25,49 @@ it('relit les droits apres reconnexion', async () => {
   await act(async()=>mockHandlers.get('connexion.prete')!({}));
   await waitFor(()=>expect(hook.result.current).toBe(true));
 });
+it('garde la saisie ouverte pendant la relecture déclenchée par serveur.change', async () => {
+  jest.mocked(getServer).mockResolvedValue({salons:[{id:room,peutEcrire:true}]} as never);
+  const hook=await renderHook(()=>useCanWrite(`room:${room}`));
+  await waitFor(()=>expect(hook.result.current).toBe(true));
+  let finish!:(value:never)=>void;
+  jest.mocked(getServer).mockReturnValueOnce(new Promise(done=>{finish=done;}));
+  await act(async()=>mockHandlers.get('serveur.change')!({}));
+  expect(getServer).toHaveBeenCalledTimes(2);
+  expect(hook.result.current).toBe(true);
+  await act(async()=>finish({salons:[{id:room,peutEcrire:false}]} as never));
+  expect(hook.result.current).toBe(false);
+});
+it.each([
+  ['un membre si le salon est ouvert à tous', 'membre', 'tous', true],
+  ['un membre si le salon est réservé aux modérateurs', 'membre', 'moderateurs', false],
+  ['un non-membre même si le salon est ouvert à tous', null, 'tous', false],
+])('sans peutEcrire, autorise %s', async (_label, monRole, ecriture, allowed) => {
+  jest.mocked(getServer).mockResolvedValue({ monRole, salons: [{ id: room, ecriture }] } as never);
+  const hook = await renderHook(() => useCanWrite(`room:${room}`));
+  await waitFor(() => expect(getServer).toHaveBeenCalled());
+  await act(async () => undefined);
+  expect(hook.result.current).toBe(allowed);
+});
+it('ignore une révocation d’un autre salon ou mal formée', async () => {
+  jest.mocked(getServer).mockResolvedValue({ salons: [{ id: room, peutEcrire: true }] } as never);
+  const hook = await renderHook(() => useCanWrite(`room:${room}`));
+  await waitFor(() => expect(hook.result.current).toBe(true));
+  for (const raw of [null, 'texte', {}, { roomId: 'autre' }]) await act(async () => mockHandlers.get('room-message.revoked')!(raw));
+  expect(hook.result.current).toBe(true);
+});
+it('lit les droits sans canal temps réel et ignore une réponse arrivée après le démontage', async () => {
+  const subscribe = jest.spyOn(mockRealtime, 'subscribe').mockImplementation(() => { throw new Error('non configuré'); });
+  let finish!: (value: never) => void;
+  jest.mocked(getServer).mockReturnValueOnce(new Promise(done => { finish = done; }));
+  const pending = await renderHook(() => useCanWrite(`room:${room}`));
+  await waitFor(() => expect(getServer).toHaveBeenCalled());
+  await pending.unmount();
+  await act(async () => finish({ salons: [{ id: room, peutEcrire: true }] } as never));
+  let fail!: (error: Error) => void;
+  jest.mocked(fetchServers).mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+  const failing = await renderHook(() => useCanWrite(`room:${room}`));
+  await failing.unmount();
+  await act(async () => fail(new Error('offline')));
+  expect(failing.result.current).toBe(false);
+  subscribe.mockRestore();
+});

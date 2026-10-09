@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { useServerChannels } from '@/hooks/useServerChannels';
@@ -81,15 +81,33 @@ describe.each(lists)('Liste $name : cinq états', ({ hook, item, data, loading, 
     expect(navigate).toHaveBeenCalledTimes(1);
   });
 
-  it('5. rafraîchissement : la liste reste visible, sans bandeau d’erreur', async () => {
+  it('5. rafraîchissement en arrière-plan : la liste reste visible, sans spinner ni bandeau d’erreur', async () => {
+    // `refreshing` du hook vaut vrai pendant un rafraîchissement lancé par `serveur.change` ou le retour sur l'écran.
     setHook({ status: 'ready', data }, { refreshing: true });
     await render(element());
     expect(screen.getByText(item)).toBeTruthy();
     // La FlatList porte le RefreshControl : on remonte de l'élément jusqu'au conteneur défilant.
     let node = screen.getByText(item).parent;
     while (node && !node.props.refreshControl) node = node.parent;
-    expect(node?.props.refreshControl.props.refreshing).toBe(true);
+    expect(node?.props.refreshControl.props.refreshing).toBe(false);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('5 ter. tirer pour rafraîchir : spinner pendant la requête, retiré à la réponse', async () => {
+    let finish!: () => void;
+    refresh.mockReturnValueOnce(new Promise<void>((done) => { finish = done; }));
+    setHook({ status: 'ready', data });
+    await render(element());
+    const list = () => {
+      let node = screen.getByText(item).parent;
+      while (node && !node.props.refreshControl) node = node.parent;
+      return node!;
+    };
+    await act(async () => { void list().props.onRefresh(); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(list().props.refreshControl.props.refreshing).toBe(true);
+    await act(async () => finish());
+    expect(list().props.refreshControl.props.refreshing).toBe(false);
   });
 
   it('5 bis. échec du rafraîchissement : la liste reste, avec la raison et Réessayer', async () => {

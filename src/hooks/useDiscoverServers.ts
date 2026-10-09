@@ -6,7 +6,11 @@ import { discoverServers, type DiscoverableServer } from '@/services/rooms.servi
 /** Délai entre la dernière frappe et la recherche (une requête par pause, pas par lettre). */
 export const DISCOVER_DEBOUNCE_MS = 300;
 
-type State = { status: 'loading' | 'ready' | 'error'; servers: DiscoverableServer[]; next: number | null; message: string | null };
+/** Une erreur porte toujours sa raison. */
+type State = { servers: DiscoverableServer[]; next: number | null } & (
+  | { status: 'loading' | 'ready'; message: null }
+  | { status: 'error'; message: string }
+);
 
 /**
  * Serveurs publics à rejoindre, par pages : la première page s'affiche sans recherche, le texte filtre par nom

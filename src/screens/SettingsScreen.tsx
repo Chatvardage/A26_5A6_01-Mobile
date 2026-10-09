@@ -14,16 +14,17 @@ import { useSession } from '@/session/SessionContext';
 import { useTranslation } from '@/i18n';
 import { useProfile } from '@/profile/ProfileContext';
 import { userMessage } from '@/services/ApiError';
+import { useBusyAction } from '@/hooks/useBusyAction';
 export function SettingsScreen() {
   const theme = useTheme(); const { strings } = useTranslation(); const t = strings.control;
   const { user, signOut } = useSession(); const { profile, loading, error, reload, save, presence } = useProfile();
   const { permission, request, openSettings } = useNotificationPermission(); const { status } = useConnection();
-  const [alias, setAlias] = useState(''); const [busy, setBusy] = useState(false); const [result, setResult] = useState<unknown>(null); const [saved, setSaved] = useState(false);
+  const [alias, setAlias] = useState(''); const { busy, start, finish } = useBusyAction(); const [result, setResult] = useState<unknown>(null); const [saved, setSaved] = useState(false);
   useEffect(() => { if (profile) { // Synchronisation du formulaire après lecture du profil.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAlias(profile.alias ?? '');
   } }, [profile]);
-  async function run(action: () => Promise<void>) { if (busy) return; setBusy(true); setResult(null); setSaved(false); try { await action(); setSaved(true); } catch (e) { setResult(e); } finally { setBusy(false); } }
+  async function run(action: () => Promise<void>) { if (!start()) return; setResult(null); setSaved(false); try { await action(); setSaved(true); } catch (e) { setResult(e); } finally { finish(); } }
   const card = { ...styles.card, backgroundColor: theme.card };
   function heading(label: string, icon: 'person' | 'notifications' | 'settings') {
     const ios = icon === 'person' ? 'person.crop.circle' : icon === 'notifications' ? 'bell' : 'gearshape';
@@ -35,7 +36,8 @@ export function SettingsScreen() {
   return <ThemedView style={{ flex: 1 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
     <View style={card}><ThemedText type="smallBold">{strings.preferences.connectedAs}</ThemedText><ThemedText type="subtitle">{user?.pseudo ?? '—'}</ThemedText>
     <ThemedText>{t.status} : {status === 'online' ? t.connected : status === 'offline' ? t.offline : strings.connection.reconnecting}</ThemedText></View>
-    {loading ? <ThemedText>{strings.states.loading}</ThemedText> : null}
+    {/* Seulement avant le premier affichage : une relecture (profil modifié sur un autre appareil) ne décale pas la page. */}
+    {loading && !profile ? <ThemedText>{strings.states.loading}</ThemedText> : null}
     {error ? <><ThemedText accessibilityRole="alert" themeColor="danger">{error}</ThemedText><ActionButton label={strings.navigation.retry} onPress={() => void reload()} /></> : null}
     {result ? <ThemedText accessibilityRole="alert" themeColor="danger">{userMessage(result)}</ThemedText> : null}
     {saved ? <ThemedText accessibilityLiveRegion="polite">{t.saved}</ThemedText> : null}

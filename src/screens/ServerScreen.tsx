@@ -13,6 +13,7 @@ import { ConversationItem } from '@/components/ConversationItem';
 import { EmptyState, ErrorState, LoadingState, RefreshErrorBanner } from '@/components/StateViews';
 import { ThemedView } from '@/components/themed-view';
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
 import { useServerChannels } from '@/hooks/useServerChannels';
 import { useLiveConversations } from '@/unread/liveUnread';
@@ -20,6 +21,7 @@ import { parseServerParams, Routes, type RootStackParamList } from '@/navigation
 import { useSession } from '@/session/SessionContext';
 import type { ConversationSummary } from '@/types/conversation';
 import { useTranslation } from '@/i18n';
+import { useBusyAction } from '@/hooks/useBusyAction';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Server'>;
 
@@ -38,19 +40,21 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
   const { user } = useSession();
   const loadDetails = useCallback(() => getServer(serverId), [serverId]);
   const details = useLoadable(loadDetails, () => false);
-  const [leaving, setLeaving] = useState(false);
+  const server = details.state.status === 'ready' ? details.state.data : null;
+  const { busy: leaving, start, finish } = useBusyAction();
   const { show: showDialog, dialog } = useAppDialog();
   const [actionError, setActionError] = useState<unknown>(null);
   useRefreshOnServerChange(details.refresh, serverId);
   async function leave() {
-    if (leaving) return; setLeaving(true); setActionError(null);
+    if (!start()) return; setActionError(null);
     try { await leaveServer(serverId); navigation.popTo(Routes.Main, { screen: Routes.Servers }); }
-    catch (e) { setActionError(e); } finally { setLeaving(false); }
+    catch (e) { setActionError(e); } finally { finish(); }
   }
-  const { state, refreshing, refreshError, retry, refresh } = useServerChannels(serverId);
+  const { state, refreshError, retry, refresh } = useServerChannels(serverId);
   useRefreshOnFocus(refresh);
   useRefreshOnServerChange(refresh, serverId);
-  const refreshProps = { refreshing, onRefresh: refresh };
+  // Spinner seulement quand l'utilisateur tire la liste : les mises à jour en arrière-plan restent invisibles.
+  const refreshProps = usePullToRefresh(refresh);
   const channels = useLiveConversations(state.status === 'ready' ? state.data.channels : NONE);
 
   const open = useCallback(
@@ -69,9 +73,9 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
         {actionError ? <ThemedText accessibilityRole="alert" themeColor="danger">{userMessage(actionError)}</ThemedText> : null}
         <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16, gap: 12 }}><View style={{ flexDirection: 'row', gap: 12 }}>
         <ActionButton compact icon={{ ios: 'person.2', android: 'group', web: 'group' }} label={strings.control.members} onPress={() => navigation.navigate(Routes.ServerMembers, { serverId })} />
-        {details.state.status === 'ready' && canManageRooms(details.state.data) ? <ActionButton compact icon={{ ios: 'slider.horizontal.3', android: 'settings', web: 'settings' }} label={strings.control.manageShort} onPress={() => navigation.navigate(Routes.ManageServer, { serverId })} /> : null}
+        {server && canManageRooms(server) ? <ActionButton compact icon={{ ios: 'slider.horizontal.3', android: 'settings', web: 'settings' }} label={strings.control.manageShort} onPress={() => navigation.navigate(Routes.ManageServer, { serverId })} /> : null}
         </View>
-        {details.state.status === 'ready' && canLeaveServer(details.state.data, user?.id ?? '') ? <ActionButton label={strings.control.leave} disabled={leaving} danger onPress={() => showDialog({ title: strings.control.leaveTitle(details.state.status === 'ready' ? details.state.data.nom : ''), message: strings.control.leaveHint, actions: [{ label: strings.control.cancel, kind: 'cancel' }, { label: strings.control.leave, kind: 'danger', onPress: () => void leave() }] })} /> : null}
+        {server && canLeaveServer(server, user?.id ?? '') ? <ActionButton label={strings.control.leave} disabled={leaving} danger onPress={() => showDialog({ title: strings.control.leaveTitle(server.nom), message: strings.control.leaveHint, actions: [{ label: strings.control.cancel, kind: 'cancel' }, { label: strings.control.leave, kind: 'danger', onPress: () => void leave() }] })} /> : null}
         </View>
         {refreshError ? <RefreshErrorBanner message={refreshError} onRetry={refresh} /> : null}
         <FlatList
@@ -79,8 +83,8 @@ function ValidServer({ serverId, navigation }: { serverId: string; navigation: P
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <ConversationItem conversation={item} currentUserId={user?.id} onPress={open} />}
           ItemSeparatorComponent={() => <ThemedView type="backgroundSelected" style={styles.separator} />}
-          refreshing={refreshing}
-          onRefresh={refresh}
+          refreshing={refreshProps.refreshing}
+          onRefresh={refreshProps.onRefresh}
           contentContainerStyle={styles.list}
         />
       </ContentFrame>

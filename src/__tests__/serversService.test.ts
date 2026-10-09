@@ -53,6 +53,14 @@ describe('fetchServers', () => {
     expect((await fetchServers()).map((s) => s.id)).toEqual(['vide', 'calme', S]);
   });
 
+  it('classe une date d’activité illisible comme sans activité', async () => {
+    const calme = { ...server, id: 'calme', salons: [{ id: 'c3', nom: 'x' }] };
+    apiFetch.mockImplementation(async (path: string) =>
+      path === '/api/messages/activity' ? { rooms: { [`room:${C1}`]: 'pas une date', 'room:c3': '2026-10-05T10:00:00.000Z' } } : [server, calme],
+    );
+    expect((await fetchServers()).map((s) => s.id)).toEqual(['calme', S]);
+  });
+
   it('ignore les compteurs négatifs et une source de non-lus en panne', async () => {
     apiFetch.mockResolvedValue([server]);
     expect((await fetchServers({ getCounts: async () => ({ [`room:${C1}`]: -4 }) }))[0].unreadCount).toBe(0);

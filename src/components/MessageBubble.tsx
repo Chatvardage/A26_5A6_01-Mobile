@@ -20,6 +20,7 @@ export function MessageBubble({
   online,
   receipt,
   readerCount,
+  onAvatarPress,
 }: {
   message: ChatMessage;
   avatar?: string | null;
@@ -33,6 +34,8 @@ export function MessageBubble({
   moderated?: boolean;
   /** Message atteint depuis la recherche : entouré quelques secondes, comme `.message-cible` sur le Web. */
   highlighted?: boolean;
+  /** Appui sur la photo de l'auteur : ouvre sa fiche de profil. */
+  onAvatarPress?: () => void;
 }) {
   const theme = useTheme();
   const { strings } = useTranslation();
@@ -50,7 +53,6 @@ export function MessageBubble({
       style={[
         styles.bubble,
         { backgroundColor: mine ? theme.tint : theme.backgroundElement },
-        highlighted && { borderWidth: 2, borderColor: theme.accent },
       ]}
     >
       {showAuthor && !mine ? (
@@ -59,11 +61,17 @@ export function MessageBubble({
         </ThemedText>
       ) : null}
       <ThemedText style={mine ? styles.mineText : undefined}>{content}</ThemedText>
+      {/* Le contour ne participe pas à la mise en page : révéler ou retirer le surlignage ne déplace rien. */}
+      {highlighted ? <View testID="message-highlight" pointerEvents="none" style={[StyleSheet.absoluteFill, styles.highlight, { borderColor: theme.accent }]} /> : null}
     </View>
   );
   return (
     <View testID="message-row" style={[styles.row, mine ? styles.rowMine : styles.rowOther]}>
-      {!mine ? <UserAvatar avatar={avatar} online={online} name={author} /> : null}
+      {!mine ? (onAvatarPress ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={strings.profileCard.view(author)} hitSlop={6} onPress={onAvatarPress}>
+          <UserAvatar avatar={avatar} online={online} name={author} />
+        </Pressable>
+      ) : <UserAvatar avatar={avatar} online={online} name={author} />) : null}
       <View testID="message-content" style={styles.limited}>
       {pressable ? (
         <Pressable
@@ -99,6 +107,7 @@ const styles = StyleSheet.create({
   rowMine: { justifyContent: 'flex-end' },
   rowOther: { justifyContent: 'flex-start' },
   bubble: { borderRadius: 14, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  highlight: { borderRadius: 14, borderWidth: 2 },
   limited: { maxWidth: '80%', flexShrink: 1 },
   mineText: { color: '#ffffff' },
   meta: { alignSelf: 'flex-end', fontSize: 11, lineHeight: 14 },

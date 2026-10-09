@@ -409,4 +409,14 @@ export const fr = {
     clearSession: 'Impossible de supprimer la session.',
     clearSessionLogout: 'Le stockage sécurisé ne peut pas être effacé. Réessayez la déconnexion.',
   },
+  profileCard: {
+    title: 'Profil',
+    view: (name: string) => `Voir le profil de ${name}`,
+    alias: 'Alias',
+    pseudo: 'Pseudo',
+    noAlias: 'Aucun alias',
+    message: 'Message privé',
+    close: 'Fermer',
+    hint: 'Maintenir pour voir le profil',
+  },
 } as const;

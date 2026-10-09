@@ -1,8 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { EditRoomScreen } from '@/screens/EditRoomScreen';
 import * as rooms from '@/services/rooms.service';
 import { ApiError } from '@/services/ApiError';
 jest.mock('@/services/rooms.service', () => ({ ...jest.requireActual('@/services/rooms.service'), getServer: jest.fn(), updateRoom: jest.fn() }));
+// Props des boutons rendus (rendu inchangé) : deux appuis dans la même image, sans rendu entre eux.
+const mockButtons = new Map<string, { onPress: () => void }>();
+jest.mock('@/components/ActionButton', () => {
+  const actual = jest.requireActual('@/components/ActionButton');
+  return { ActionButton: (props: { label: string; onPress: () => void }) => { mockButtons.set(props.label, props); return actual.ActionButton(props); } };
+});
 const id = '11111111-1111-4111-8111-111111111111';
 const roomId = '33333333-3333-4333-8333-333333333333';
 const room: rooms.Room = { id: roomId, serveurId: id, nom: 'général', position: 0, acces: 'tous', ecriture: 'moderateurs', peutEcrire: true };
@@ -52,4 +58,15 @@ it('signale un salon disparu, un membre sans droit et une panne', async () => {
   await render(<EditRoomScreen {...props({ serverId: id, roomId })} />);
   await fireEvent.press(await screen.findByText('Réessayer'));
   expect(await screen.findByLabelText('Nom du salon')).toHaveDisplayValue('général');
+});
+
+it('deux appuis rapides n’enregistrent qu’une fois', async () => {
+  let finish!: () => void;
+  jest.mocked(rooms.updateRoom).mockReturnValueOnce(new Promise(done => { finish = () => done(room); }));
+  await render(<EditRoomScreen {...props({ serverId: id, roomId })} />);
+  await screen.findByLabelText('Nom du salon');
+  await act(async () => { const { onPress } = mockButtons.get('Enregistrer')!; onPress(); onPress(); });
+  expect(rooms.updateRoom).toHaveBeenCalledTimes(1);
+  await act(async () => finish());
+  expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 
+import { SearchPanel } from '@/components/SearchPanel';
 import { SearchResultItem } from '@/components/SearchResultItem';
 import { ConversationSearchScreen } from '@/screens/ConversationSearchScreen';
 import type { SearchResult } from '@/services/searchService';
@@ -143,5 +144,49 @@ describe('SearchResultItem', () => {
     expect(screen.queryByText('Message privé')).toBeNull();
     await view.rerender(<SearchResultItem result={{ ...dm, senderName: undefined }} variant="scoped" onPress={jest.fn()} />);
     expect(screen.getByText('Utilisateur inconnu')).toBeTruthy();
+  });
+});
+
+describe('SearchPanel sans conversation (recherche globale)', () => {
+  const panel = () => <SearchPanel onOpenResult={jest.fn()} />;
+
+  it('affiche chaque état de la recherche', async () => {
+    const view = await render(panel());
+    expect(screen.getByPlaceholderText('Rechercher dans vos conversations')).toBeTruthy();
+    expect(screen.getByText('Recherchez un message')).toBeTruthy();
+    expect(mockUseSearch).toHaveBeenCalledWith(undefined);
+    mockSearch = { ...mockSearch, status: 'tooShort' };
+    await view.rerender(panel());
+    expect(screen.getByText('Entrez au moins 2 caractères.')).toBeTruthy();
+    mockSearch = { ...mockSearch, status: 'loading' };
+    await view.rerender(panel());
+    expect(screen.getByText('Recherche en cours…')).toBeTruthy();
+    mockSearch = { ...mockSearch, status: 'error', errorMessage: 'Service indisponible' };
+    await view.rerender(panel());
+    expect(screen.getByText('Service indisponible')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(mockSearch.retry).toHaveBeenCalledTimes(1);
+    // Erreur sans raison : seul le titre de l'erreur reste.
+    mockSearch = { ...mockSearch, errorMessage: null };
+    await view.rerender(panel());
+    expect(screen.getByRole('button', { name: 'Réessayer' })).toBeTruthy();
+    mockSearch = { ...mockSearch, status: 'empty' };
+    await view.rerender(panel());
+    expect(screen.getByText('Aucun résultat')).toBeTruthy();
+  });
+
+  it('groupe les résultats par messages privés et par serveur, avec chargement et erreur de la page suivante', async () => {
+    const named = { ...room, id: 'r2', serverName: 'Équipe', content: 'chez Équipe' };
+    mockSearch = { ...mockSearch, status: 'ready', results: [dm, { ...dm, id: 'd2', content: 'second privé' }, room, named], loadingMore: true };
+    const view = await render(panel());
+    expect(screen.getByText('Messages privés')).toBeTruthy();
+    expect(screen.getByText('Équipe')).toBeTruthy();
+    expect(screen.getByText('Salons')).toBeTruthy();
+    expect(screen.getByLabelText('Chargement…')).toBeTruthy();
+    expect(screen.queryByText('Plus de résultats')).toBeNull();
+    mockSearch = { ...mockSearch, loadingMore: false, moreError: 'Page suivante indisponible' };
+    await view.rerender(panel());
+    expect(screen.getByRole('alert')).toHaveTextContent('Page suivante indisponible');
+    expect(screen.queryByText('Plus de résultats')).toBeNull();
   });
 });

@@ -29,4 +29,6 @@ it('traduit le message de bienvenue et son auteur sans traduire les messages uti
   expect(displayMessage({...message,id:'custom'},en)).toBe('Original');
   expect(displayMessage({...message,updatedAt:'2026-10-08T10:01:00Z'},en)).toBe('Original');
   expect(displayMessage(message,fr)).toBe(fr.conversation.welcome);
+  // Sans date de modification connue, le message n'est pas reconnu comme le message d'origine.
+  expect(displayMessage({...message,updatedAt:undefined},fr)).toBe('Original');
 });

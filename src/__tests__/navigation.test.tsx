@@ -122,6 +122,9 @@ describe('RootNavigator', () => {
     expect(mockStackScreens[3].options).toEqual({ title: 'Modifier le salon' });
     expect(mockStackScreens[8].options).toEqual({ title: 'Recherche' });
     expect(mockStackScreens[9].options).toEqual({ title: 'Nouveau message' });
+    const discover = mockStackScreens[1].options as unknown as (props: { route: { params?: { mode?: string } } }) => { title: string };
+    expect(discover({ route: { params: { mode: 'create' } } }).title).toBe('Créer un serveur');
+    expect(discover({ route: {} }).title).toBe('Découvrir des serveurs');
     for (const route of mockStackScreens.slice(5, 7)) {
       if (typeof route.options !== 'function') throw new Error('Options dynamiques attendues');
       expect(route.options({ route: {} }).title).toBe(route.name === 'Server' ? 'Serveur' : 'Conversation');

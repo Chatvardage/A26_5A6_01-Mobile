@@ -14,17 +14,18 @@ import { useTranslation } from '@/i18n';
 import { Routes, type RootStackParamList } from '@/navigation/routes';
 import { userMessage } from '@/services/ApiError';
 import { acceptInvitation, createServer, getInvitations, joinServer, refuseInvitation } from '@/services/rooms.service';
+import { useBusyAction } from '@/hooks/useBusyAction';
 type Props = NativeStackScreenProps<RootStackParamList, 'DiscoverServers'>;
 export function DiscoverServersScreen({ navigation, route }: Props) {
   const creating = route?.params?.mode === 'create';
   return creating ? <CreateServer navigation={navigation} /> : <Discover navigation={navigation} />;
 }
 function useRun(navigation: Props['navigation'], refresh: () => unknown) {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState<unknown>(null);
+  const { busy, start, finish } = useBusyAction(); const [error, setError] = useState<unknown>(null);
   async function run(action: () => Promise<unknown>, open = false) {
-    if (busy) return; setBusy(true); setError(null);
+    if (!start()) return; setError(null);
     try { const result = await action(); if (open && result && typeof result === 'object' && 'id' in result && 'nom' in result) navigation.replace(Routes.Server, { serverId: String(result.id), title: String(result.nom) }); else await refresh(); }
-    catch (e) { setError(e); } finally { setBusy(false); }
+    catch (e) { setError(e); } finally { finish(); }
   }
   return { busy, error, run };
 }
@@ -47,7 +48,7 @@ function Discover({ navigation }: { navigation: Props['navigation'] }) {
     </SectionCard> : null}
     <SectionCard title={t.publicServers}>
       <ThemedTextInput accessibilityLabel={t.searchServers} placeholder={t.searchServers} value={query} maxLength={80} onChangeText={setQuery} returnKeyType="search" autoCorrect={false} />
-      {discovery.status === 'loading' ? <LoadingState /> : discovery.status === 'error' ? <ErrorState message={discovery.message ?? strings.errors.generic} onRetry={reload} /> : <>
+      {discovery.status === 'loading' ? <LoadingState /> : discovery.status === 'error' ? <ErrorState message={discovery.message} onRetry={reload} /> : <>
         {!discovery.servers.length ? <ThemedText themeColor="textSecondary">{t.noDiscovery}</ThemedText> : null}
         {discovery.servers.map(server => <View key={server.id} style={{ gap: 8 }}><ThemedText type="smallBold">{server.nom}</ThemedText><ThemedText type="small" themeColor="textSecondary">{server.nombreMembres} {strings.server.members}</ThemedText><ActionButton label={`${t.join} · ${server.nom}`} disabled={busy} onPress={() => void run(() => joinServer(server.id), true)} /></View>)}
         {discovery.moreError ? <ThemedText accessibilityRole="alert" themeColor="danger">{discovery.moreError}</ThemedText> : null}
