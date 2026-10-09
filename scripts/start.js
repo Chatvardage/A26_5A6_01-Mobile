@@ -2,7 +2,8 @@
 /**
  * Démarre Expo en adaptant la configuration au poste. Usage : `npm start [options expo]`.
  *
- * - Hors WSL2 : équivaut à `npx expo start`.
+ * - Hors WSL2 : déduit l'IP LAN de l'API si aucune URL n'est configurée, puis équivaut à
+ *   `npx expo start`.
  * - Sous WSL2 : ajoute `--tunnel` (le téléphone n'atteint pas Metro autrement) et, si
  *   EXPO_PUBLIC_API_URL n'est définie ni dans l'environnement ni dans `.env`, la déduit de
  *   l'IP Wi-Fi actuelle de Windows (port 3006 : voir la redirection « netsh » du README).
@@ -10,8 +11,15 @@
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  buildApiUrl,
+  getLocalIpv4Addresses,
+  readConfiguredUrl,
+  updateEnvContent,
+} = require('./update-api-ip');
 
 const WSL_API_PORT = 3006;
+const API_VARIABLE = 'EXPO_PUBLIC_API_URL';
 const args = process.argv.slice(2);
 const env = { ...process.env };
 
@@ -42,6 +50,24 @@ function definedInDotEnv() {
   }
 }
 
+function updateApiIp() {
+  const ip = getLocalIpv4Addresses()[0];
+  if (!ip) {
+    throw new Error("Aucune IPv4 LAN détectée. Utiliser `npm run update-ip -- --ip <IPv4-du-PC>`.");
+  }
+
+  let content = '';
+  try {
+    content = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
+  const apiUrl = buildApiUrl(readConfiguredUrl(content), ip);
+  fs.writeFileSync(path.join(__dirname, '..', '.env'), updateEnvContent(content, apiUrl));
+  console.log(`[start] API mise à jour : ${apiUrl}`);
+}
+
 if (isWsl()) {
   if (!args.includes('--tunnel') && !args.includes('--lan') && !args.includes('--localhost')) args.unshift('--tunnel');
 
@@ -63,6 +89,15 @@ if (isWsl()) {
       }
     } else {
       console.warn("[start] IP Windows introuvable : définir EXPO_PUBLIC_API_URL dans .env (voir le README).");
+    }
+  }
+} else {
+  if (!env[API_VARIABLE] && !definedInDotEnv()) {
+    try {
+      updateApiIp();
+    } catch (error) {
+      console.error(`[start] ${error.message}`);
+      process.exit(1);
     }
   }
 }

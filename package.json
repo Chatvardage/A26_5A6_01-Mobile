@@ -67,7 +67,8 @@
     "typecheck": "tsc --noEmit",
     "start:tunnel": "expo start --tunnel",
     "test:controle3-e2e": "node scripts/controle3-e2e.cjs",
-    "start:dev": "expo start --dev-client"
+    "start:dev": "expo start --dev-client",
+    "update-ip": "node scripts/update-api-ip.js"
   },
   "private": true,
   "jest": {

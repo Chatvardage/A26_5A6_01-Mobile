@@ -12,6 +12,8 @@ function runStart({
   args = [] as string[],
   missingCli = false,
   env = {} as Record<string, string>,
+  dotEnvContent = '',
+  networkInterfaces = { WiFi: [{ family: 'IPv4', internal: false, address: '192.168.1.20' }] },
 } = {}) {
   const handlers: Record<string, (...args: unknown[]) => void> = {};
   const child = { on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
@@ -21,6 +23,7 @@ function runStart({
     (_command: string, _args: string[], _options: { stdio: string; env: Record<string, string | undefined> }) => child,
   );
   const spawnSync = jest.fn();
+  const writeFileSync = jest.fn();
   const exit = jest.fn(() => { throw new Error('process.exit'); });
   const consoleMock = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
   const resolve = jest.fn(() => {
@@ -29,8 +32,22 @@ function runStart({
   });
   const requireMock = Object.assign((name: string) => {
     if (name === 'node:child_process') return { spawn, spawnSync };
-    if (name === 'node:fs') return { readFileSync: (file: string) => file === '/proc/version' ? 'Microsoft WSL2' : '' };
+    if (name === 'node:fs') return {
+      readFileSync: (file: string) => file === '/proc/version' ? 'Microsoft WSL2' : dotEnvContent,
+      writeFileSync,
+    };
     if (name === 'node:path') return path;
+    if (name === './update-api-ip') return {
+      buildApiUrl: (configuredUrl: string | null, ip: string) => configuredUrl
+        ? new URL(configuredUrl).toString().replace(new URL(configuredUrl).hostname, ip)
+        : `http://${ip}:3000`,
+      getLocalIpv4Addresses: () => Object.values(networkInterfaces)
+        .flatMap((interfaces) => interfaces ?? [])
+        .filter((network) => network.family === 'IPv4' && !network.internal)
+        .map((network) => network.address),
+      readConfiguredUrl: (content: string) => content.match(/^\s*EXPO_PUBLIC_API_URL\s*=\s*(\S+)\s*$/m)?.[1] ?? null,
+      updateEnvContent: (content: string, apiUrl: string) => `${content.replace(/\s*$/, '')}\nEXPO_PUBLIC_API_URL=${apiUrl}\n`,
+    };
     throw new Error(`Unexpected module: ${name}`);
   }, { resolve });
   const context = {
@@ -40,7 +57,7 @@ function runStart({
     console: consoleMock,
   };
   const run = () => vm.runInNewContext(source, context);
-  return { run, spawn, spawnSync, exit, consoleMock, handlers, resolve };
+  return { run, spawn, spawnSync, writeFileSync, exit, consoleMock, handlers, resolve };
 }
 
 test.each(['win32', 'darwin'])('lance Expo avec le même Node sans npx sur %s', (platform) => {
@@ -50,6 +67,29 @@ test.each(['win32', 'darwin'])('lance Expo avec le même Node sans npx sur %s', 
   expect(launcher.spawn).toHaveBeenCalledWith('/runtime/node',
     ['/project/node_modules/expo/bin/cli', 'start', '--lan', '-c'],
     { stdio: 'inherit', env: { CUSTOM: 'value' } });
+});
+
+test('met à jour l adresse API dans .env hors WSL2 avant de lancer Expo', () => {
+  const launcher = runStart({ platform: 'win32' });
+
+  launcher.run();
+
+  expect(launcher.writeFileSync).toHaveBeenCalledWith(
+    expect.stringContaining('.env'),
+    '\nEXPO_PUBLIC_API_URL=http://192.168.1.20:3000\n',
+  );
+  expect(launcher.consoleMock.log).toHaveBeenCalledWith('[start] API mise à jour : http://192.168.1.20:3000');
+});
+
+test.each([
+  { env: { EXPO_PUBLIC_API_URL: 'http://10.0.2.2:3000' }, dotEnvContent: '', description: "l'environnement" },
+  { env: {} as Record<string, string>, dotEnvContent: 'EXPO_PUBLIC_API_URL=http://192.168.1.42:3000\n', description: '.env' },
+])('ne remplace pas une URL déjà définie dans $description hors WSL2', ({ env, dotEnvContent }) => {
+  const launcher = runStart({ platform: 'win32', env, dotEnvContent });
+
+  launcher.run();
+
+  expect(launcher.writeFileSync).not.toHaveBeenCalled();
 });
 
 test.each([
