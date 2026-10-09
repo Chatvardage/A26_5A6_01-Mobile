@@ -1,6 +1,6 @@
 import { ApiError } from '@/services/ApiError';
 import * as http from '@/services/httpClient';
-import { fetchDmSuggestions, searchUsers } from '@/services/usersService';
+import { fetchDmSuggestions, lookupDisplayNames, searchUsers } from '@/services/usersService';
 
 jest.mock('@/services/httpClient');
 const apiFetch = http.apiFetch as jest.Mock;
@@ -113,5 +113,25 @@ describe('fetchDmSuggestions', () => {
     mockApi({ '/api/messages/conversations': [], '/api/servers': [] });
     await expect(fetchDmSuggestions(ME)).resolves.toEqual({ users: [], partnerIds: [] });
     expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('lookupDisplayNames', () => {
+  const profiles = (path: string) =>
+    decodeURIComponent(path.split('ids=')[1]).split(',').map((id) => ({ idUtilisateur: id, alias: id === A ? 'Zozo' : null, avatar: null, actif: true }));
+
+  it('préfère l’alias au pseudo, sinon garde le pseudo', async () => {
+    apiFetch.mockImplementation(async (path: string) => (path.startsWith('/api/users/lookup') ? lookupResponse(path) : profiles(path)));
+    expect(await lookupDisplayNames([A, B])).toEqual({ [A]: 'Zozo', [B]: 'alice' });
+  });
+
+  it('garde les pseudos si les profils publics sont indisponibles, et propage une panne des pseudos', async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/users/lookup')) return lookupResponse(path);
+      throw new ApiError('network', 'x');
+    });
+    expect(await lookupDisplayNames([A])).toEqual({ [A]: 'Zoé' });
+    apiFetch.mockRejectedValue(new ApiError('network', 'x'));
+    await expect(lookupDisplayNames([A])).rejects.toMatchObject({ kind: 'network' });
   });
 });

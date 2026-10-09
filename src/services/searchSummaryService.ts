@@ -2,7 +2,7 @@ import { normalizeQuery } from '@/partage/search';
 import { isUuid, parseConversationId } from '@/types/conversationId';
 import { ApiError } from './ApiError';
 import { apiFetch } from './httpClient';
-import { lookupPseudos } from './usersService';
+import { lookupDisplayNames } from './usersService';
 
 export type ConversationMatch = { conversationId: string; count: number; title?: string };
 export type ServerMatch = { serverId: string; count: number; title?: string; channels: ConversationMatch[] };
@@ -34,7 +34,7 @@ export async function searchSummary(query: string, signal?: AbortSignal): Promis
     return { serverId: entry.serverId as string, count: entry.count as number, channels: conversations(entry.channels, 'room') };
   }).filter(entry => entry.count > 0 && entry.channels.length > 0);
   const [names, metadata] = await Promise.all([
-    directMessages.length ? lookupPseudos(directMessages.map(entry => parseConversationId(entry.conversationId)!.targetId)).catch(() => ({} as Record<string, string>)) : Promise.resolve({} as Record<string, string>),
+    directMessages.length ? lookupDisplayNames(directMessages.map(entry => parseConversationId(entry.conversationId)!.targetId)).catch(() => ({} as Record<string, string>)) : Promise.resolve({} as Record<string, string>),
     servers.length ? apiFetch<{ id: string; nom: string; salons: { id: string; nom: string }[] }[]>('/api/servers', { signal }).catch(() => []) : Promise.resolve([]),
   ]);
   const serverNames = new Map((Array.isArray(metadata) ? metadata : []).map(server => [server.id, server]));

@@ -627,3 +627,48 @@ describe('websocketService', () => {
     expect(getRealtimeState()).toBe('disconnected');
   });
 });
+
+describe('websocketService : présence et profil', () => {
+  type Ack = (error: Error | null, response?: unknown) => void;
+  const presenceEmit = jest.fn();
+  let service: RealtimeService;
+  beforeEach(() => {
+    disconnectRealtime();
+    service = createRealtimeService();
+    Object.assign(mockSocket, { timeout: jest.fn(() => ({ emit: presenceEmit })) });
+    presenceEmit.mockReset();
+    service.configureRealtime({ getToken: () => 'test-token', onUnauthorized: jest.fn() });
+    // Le socket est créé au premier abonnement.
+    service.onReady(jest.fn());
+  });
+  afterEach(() => service.disconnectRealtime());
+
+  it('refuse le suivi de présence et ignore les publications avant connexion.prete', async () => {
+    await expect(service.followPresence(['a'])).rejects.toMatchObject({ kind: 'network' });
+    service.publishPresence('en-ligne');
+    service.publishProfile();
+    expect(mockSocket.emit).not.toHaveBeenCalled();
+    expect(presenceEmit).not.toHaveBeenCalled();
+  });
+
+  it('suit la présence sans doublon et publie présence et profil une fois prêt', async () => {
+    trigger('connexion.prete');
+    presenceEmit.mockImplementation((_event: string, _payload: unknown, ack: Ack) => ack(null, { enLigne: ['a'] }));
+    await expect(service.followPresence(['a', 'b', 'a'])).resolves.toEqual(['a']);
+    expect(presenceEmit).toHaveBeenCalledWith('presence.suivre', { ids: ['a', 'b'] }, expect.any(Function));
+    service.publishPresence('hors-ligne');
+    service.publishProfile();
+    expect(mockSocket.emit).toHaveBeenCalledWith('presence.update', { statut: 'hors-ligne' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('profil.update');
+  });
+
+  it.each([
+    ['une erreur d’accusé', new Error('timeout'), undefined, { message: 'timeout' }],
+    ['une réponse sans liste', null, {}, { kind: 'invalid_response' }],
+    ['une liste invalide', null, { enLigne: ['a', 1] }, { kind: 'invalid_response' }],
+  ])('rejette %s', async (_label, error, response, expected) => {
+    trigger('connexion.prete');
+    presenceEmit.mockImplementation((_event: string, _payload: unknown, ack: Ack) => ack(error, response));
+    await expect(service.followPresence(['a'])).rejects.toMatchObject(expected);
+  });
+});

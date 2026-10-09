@@ -6,7 +6,7 @@ import { useProfile } from '@/profile/ProfileContext';
 import { useTranslation } from '@/i18n';
 import { confirmDelivery } from '@/services/receipts.service';
 import { markConversationRead } from '@/services/unreadService';
-import { lookupPseudos } from '@/services/usersService';
+import { lookupDisplayNames } from '@/services/usersService';
 import { useSession } from '@/session/SessionContext';
 import { toConversationId } from '@/types/conversationId';
 import { useUnread } from '@/unread/UnreadContext';
@@ -81,7 +81,7 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
         if (!granted.current) return;
       }
       if (!titles.current.has(senderId)) {
-        const names = await lookupPseudos([senderId]).catch(() => ({}) as Record<string, string>);
+        const names = await lookupDisplayNames([senderId]).catch(() => ({}) as Record<string, string>);
         if (names[senderId]) {
           // Cache borné (le plus ancien est oublié) : une longue session sur un serveur très actif ne le fait pas grossir.
           if (titles.current.size >= MAX_CACHED_TITLES) titles.current.delete(titles.current.keys().next().value as string);
