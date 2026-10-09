@@ -2,8 +2,8 @@
 /**
  * Démarre Expo en adaptant la configuration au poste. Usage : `npm start [options expo]`.
  *
- * - Hors WSL2 : déduit l'IP LAN de l'API si aucune URL n'est configurée, puis équivaut à
- *   `npx expo start`.
+ * - Hors WSL2 : met à jour l'IP LAN de l'API dans `.env` si aucune URL n'est fournie
+ *   par l'environnement, puis équivaut à `npx expo start`.
  * - Sous WSL2 : ajoute `--tunnel` (le téléphone n'atteint pas Metro autrement) et, si
  *   EXPO_PUBLIC_API_URL n'est définie ni dans l'environnement ni dans `.env`, la déduit de
  *   l'IP Wi-Fi actuelle de Windows (port 3006 : voir la redirection « netsh » du README).
@@ -92,7 +92,7 @@ if (isWsl()) {
     }
   }
 } else {
-  if (!env[API_VARIABLE] && !definedInDotEnv()) {
+  if (!env[API_VARIABLE]) {
     try {
       updateApiIp();
     } catch (error) {
