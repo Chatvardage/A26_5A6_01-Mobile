@@ -334,7 +334,7 @@ export function useMessages(conversationId: string, currentUserId: string, initi
 
   /** Une seule page part du message recherche; aucun historique intermediaire n'est charge. */
   const jumpTo = useCallback(async (messageId: string): Promise<boolean> => {
-    if (messagesRef.current.some(message => message.id === messageId)) return true;
+    // Toujours remonter la liste sous le chargement, mais réutiliser les messages déjà disponibles.
     const requestGeneration = generation.current;
     const version = ++windowRequest.current;
     recentRequest.current++;
@@ -342,7 +342,19 @@ export function useMessages(conversationId: string, currentUserId: string, initi
     setLoadingOlder(false);
     setLoadingNewer(false);
     try {
-      const { page, more, older } = await fetchWindow(conversationId, messageId);
+      const cached = messagesRef.current;
+      const index = cached.findIndex(message => message.id === messageId);
+      let window: Awaited<ReturnType<typeof fetchWindow>>;
+      if (index !== -1) {
+        const start = Math.max(0, index - PAGE_SIZE);
+        const end = Math.min(cached.length, index + PAGE_SIZE + 1);
+        window = { page: cached.slice(start, end), more: start > 0 || newerAvailable.current, older: end < cached.length || hasOlderRef.current };
+        // Une image suffit à afficher le chargement et démonter la liste, sans ajouter de délai réseau.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      } else {
+        window = await fetchWindow(conversationId, messageId);
+      }
+      const { page, more, older } = window;
       if (requestGeneration !== generation.current || version !== windowRequest.current) return false;
       if (!page.some(message => message.id === messageId) || deletedIds.current.has(messageId)) return false;
       anchor.current = more ? messageId : null;

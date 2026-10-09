@@ -118,10 +118,40 @@ describe('useMessages.jumpTo', () => {
     expect(ids(hook)).toHaveLength(51);
     expect(ids(hook).at(-1)).toBe(TARGET);
   });
-  it('retrouve un message deja charge sans requete supplementaire', async () => {
+  it('remonte une fenêtre déjà chargée sans nouvelle requête et affiche le chargement pendant une image', async () => {
     const hook = await setup([msg('a',1)]);
-    expect(await jump(hook,'a')).toBe(true);
+    let frame!: FrameRequestCallback;
+    const requestFrame = jest.spyOn(global, 'requestAnimationFrame').mockImplementation(callback => { frame = callback; return 1; });
+    let pending!: Promise<boolean>;
+    await act(async () => { pending = hook.result.current.jumpTo('a'); });
+    expect(hook.result.current.jumping).toBe(true);
+    await act(async () => { frame(0); await pending; });
+    expect(await pending).toBe(true);
+    expect(hook.result.current.jumping).toBe(false);
     expect(fetchHistory).toHaveBeenCalledTimes(1);
+    expect(ids(hook)).toEqual(['a']);
+    requestFrame.mockRestore();
+  });
+
+  it('limite une fenêtre locale à 101 messages et permet de retrouver les pages retirées des deux côtés', async () => {
+    const hook = await setup(page('r', 0, 50));
+    fetchHistory.mockResolvedValueOnce(page('r', 50, 50));
+    await act(async () => hook.result.current.loadOlder());
+    fetchHistory.mockResolvedValueOnce(page('r', 100, 50));
+    await act(async () => hook.result.current.loadOlder());
+    expect(await jump(hook, 'r75')).toBe(true);
+    expect(ids(hook)).toHaveLength(101);
+    expect(ids(hook)[0]).toBe('r25');
+    expect(ids(hook).at(-1)).toBe('r125');
+    expect(hook.result.current.hasNewer).toBe(true);
+    expect(hook.result.current.hasOlder).toBe(true);
+    expect(fetchHistory).toHaveBeenCalledTimes(3);
+    fetchHistory.mockResolvedValueOnce([msg('r24', 24)]);
+    await act(async () => hook.result.current.loadNewer());
+    expect(fetchHistory).toHaveBeenLastCalledWith(`dm:${OLI}`, 50, 'r25', { direction: 'after' });
+    fetchHistory.mockResolvedValueOnce([msg('r126', 126)]);
+    await act(async () => hook.result.current.loadOlder());
+    expect(fetchHistory).toHaveBeenLastCalledWith(`dm:${OLI}`, 50, 'r125');
   });
   it('remplace les messages recents par une seule page depuis la cible', async () => {
     const hook = await setup(page('r',0,50));
@@ -211,4 +241,85 @@ it('ouvre directement une cible initiale sans charger la page recente', async ()
   expect(fetchHistory).toHaveBeenNthCalledWith(2,`dm:${OLI}`,50,TARGET,{direction:'after'});
   expect(ids(hook)).toEqual([TARGET]);
   expect(hook.result.current.hasNewer).toBe(false);
+});
+
+describe('useMessages : fenêtre ouverte sur des messages anciens', () => {
+  /** Saut vers TARGET avec une page complète de messages plus récents : `hasNewer` reste vrai. */
+  const anchored = async () => {
+    const hook = await setup([msg('recent', 0)]);
+    fetchHistory.mockResolvedValueOnce([msg(TARGET, 2000)]).mockResolvedValueOnce(page('n', 1000, 50));
+    await jump(hook, TARGET);
+    expect(hook.result.current.hasNewer).toBe(true);
+    return hook;
+  };
+  const handler = (event: string) => (mockRealtime.subscribe.mock.calls as unknown as [string, (raw: unknown) => void][]).findLast(([name]) => name === event)![1];
+  const raw = (id: string, extra: Record<string, unknown> = {}) => ({
+    id, senderId: OLI, recipientId: ME, content: `reçu ${id}`, createdAt: '2026-10-01T12:30:00Z', updatedAt: '2026-10-01T12:30:00Z', ...extra,
+  });
+
+  it('ignore un nouveau message hors de la fenêtre mais applique la réception d’un message affiché', async () => {
+    const hook = await anchored();
+    await act(async () => handler('private-message.created')(raw('hors-fenetre')));
+    expect(ids(hook)).not.toContain('hors-fenetre');
+    await act(async () => handler('private-message.delivered')(raw('n1000', { deliveredAt: '2026-10-01T12:31:00Z' })));
+    expect(hook.result.current.messages.find(m => m.id === 'n1000')?.deliveredAt).toBe('2026-10-01T12:31:00Z');
+  });
+
+  it('considère qu’il reste des messages plus récents si leur vérification échoue', async () => {
+    const hook = await anchored();
+    fetchHistory.mockResolvedValueOnce(page('m', 500, 50));
+    jest.mocked(messageService.hasNewerMessages).mockRejectedValueOnce(new Error('réseau'));
+    await act(async () => hook.result.current.loadNewer());
+    expect(ids(hook)[0]).toBe('m500');
+    expect(hook.result.current.hasNewer).toBe(true);
+  });
+
+  it('ignore une page plus récente arrivée après un nouveau saut', async () => {
+    const hook = await anchored();
+    let resolve!: (messages: ChatMessage[]) => void;
+    fetchHistory.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    let pending!: Promise<void>;
+    await act(async () => { pending = hook.result.current.loadNewer(); });
+    fetchHistory.mockResolvedValueOnce([msg('autre', 3000)]).mockResolvedValueOnce([]);
+    expect(await jump(hook, 'autre')).toBe(true);
+    await act(async () => { resolve([msg('tardif', 1)]); await pending; });
+    expect(ids(hook)).toEqual(['autre']);
+  });
+
+  it('ignore l’échec d’une page plus récente arrivé après un nouveau saut', async () => {
+    const hook = await anchored();
+    let reject!: (error: Error) => void;
+    fetchHistory.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    let pending!: Promise<void>;
+    await act(async () => { pending = hook.result.current.loadNewer(); });
+    fetchHistory.mockResolvedValueOnce([msg('autre', 3000)]).mockResolvedValueOnce([]);
+    expect(await jump(hook, 'autre')).toBe(true);
+    await act(async () => { reject(new Error('réseau')); await pending; });
+    expect(hook.result.current.olderError).toBeNull();
+    expect(hook.result.current.loadingNewer).toBe(false);
+  });
+
+  it('ignore une page plus récente arrivée après un changement de conversation', async () => {
+    const hook = await anchored();
+    let resolve!: (messages: ChatMessage[]) => void;
+    fetchHistory.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    let pending!: Promise<void>;
+    await act(async () => { pending = hook.result.current.loadNewer(); });
+    fetchHistory.mockResolvedValueOnce([msg('ailleurs', 0)]);
+    await hook.rerender({ conversation: `dm:${TARGET}` });
+    await waitFor(() => expect(ids(hook)).toEqual(['ailleurs']));
+    await act(async () => { resolve([msg('tardif', 1)]); await pending; });
+    expect(ids(hook)).toEqual(['ailleurs']);
+  });
+
+  it('un envoi depuis une fenêtre ancienne revient aux messages récents', async () => {
+    const hook = await anchored();
+    const sent = { ...msg('envoye', -1), senderId: ME };
+    jest.mocked(messageService.sendMessage).mockResolvedValueOnce(sent);
+    fetchHistory.mockResolvedValueOnce([sent, msg('recent', 0)]);
+    await act(async () => hook.result.current.send('bonjour'));
+    expect(hook.result.current.hasNewer).toBe(false);
+    expect(ids(hook)).toEqual(['envoye', 'recent']);
+    expect(fetchHistory).toHaveBeenLastCalledWith(`dm:${OLI}`);
+  });
 });
