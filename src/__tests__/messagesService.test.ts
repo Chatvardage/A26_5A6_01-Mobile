@@ -1,6 +1,6 @@
 import * as http from '@/services/httpClient';
 import { ApiError } from '@/services/ApiError';
-import { belongsTo, deleteMessage, editMessage, fetchHistory, mergeMessages, sendMessage } from '@/services/messagesService';
+import { belongsTo, deleteMessage, editMessage, fetchHistory, hasNewerMessages, mergeMessages, sendMessage } from '@/services/messagesService';
 
 jest.mock('@/services/httpClient');
 const apiFetch = http.apiFetch as jest.Mock;
@@ -24,6 +24,21 @@ const msg = (id: string, createdAt: string) => ({
 });
 
 beforeEach(() => apiFetch.mockReset());
+
+describe('hasNewerMessages', () => {
+  it.each(['dm', 'room'])('vérifie le dernier message %s avec une seule ligne sans lookup', async kind => {
+    apiFetch.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'suivant' }]);
+    expect(await hasNewerMessages(`${kind}:${DM}`, 'borne')).toBe(false);
+    expect(await hasNewerMessages(`${kind}:${DM}`, 'borne')).toBe(true);
+    const path = kind === 'dm' ? `/api/messages/history/${DM}` : `/api/messages/rooms/${DM}/history`;
+    expect(apiFetch).toHaveBeenCalledWith(`${path}?limit=1&cursor=borne&direction=after`);
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+  it('rejette une réponse invalide', async () => {
+    apiFetch.mockResolvedValue(null);
+    await expect(hasNewerMessages(`dm:${DM}`, 'borne')).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+});
 
 describe('fetchHistory', () => {
   it('tolère un auteur absent et une résolution des pseudos indisponible', async () => {
@@ -287,5 +302,25 @@ describe('deleteMessage', () => {
     expect(apiFetch).not.toHaveBeenCalled();
     apiFetch.mockRejectedValueOnce(Object.assign(new Error('403'), { kind: 'forbidden' }));
     await expect(deleteMessage(`dm:${ROOM}`, MESSAGE)).rejects.toMatchObject({ kind: 'forbidden' });
+  });
+});
+
+describe('fenêtre autour d’un message et accusés de réception', () => {
+  it('demande la page autour d’un message ou après lui, et garde la date de réception', async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.startsWith('/api/users/lookup') ? [] : [{ ...msg('reçu', '2026-10-01T10:00:00Z'), deliveredAt: '2026-10-01T10:00:05Z' }],
+    );
+    const [message] = await fetchHistory(`dm:${DM}`, 50, undefined, { around: 'cible' });
+    expect(apiFetch).toHaveBeenCalledWith(`/api/messages/history/${DM}?limit=50&around=cible`);
+    expect(message.deliveredAt).toBe('2026-10-01T10:00:05Z');
+    await fetchHistory(`room:${ROOM}`, 50, 'cible', { direction: 'after' });
+    expect(apiFetch).toHaveBeenCalledWith(`/api/messages/rooms/${ROOM}/history?limit=50&cursor=cible&direction=after`);
+  });
+
+  it('une mise à jour sans date de réception garde celle déjà connue', () => {
+    const delivered = { ...baseMessage('m', '2026-10-01T10:00:00Z'), deliveredAt: '2026-10-01T10:00:05Z' };
+    const edited = { ...baseMessage('m', '2026-10-01T10:00:00Z', '2026-10-01T10:05:00Z'), content: 'modifié' };
+    const [merged] = mergeMessages([delivered], [edited]);
+    expect(merged).toMatchObject({ content: 'modifié', deliveredAt: '2026-10-01T10:00:05Z' });
   });
 });

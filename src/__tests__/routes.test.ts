@@ -1,4 +1,4 @@
-import { parseConversationParams, parseServerParams } from '@/navigation/routes';
+import { parseConversationParams, parseRoomParams, parseServerParams } from '@/navigation/routes';
 import { parseConversationId, toConversationId } from '@/types/conversationId';
 
 const UUID = '0b7d6f3e-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
@@ -70,5 +70,15 @@ describe('message à atteindre', () => {
     expect(params?.conversationId).toBe(`dm:${UUID}`);
     expect(params?.messageId).toBeUndefined();
     expect(params?.focusToken).toBeUndefined();
+  });
+});
+
+describe('parseRoomParams', () => {
+  it('exige un serveur et un salon valides', () => {
+    expect(parseRoomParams({ serverId: UUID, roomId: UUID })).toEqual({ serverId: UUID, roomId: UUID });
+    expect(parseRoomParams({ serverId: UUID })).toBeNull();
+    expect(parseRoomParams({ serverId: UUID, roomId: 'salon' })).toBeNull();
+    expect(parseRoomParams({ serverId: 'x', roomId: UUID })).toBeNull();
+    expect(parseRoomParams(null)).toBeNull();
   });
 });

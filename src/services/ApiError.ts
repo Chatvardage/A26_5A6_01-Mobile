@@ -1,4 +1,4 @@
-import { getTranslations } from '@/i18n';
+import { getTranslations, type Translations } from '@/i18n';
 
 export type ApiErrorKind =
   | 'network'
@@ -13,6 +13,7 @@ export type ApiErrorKind =
   | 'invalid_response'
   | 'storage'
   | 'conflict'
+  | 'wrong_password' // Mot de passe actuel refusé (modifier le mot de passe, supprimer le compte).
   | 'rate_limit'; // Compatibilité avec les consommateurs auth historiques ; message de tentatives limitées.
 
 export class ApiError extends Error {
@@ -38,12 +39,12 @@ export function kindFromStatus(status: number): ApiErrorKind {
 }
 
 /** Message affichable à l'utilisateur (jamais de détail technique). */
-export function userMessage(error: unknown): string {
-  const strings = getTranslations();
+export function userMessage(error: unknown, strings: Translations = getTranslations()): string {
   if (error instanceof ApiError) {
     const messages = {
       bad_request: strings.errors.badRequest,
       conflict: strings.errors.conflict,
+      wrong_password: strings.errors.wrongPassword,
       rate_limit: strings.errors.rateLimit,
       rate_limited: strings.errors.rateLimited,
       storage: strings.errors.storage,

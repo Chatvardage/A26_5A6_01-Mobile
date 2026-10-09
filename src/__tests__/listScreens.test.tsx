@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 
 import { useDirectMessages } from '@/hooks/useDirectMessages';
 import { useServerChannels } from '@/hooks/useServerChannels';
@@ -14,6 +14,8 @@ jest.mock('@/hooks/useDirectMessages');
 jest.mock('@/hooks/useServerChannels');
 jest.mock('@/hooks/useServers');
 jest.mock('@/hooks/useRefreshOnFocus', () => ({ useRefreshOnFocus: jest.fn() }));
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => ({}) }));
+jest.mock('@/services/usersService', () => ({ ...jest.requireActual('@/services/usersService'), lookupPseudos: jest.fn(async () => ({ [SERVER_ID]: 'alice42' })) }));
 jest.mock('@/session/SessionContext', () => ({ useSession: () => ({ user: { id: 'me' }, realtime: { subscribe: () => () => undefined } }) }));
 
 const SERVER_ID = '11111111-1111-4111-8111-111111111111';
@@ -24,7 +26,7 @@ const conversation: ConversationSummary = {
   id: `dm:${SERVER_ID}`, kind: 'dm', title: 'Alice', unreadCount: 0,
   lastMessage: { id: 'message', content: 'Bonjour', senderId: 'alice', createdAt: '2026-10-01T10:00:00Z' },
 };
-const channel: ConversationSummary = { ...conversation, id: `room:${SERVER_ID}`, kind: 'room', title: 'Général' };
+const channel: ConversationSummary = { ...conversation, id: `room:${SERVER_ID}`, kind: 'room', title: 'général' };
 const server: ServerSummary = { id: SERVER_ID, name: 'Équipe', memberCount: 2, channelIds: [channel.id], unreadCount: 1 };
 
 const targets = [
@@ -32,19 +34,19 @@ const targets = [
     name: 'messages privés', hook: useDirectMessages as jest.Mock, loading: 'Chargement des messages privés…',
     empty: 'Aucun message privé', data: [conversation, { ...conversation, id: 'second' }], button: /Alice/,
     destination: ['Conversation', { conversationId: conversation.id, title: 'Alice' }],
-    element: () => <DirectMessagesScreen navigation={{ navigate } as never} route={{} as never} />,
+    element: () => <DirectMessagesScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{} as never} />,
   },
   {
     name: 'serveurs', hook: useServers as jest.Mock, loading: 'Chargement des serveurs…',
     empty: 'Aucun serveur', data: [server, { ...server, id: 'second' }], button: /Équipe/,
     destination: ['Server', { serverId: SERVER_ID, title: 'Équipe' }],
-    element: () => <ServersScreen navigation={{ navigate } as never} route={{} as never} />,
+    element: () => <ServersScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{} as never} />,
   },
   {
     name: 'salons', hook: useServerChannels as jest.Mock, loading: 'Chargement des salons…',
-    empty: 'Aucun salon', data: { channels: [channel, { ...channel, id: 'second' }] }, button: /Général/,
-    destination: ['Conversation', { conversationId: channel.id, title: 'Général' }],
-    element: () => <ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: SERVER_ID } } as never} />,
+    empty: 'Aucun salon', data: { channels: [channel, { ...channel, id: 'second' }] }, button: /général/,
+    destination: ['Conversation', { conversationId: channel.id, title: 'général' }],
+    element: () => <ServerScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{ params: { serverId: SERVER_ID } } as never} />,
   },
 ];
 
@@ -65,7 +67,6 @@ describe.each(targets)('Écran $name', ({ hook, loading, empty, data, button, de
     setState({ status: 'empty' });
     await view.rerender(element());
     expect(screen.getByText(empty)).toBeTruthy();
-    expect(screen.getByTestId('refreshable-state').props.refreshControl.props.onRefresh).toBe(refresh);
     await act(async () => { screen.getByTestId('refreshable-state').props.refreshControl.props.onRefresh(); });
     expect(refresh).toHaveBeenCalledTimes(1);
   });
@@ -82,7 +83,7 @@ describe.each(targets)('Écran $name', ({ hook, loading, empty, data, button, de
 });
 
 it('refuse un serveur invalide avant d’appeler le hook', async () => {
-  await render(<ServerScreen navigation={{ navigate } as never} route={{ params: { serverId: 'invalide' } } as never} />);
+  await render(<ServerScreen navigation={{ navigate, setOptions: jest.fn() } as never} route={{ params: { serverId: 'invalide' } } as never} />);
   expect(screen.getByText('Ce serveur est introuvable.')).toBeTruthy();
   expect(useServerChannels).not.toHaveBeenCalled();
 });
@@ -105,4 +106,23 @@ describe('Carte de nouveau message privé', () => {
     await fireEvent.press(button);
     expect(navigate).toHaveBeenCalledWith('NewDirectMessage');
   });
+});
+
+it('la liste des serveurs ouvre la création d’un serveur', async () => {
+  jest.mocked(useServers).mockReturnValue({ state: { status: 'ready', data: [server] }, refreshing: false, refreshError: null, retry, refresh });
+  await render(targets[1].element());
+  await fireEvent.press(screen.getByRole('button', { name: 'Créer un serveur' }));
+  expect(navigate).toHaveBeenCalledWith('DiscoverServers', { mode: 'create' });
+});
+
+it('un appui long sur un message privé ouvre la fiche de profil, qui ouvre la conversation', async () => {
+  jest.mocked(useDirectMessages).mockReturnValue({ state: { status: 'ready', data: [conversation] }, refreshing: false, refreshError: null, retry, refresh });
+  await render(targets[0].element());
+  const item = screen.getByRole('button', { name: /^Alice/ });
+  expect(item.props.accessibilityHint).toBe('Maintenir pour voir le profil');
+  await fireEvent(item, 'longPress');
+  const sheet = within(screen.getByTestId('profile-sheet'));
+  expect(await sheet.findByText('@alice42')).toBeTruthy();
+  await fireEvent.press(sheet.getByRole('button', { name: 'Message privé' }));
+  expect(navigate).toHaveBeenCalledWith('Conversation', { conversationId: `dm:${SERVER_ID}`, title: 'alice42' });
 });

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { confirmDelivery } from '@/services/receipts.service';
 import { ApiError, userMessage } from '@/services/ApiError';
 import {
   belongsTo,
   deleteMessage,
   editMessage,
   fetchHistory,
+  hasNewerMessages,
   mergeMessages,
   sendMessage,
   type RawMessage,
@@ -16,10 +18,28 @@ import type { ChatMessage } from '@/types/conversation';
 import { parseConversationId } from '@/types/conversationId';
 
 const PAGE_SIZE = 50;
+
+/**
+ * Fenêtre autour d'un message cherché : la cible et les plus anciens (`around`), puis jusqu'à une page de
+ * messages plus récents. Une petite conversation s'affiche donc en entier, sans « Charger les messages plus
+ * récents » ; `more` ne reste vrai que s'il en existe au-delà (ou si la vérification échoue). `older` : y a-t-il
+ * encore des messages plus anciens que la fenêtre.
+ */
+async function fetchWindow(conversationId: string, messageId: string): Promise<{ page: ChatMessage[]; more: boolean; older: boolean }> {
+  const older = await fetchHistory(conversationId, PAGE_SIZE, undefined, { around: messageId });
+  const hasOlder = older.length === PAGE_SIZE;
+  if (!older[0]) return { page: older, more: false, older: false };
+  try {
+    const newer = await fetchHistory(conversationId, PAGE_SIZE, older[0].id, { direction: 'after' });
+    const more = newer.length === PAGE_SIZE ? await hasNewerMessages(conversationId, newer[0].id).catch(() => true) : false;
+    return { page: [...newer, ...older], more, older: hasOlder };
+  } catch {
+    return { page: older, more: true, older: hasOlder };
+  }
+}
+
 /** Suppressions mémorisées (pour ignorer une réponse tardive qui les ramènerait) : les plus anciennes sont oubliées. */
 const MAX_DELETED_IDS = 500;
-/** Garde-fou comme le client Web : au plus 20 pages (1 000 messages) chargées pour atteindre un message. */
-const MAX_JUMP_PAGES = 20;
 type Status = 'loading' | 'error' | 'ready';
 
 function normalizeEvent(raw: RawMessage, senderId: string, senderName?: string): ChatMessage {
@@ -30,10 +50,11 @@ function normalizeEvent(raw: RawMessage, senderId: string, senderName?: string):
     content: raw.content,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+    ...(raw.deliveredAt ? { deliveredAt: raw.deliveredAt } : {}),
   };
 }
 
-export function useMessages(conversationId: string, currentUserId: string) {
+export function useMessages(conversationId: string, currentUserId: string, initialMessageId?: string) {
   const { realtime } = useSession();
   const { getRealtimeState, joinRoom, leaveRoom, onConnectionState, onReady, subscribe } = realtime;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -60,6 +81,12 @@ export function useMessages(conversationId: string, currentUserId: string) {
   const subscriptionFailed = useRef(false);
   const [subscriptionAttempt, setSubscriptionAttempt] = useState(0);
   const recentRequest = useRef(0);
+  const windowRequest = useRef(0);
+  const anchor = useRef<string | null>(initialMessageId ?? null);
+  const newerAvailable = useRef(false);
+  const [hasNewer, setHasNewer] = useState(false);
+  const [loadingNewer, setLoadingNewer] = useState(false);
+  const [jumping, setJumping] = useState(false);
 
   const updateStatus = useCallback((next: Status) => {
     statusRef.current = next;
@@ -94,15 +121,21 @@ export function useMessages(conversationId: string, currentUserId: string) {
       setErrorMessage(null);
     }
     try {
-      const page = await fetchHistory(conversationId);
+      const { page, more, older } = anchor.current
+        ? await fetchWindow(conversationId, anchor.current)
+        : await fetchHistory(conversationId).then(recent => ({ page: recent, more: false, older: recent.length === PAGE_SIZE }));
       if (requestGeneration !== generation.current || requestId !== recentRequest.current) return;
+      newerAvailable.current = more;
+      setHasNewer(more);
+      if (!more) anchor.current = null;
       for (const message of page) {
+        if (conversationId.startsWith('dm:') && message.senderId !== currentUserId && !message.deliveredAt) void confirmDelivery(message.id).catch(() => undefined);
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
       }
       const buffered = initial ? eventBuffer.current : [];
       updateMessages([...page, ...buffered]);
       if (initial) eventBuffer.current = [];
-      if (initial) setHasOlder(page.length === PAGE_SIZE);
+      if (initial) setHasOlder(older);
       firstLoadDone.current = true;
       updateStatus('ready');
       setErrorMessage(null);
@@ -111,15 +144,22 @@ export function useMessages(conversationId: string, currentUserId: string) {
       setErrorMessage(userMessage(error));
       if (initial) updateStatus('error');
     }
-  }, [conversationId, updateMessages, updateStatus]);
+  }, [conversationId, currentUserId, updateMessages, updateStatus]);
 
   useEffect(() => {
     const ref = parseConversationId(conversationId);
     const currentGeneration = ++generation.current;
     let joinGeneration = 0;
     messagesRef.current = [];
-    // La conversation est une frontière d'état: son changement invalide immédiatement la liste précédente.
+    anchor.current = initialMessageId ?? null;
+    newerAvailable.current = Boolean(initialMessageId);
+    windowRequest.current++;
+    // La conversation change : ses indicateurs sont reinitialises avec sa liste.
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHasNewer(Boolean(initialMessageId));
+    setLoadingNewer(false);
+    setJumping(false);
+    // La conversation est une frontière d'état: son changement invalide immédiatement la liste précédente.
     setMessages([]);
     updateStatus('loading');
     setErrorMessage(null);
@@ -141,6 +181,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       if (typeof message.id !== 'string' || typeof message.content !== 'string') return;
       const senderId = message.senderId ?? message.authorId;
       if (!senderId) return;
+      if (newerAvailable.current && !messagesRef.current.some(item => item.id === message.id)) return;
       const incoming = normalizeEvent(message, senderId, pseudoCache.current.get(senderId));
       try {
         if (firstLoadDone.current) updateMessages([incoming]);
@@ -204,6 +245,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
         : [
             ['private-message.created', receive],
             ['private-message.updated', receive],
+            ['private-message.delivered', receive],
             ['private-message.deleted', removed],
           ] as const;
 
@@ -250,7 +292,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       if (ref?.kind === 'room') void leaveRoom(ref.targetId).catch(() => undefined);
     };
-  }, [conversationId, currentUserId, forget, getRealtimeState, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
+  }, [conversationId, currentUserId, initialMessageId, forget, getRealtimeState, joinRoom, leaveRoom, loadRecent, onConnectionState, onReady, subscribe, subscriptionAttempt, updateMessages, updateStatus]);
 
   const retry = useCallback(() => {
     if (subscriptionFailed.current) setSubscriptionAttempt((attempt) => attempt + 1);
@@ -261,6 +303,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     if (statusRef.current !== 'ready' || olderInFlight.current || !hasOlder) return;
     const oldest = messagesRef.current.at(-1);
     if (!oldest) return;
+    const windowVersion = windowRequest.current;
     setLoadingOlder(true);
     setOlderError(null);
     const requestGeneration = generation.current;
@@ -269,7 +312,7 @@ export function useMessages(conversationId: string, currentUserId: string) {
     olderInFlight.current = inFlight;
     try {
       const page = await fetchHistory(conversationId, PAGE_SIZE, oldest.id);
-      if (requestGeneration !== generation.current) return;
+      if (requestGeneration !== generation.current || windowVersion !== windowRequest.current) return;
       for (const message of page) {
         if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
       }
@@ -277,10 +320,10 @@ export function useMessages(conversationId: string, currentUserId: string) {
       hasOlderRef.current = page.length === PAGE_SIZE;
       setHasOlder(hasOlderRef.current);
     } catch (error) {
-      if (requestGeneration === generation.current) setOlderError(userMessage(error));
+      if (requestGeneration === generation.current && windowVersion === windowRequest.current) setOlderError(userMessage(error));
     } finally {
       if (olderInFlight.current === inFlight) olderInFlight.current = null;
-      if (requestGeneration === generation.current) setLoadingOlder(false);
+      if (requestGeneration === generation.current && windowVersion === windowRequest.current) setLoadingOlder(false);
       release();
     }
   }, [conversationId, hasOlder, updateMessages]);
@@ -289,50 +332,91 @@ export function useMessages(conversationId: string, currentUserId: string) {
     hasOlderRef.current = hasOlder;
   }, [hasOlder]);
 
-  /**
-   * Charge les pages plus anciennes, sans trou, jusqu'à `messageId` (résultat de recherche), comme
-   * « Charger plus » sur le Web. Retourne `false` si le message est introuvable (trop ancien ou supprimé).
-   */
-  const jumpTo = useCallback(
-    async (messageId: string): Promise<boolean> => {
-      const requestGeneration = generation.current;
-      for (let page = 0; ; page++) {
-        // Une page ancienne déjà en cours (défilement) : l'attendre, puis réévaluer avec les messages qu'elle apporte.
-        while (olderInFlight.current) await olderInFlight.current;
-        if (requestGeneration !== generation.current) return false;
-        if (messagesRef.current.some((message) => message.id === messageId)) return true;
-        const oldest = messagesRef.current.at(-1);
-        if (statusRef.current !== 'ready' || !oldest || !hasOlderRef.current || page >= MAX_JUMP_PAGES) return false;
-        let release!: () => void;
-        const inFlight = new Promise<void>((resolve) => (release = resolve));
-        olderInFlight.current = inFlight;
-        try {
-          const previous = await fetchHistory(conversationId, PAGE_SIZE, oldest.id);
-          if (requestGeneration !== generation.current) return false;
-          for (const message of previous) {
-            if (message.senderName) pseudoCache.current.set(message.senderId, message.senderName);
-          }
-          updateMessages(previous);
-          hasOlderRef.current = previous.length === PAGE_SIZE;
-          setHasOlder(hasOlderRef.current);
-        } catch {
-          return false;
-        } finally {
-          if (olderInFlight.current === inFlight) olderInFlight.current = null;
-          release();
-        }
+  /** Une seule page part du message recherche; aucun historique intermediaire n'est charge. */
+  const jumpTo = useCallback(async (messageId: string): Promise<boolean> => {
+    // Toujours remonter la liste sous le chargement, mais réutiliser les messages déjà disponibles.
+    const requestGeneration = generation.current;
+    const version = ++windowRequest.current;
+    recentRequest.current++;
+    setJumping(true);
+    setLoadingOlder(false);
+    setLoadingNewer(false);
+    try {
+      const cached = messagesRef.current;
+      const index = cached.findIndex(message => message.id === messageId);
+      let window: Awaited<ReturnType<typeof fetchWindow>>;
+      if (index !== -1) {
+        const start = Math.max(0, index - PAGE_SIZE);
+        const end = Math.min(cached.length, index + PAGE_SIZE + 1);
+        window = { page: cached.slice(start, end), more: start > 0 || newerAvailable.current, older: end < cached.length || hasOlderRef.current };
+        // Une image suffit à afficher le chargement et démonter la liste, sans ajouter de délai réseau.
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      } else {
+        window = await fetchWindow(conversationId, messageId);
       }
-    },
-    [conversationId, updateMessages],
-  );
+      const { page, more, older } = window;
+      if (requestGeneration !== generation.current || version !== windowRequest.current) return false;
+      if (!page.some(message => message.id === messageId) || deletedIds.current.has(messageId)) return false;
+      anchor.current = more ? messageId : null;
+      newerAvailable.current = more;
+      setHasNewer(more);
+      messagesRef.current = [];
+      updateMessages(page);
+      hasOlderRef.current = older;
+      setHasOlder(hasOlderRef.current);
+      setLoadingOlder(false);
+      setOlderError(null);
+      return true;
+    } catch { return false; }
+    finally { if (requestGeneration === generation.current && version === windowRequest.current) setJumping(false); }
+  }, [conversationId, updateMessages]);
+
+  const loadNewer = useCallback(async () => {
+    const newest = messagesRef.current[0];
+    if (!newerAvailable.current || olderInFlight.current || !newest) return;
+    const requestGeneration = generation.current;
+    const version = windowRequest.current;
+    let release!: () => void;
+    const inFlight = new Promise<void>(resolve => { release = resolve; });
+    olderInFlight.current = inFlight;
+    setLoadingNewer(true);
+    setOlderError(null);
+    try {
+      const page = await fetchHistory(conversationId, PAGE_SIZE, newest.id, { direction: 'after' });
+      const more = page.length === PAGE_SIZE
+        ? await hasNewerMessages(conversationId, page[0].id).catch(() => true)
+        : false;
+      if (requestGeneration !== generation.current || version !== windowRequest.current) return;
+      updateMessages(page);
+      newerAvailable.current = more;
+      setHasNewer(newerAvailable.current);
+      if (!newerAvailable.current) anchor.current = null;
+    } catch (error) {
+      if (requestGeneration === generation.current && version === windowRequest.current) setOlderError(userMessage(error));
+    } finally {
+      if (olderInFlight.current === inFlight) olderInFlight.current = null;
+      if (requestGeneration === generation.current && version === windowRequest.current) setLoadingNewer(false);
+      release();
+    }
+  }, [conversationId, updateMessages]);
 
   const send = useCallback(
     async (text: string) => {
       const requestGeneration = generation.current;
       const sent = await sendMessage(conversationId, text);
-      if (requestGeneration === generation.current) updateMessages([sent]);
+      if (requestGeneration === generation.current) {
+        if (anchor.current) {
+          windowRequest.current++;
+          anchor.current = null;
+          newerAvailable.current = false;
+          setHasNewer(false);
+          messagesRef.current = [];
+          updateMessages([sent]);
+          await loadRecent();
+        } else updateMessages([sent]);
+      }
     },
-    [conversationId, updateMessages],
+    [conversationId, loadRecent, updateMessages],
   );
 
   const edit = useCallback(
@@ -353,5 +437,5 @@ export function useMessages(conversationId: string, currentUserId: string) {
     [conversationId, forget],
   );
 
-  return { messages, status, errorMessage, accessError, hasOlder, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove };
+  return { hasNewer, loadingNewer, loadNewer, jumping, messages, status, errorMessage, accessError, hasOlder, loadingOlder, olderError, connection, retry, loadOlder, jumpTo, send, edit, remove };
 }

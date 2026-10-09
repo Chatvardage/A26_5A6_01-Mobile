@@ -285,7 +285,10 @@ Les messages privés (`dm:<uuid>`) et les salons (`room:<uuid>`) utilisent le m�
 | Connexion WebSocket | Socket unique sur `/messages`, chemin `/socket.io`, jeton dans `auth.token`, abonnement aux salons après `connexion.prete` | `websocketService`, `SessionManager` |
 | Réception temps réel | Événements `private-message.created` et `room-message.created`, filtrage par conversation et tampon pendant le chargement initial | `useMessages` |
 | Modification | Appui long uniquement sur son propre message, préremplissage, enregistrement PATCH et annulation ; l'API reste responsable des permissions | `MessageBubble`, `MessageInput`, `messagesService` |
-| Suppression | Appui long sur son propre message : menu Modifier / Supprimer / Annuler ; dans un salon, un modérateur, le propriétaire du serveur ou un administrateur peut aussi supprimer le message d'un autre (menu Supprimer / Annuler seulement : la modification reste réservée à l'auteur, texte de confirmation propre à la modération). Le droit vient de `monRole` de `GET /api/servers` (`useCanModerate`, relu à chaque `serveur.change`) ; « Supprimer » demande une confirmation définitive, puis `DELETE` (message privé : `/api/messages/:id` ; salon : `/api/messages/rooms/:roomId/:id`). Le message disparaît de la liste, la raison d'un refus s'affiche sans retirer le message ; supprimer le message en cours de modification quitte la modification | `ConversationScreen`, `useCanModerate`, `useMessages.remove`, `messagesService.deleteMessage`, `serversService.fetchCanModerate` |
+| Suppression | Appui long sur son propre message : dialogue au style de l'app (`AppDialog`) qui cite le message, Annuler à gauche, Modifier puis Supprimer à droite ; dans un salon, un modérateur, le propriétaire du serveur ou un administrateur peut aussi supprimer le message d'un autre (Annuler / Supprimer seulement : la modification reste réservée à l'auteur, texte de confirmation propre à la modération). Le droit vient de `monRole` de `GET /api/servers` (`useCanModerate`, relu à chaque `serveur.change`) ; « Supprimer » demande une confirmation définitive, puis `DELETE` (message privé : `/api/messages/:id` ; salon : `/api/messages/rooms/:roomId/:id`). Le message disparaît de la liste, la raison d'un refus s'affiche sans retirer le message ; supprimer le message en cours de modification quitte la modification | `ConversationScreen`, `useCanModerate`, `useMessages.remove`, `messagesService.deleteMessage`, `serversService.fetchCanModerate` |
+| Serveurs | Découverte : invitations en haut, puis les serveurs publics proposés par pages de 20 (`GET /api/servers/decouvrir?q=&decalage=&limite=`), « Afficher plus de serveurs » et recherche par nom en direct. Gestion : la modification d'un salon ouvre son propre écran (`EditRoom`) ; les confirmations (supprimer, quitter, expulser) passent par `AppDialog`. Invitation reçue (`serveur.change`, raison `invitation`, `cibleId` = moi) : notification locale avec le nom du serveur en mode « Notifications système », son toucher ouvre les invitations | `DiscoverServersScreen`, `useDiscoverServers`, `ManageServerScreen`, `EditRoomScreen`, `AppDialog`, `useInvitationAlerts` |
+| Listes | Serveurs triés par dernière activité (`GET /api/messages/activity`, dernier message de leurs salons) et messages privés par dernier message ; 15 éléments à la fois avec « Afficher plus ». Loupe dans l'en-tête des deux onglets : filtre par nom (sans casse ni accents). Pastille du nombre d'invitations en attente sur « Découvrir des serveurs » et sur l'onglet Serveurs de la barre de navigation (`InvitationsProvider`) | `ServersScreen`, `DirectMessagesScreen`, `usePagedList`, `useListFilter`, `HeaderSearchButton`, `InvitationsProvider`, `serversService` |
+| Compte | Paramètres › Compte : modifier le mot de passe (mot de passe actuel exigé ; Authentification révoque tous les jetons, la session est rouverte avec le nouveau) et supprimer le compte (mot de passe actuel puis confirmation). Un mot de passe actuel faux (401) n'ouvre ni ne ferme la session : « Mot de passe actuel incorrect » | `AccountSection`, `SessionManager.changePassword` / `deleteAccount`, `authService` |
 | Réception des suppressions | Événements `private-message.deleted` et `room-message.deleted` (suppression depuis un autre appareil ou le Web) : le message est retiré de la liste et du tampon de chargement ; un message supprimé ne réapparaît pas avec une page REST arrivée en retard | `useMessages` |
 | Réception des modifications | Événements `private-message.updated` et `room-message.updated`, remplacement du contenu sans ajouter de ligne | `useMessages` |
 | Mention « modifié » | Affichée lorsque les instants `updatedAt` et `createdAt` diffèrent | `MessageBubble` |
@@ -293,6 +296,9 @@ Les messages privés (`dm:<uuid>`) et les salons (`room:<uuid>`) utilisent le m�
 | Suppression des doublons | Fusion par identifiant entre historique, pagination, réponses POST/PATCH et événements ; conservation de la version au `updatedAt` le plus récent | `mergeMessages` |
 | Texte non envoyé | Brouillon par conversation, restauré après navigation et passage en modification ; conservé sur erreur ou si le texte change pendant l'envoi, effacé après succès seulement | `MessageInput` |
 | Chargement et erreurs | États initial/vide/erreur avec nouvelle tentative, indicateur de pagination, erreurs d'envoi/modification et bandeau de connexion | `ConversationScreen`, `MessageInput`, `useMessages` |
+| Alias | Le nom affiché d'une personne est son alias (Paramètres › Profil) s'il en a choisi un, sinon son pseudo : messages, titre d'une conversation privée, liste des messages privés, recherche et résumé de recherche, choix du destinataire (alias puis `@pseudo`), membres d'un serveur et titre des notifications. Un alias ajouté, modifié ou retiré sur un autre appareil (`profil.changed`) est repris sans rouvrir l'écran ; une panne des profils publics laisse les pseudos | `lookupDisplayNames`, `usePublicProfiles`, `useRefreshOnProfileChange`, `UserChoiceItem` |
+| Fiche de profil | Photo (ou initiale), nom affiché, `@pseudo`, présence, alias et pseudo, et un bouton « Message privé ». Ouverte par un appui long sur une conversation de la liste des messages privés, un toucher sur la photo de l'auteur d'un message (salon ou message privé ; pas le message système) et un toucher sur la photo d'un membre d'un serveur. Pas de bouton sur sa propre fiche, ni vers la conversation privée déjà affichée ; l'appui long sur un message garde ses actions (modifier, supprimer). Dans la liste des membres, sa propre ligne n'a ni pastille de présence ni fiche. La fiche reprend les profils déjà suivis par l'écran qui l'ouvre : son « En ligne / Hors ligne » est celui de la pastille | `ProfileSheet` (`useProfileSheet`), `ConversationItem`, `MessageBubble`, `ServerMembersScreen` |
+| Présence | Un seul suivi de présence pour toute l'app : Message-Service ne garde qu'un `presence.suivre` par connexion (le dernier remplace les autres) et refuse deux demandes à moins d'une seconde. `usePublicProfiles` envoie donc une seule demande, l'union des personnes affichées par tous les écrans montés, regroupée et espacée d'au moins 1,1 s, renvoyée à chaque connexion prête ; les `presence.changed` s'appliquent à tous les écrans | `usePublicProfiles` |
 
 Le temps réel est configuré avant de publier une session connectée. Un renouvellement du jeton reconnecte le socket sans supprimer les abonnements ; une déconnexion ou révocation ferme le socket. Dès la première `connexion.prete`, puis à chaque reconnexion, l'historique récent est rechargé et fusionné sans vider les pages déjà chargées. Ce rattrapage couvre la fenêtre entre le premier chargement REST et l'arrivée des événements; une ancienne requête initiale ne remplace pas le résultat du rattrapage.
 
@@ -398,9 +404,9 @@ Le Frontend (`A26_5A6_01-Frontend/src/partage/`) contient la copie identique, te
 ## Recherche, réseau et notifications
 
 **Recherche** (`GET /api/messages/search`, 2 à 100 caractères, 20 résultats par page, curseur `nextCursor`)
-- Onglet **Recherche** : toutes les conversations accessibles, résultats regroupés (messages privés, puis un groupe par serveur avec le salon et l'auteur) ; le texte cherché est surligné. Toucher un résultat ouvre `Conversation` avec `{ conversationId, messageId, focusToken }` : l'écran charge les pages plus anciennes (`useMessages.jumpTo`, 20 pages au plus) jusqu'à ce message, défile jusqu'à lui et l'entoure 3 secondes, comme sur le Web ; s'il est introuvable (trop ancien ou supprimé), un avis s'affiche.
+- Onglet **Recherche** : `GET /api/messages/search/summary` fournit les comptes complets par interlocuteur et par serveur, séparés en deux catégories. Huit personnes et huit serveurs sont affichés au départ, avec « Voir plus » indépendant sous chaque catégorie au-delà de huit éléments (huit supplémentaires par appui). Les groupes à zéro sont absents. Une personne ouvre `ConversationSearch` sur son DM avec le texte prérempli; un serveur ouvre `ServerSearch` sur ses seuls salons ayant des correspondances, puis un salon ouvre la même recherche directe. Le texte est conservé à chaque étape et les noms de serveurs identiques restent séparés par identifiant. Les résultats de messages surlignent le texte; toucher un résultat ouvre sa page directement, défile jusqu'au message et l'entoure 3 secondes. Un message devenu introuvable affiche un avis.
 - Bouton loupe dans l'en-tête d'une **conversation** (message privé ou salon) : route `ConversationSearch { conversationId, title? }`, recherche limitée à cette conversation (`conversationId=` côté API), comme sur le client Web. Les deux interlocuteurs d'un message privé peuvent chacun chercher dans leurs anciens messages ; dans un salon, la recherche porte sur le salon affiché. Le droit de lecture est vérifié par l'API (403 / 404). Toucher un résultat dépile jusqu'à la conversation déjà ouverte (`popTo`) et la place sur le message : plusieurs recherches de suite n'empilent donc rien, et la flèche de retour ramène directement à la liste.
-- `useSearch` : délai de frappe de 350 ms, annulation de la requête précédente, pagination sans doublon (`Plus de résultats` ou fin de liste).
+- `useSearch` et `useSearchSummary` : délai de frappe de 350 ms, annulation et invalidation de la requête précédente. Les messages se paginent sans doublon uniquement par « Plus de résultats ». Les résumés sont calculés côté service, sans télécharger les messages pour compter. Reconstruire Message-Service pour exposer `/api/messages/search/summary` avant d'utiliser le nouveau mobile; le Gateway relaie déjà cette famille de routes. Aucun changement du client Electron.
 
 **Réseau** : `network.adapter` (NetInfo) + état du canal temps réel → `useConnection` (`online`, `reconnecting`, `offline`) → bandeau `ConnectionStatus` affiché au-dessus de l'application avec une session ouverte. Le service temps réel est celui de la session (`useSession().realtime`). Le canal Socket.IO se reconnecte seul ; à chaque `connexion.prete`, les compteurs de non-lus sont rechargés par l'API et l'historique de la conversation ouverte est rattrapé par `useMessages` (fusion sans doublon). Le bandeau global est masqué dans une conversation, qui affiche déjà son propre état de connexion.
 
@@ -452,7 +458,7 @@ d'identifiants, l'ajout et la suppression de fichiers, et la lecture/écriture d
 projet Xcode temporaire. Ce test ne remplace pas une compilation iOS sur macOS.
 Retirer la surcharge lorsque `xcode` adoptera une version corrigée compatible.
 
-Au **4 octobre 2026**, deux avis HIGH restent sans version corrigée publiée :
+Au **9 octobre 2026**, deux avis HIGH restent sans version corrigée publiée :
 
 - [`node-forge` ≤ 1.4.0](https://github.com/advisories/GHSA-86w9-cpqp-85rv) :
   validation insuffisante des signatures RSA; utilisé par les outils Expo.
@@ -467,3 +473,67 @@ aux outils concernés, sans considérer cette précaution comme un correctif.
 Ne pas utiliser `npm audit fix --force` : la résolution proposée inclut une
 rétrogradation incompatible vers Expo 44. Vérifier les nouveaux correctifs avec
 `npm audit` et `npx expo install --check`, puis refaire les tests avant une mise à jour.
+
+Vérification du **9 octobre 2026**, avec Node **22.23.2** et le SDK Expo **57** :
+
+- `npx expo install --fix` confirme que les dépendances sont à jour.
+- `npm audit fix` ne modifie ni le manifeste ni le verrouillage et termine en échec
+  avec **49 alertes HIGH**, **0 CRITICAL**, provenant des deux avis ci-dessus.
+- Les dernières versions publiées sur npm sont toujours `braces@3.0.3` et
+  `node-forge@1.4.0`, toutes deux affectées. Les avis officiels indiquent qu'aucune
+  version corrigée n'est disponible.
+
+Il n'existe donc actuellement aucune correction par mise à jour de ces deux
+paquets. Une migration de Jest seule ne retire pas `braces` de la chaîne Metro.
+Le résultat attendu reste un audit en échec tant que ces dépendances sont présentes
+et affectées; cette vérification ne constitue pas une résolution des failles.
+
+### Préférences du téléphone et accueil
+
+Le thème clair/sombre et la langue suivent automatiquement les paramètres du téléphone. La langue enregistrée dans le profil serveur ne remplace pas celle du téléphone. Le français et l’anglais sont disponibles; les autres langues utilisent l’anglais. L’onglet Accueil propose des accès aux serveurs, messages privés, recherche et paramètres.
+
+### Conversation et messagerie : suivi des nouveaux messages
+
+Les nouveaux messages replaçent la conversation en bas si la distance au dernier message ne dépasse pas une page visible. Au-delà, la position de lecture est conservée. La hauteur visible tient compte du clavier. Les droits d’écriture sont relus après reconnexion et à chaque `serveur.change` ; pendant cette relecture, la zone de saisie garde le droit précédent au lieu de disparaître puis réapparaître (une révocation `room-message.revoked` la ferme immédiatement, et une perte de droit annoncée par `serveur.change` s’applique à l’arrivée de la réponse, le backend refusant l’envoi entre-temps). Les listes (serveurs, salons, messages privés) se mettent à jour en arrière-plan sans afficher le spinner, réservé au geste « tirer pour rafraîchir ». le rôle effectif fourni par Room-Service permet la compatibilité avec les anciennes réponses sans `peutEcrire`. Une interdiction explicite du serveur reste prioritaire.
+
+Un envoi réussi remet toujours la conversation en bas, quelle que soit la position de lecture. Le seuil d’une page concerne uniquement les messages reçus. Un envoi en erreur conserve la position et le brouillon.
+
+### Membres et modération
+
+La liste des membres affiche les avatars, la présence et le rôle effectif. Depuis cette liste, un modérateur peut choisir **Expulser**, puis confirmer. Le serveur valide les permissions : seuls les membres de rang inférieur peuvent être exclus; l’auto-exclusion et l’exclusion dans le serveur Chatvardage par défaut ne sont pas proposées. Après succès, la liste est relue; un refus conserve le membre et affiche une erreur.
+
+Les avatars sont alignés en haut de la bulle; la date et les accusés apparaissent dessous. Les champs de gestion du serveur utilisent une couleur d’indication adaptée au thème et la visibilité publique est centrée dans sa ligne.
+
+La date des messages reçus est alignée à gauche sous le début de la bulle. Celle de ses propres messages reste alignée à droite.
+
+Les boutons d’envoi, de modification, de recherche de destinataires et leurs libellés d’accessibilité suivent la langue du téléphone. Le message de bienvenue d’origine et son auteur Système sont traduits à l’affichage; le contenu des utilisateurs et les messages modifiés restent inchangés.
+
+### Conversation et messagerie : résultats anciens
+
+Un résultat de recherche ouvre une page directement depuis le message choisi, avec un indicateur de chargement puis une mise en évidence instantanée. Les messages intermédiaires ne sont plus chargés. La pagination reprend depuis cette position, vers les messages plus anciens ou plus récents. Une reconstruction locale de Message-Service est nécessaire pour activer les nouveaux paramètres `around` et `direction`.
+
+### Conversation et messagerie : pagination de recherche
+
+La cible de défilement reste en attente tant que le saut masque la liste (`jumping`), puis est appliquée après les événements natifs de dimensions et de contenu. Le chargement reste visible au-dessus de la liste transparente jusqu'à un placement précis et la confirmation que la cible est visible, suivis de deux images pour laisser le natif appliquer le déplacement. Les approximations nécessaires aux messages de hauteur variable restent masquées ; elles ne réactivent ni le suivi du dernier message, ni la pagination, ni le maintien automatique de position. Une nouvelle recherche ou le démontage annule les tentatives et la révélation précédentes. La mise en évidence de trois secondes commence à la révélation. Les tests couvrent les mesures tardives, les échecs successifs de placement et le retour de recherche avec le vrai hook de profils publics. Validation du rendu natif sur appareil à effectuer.
+
+Une nouvelle cible de navigation (`messageId` ou `focusToken`) affiche le chargement dès le premier rendu, avant le lancement des effets : l'ancienne liste ne passe plus par un rendu visible intermédiaire. La préparation du saut se fait avant la peinture (`useLayoutEffect`). Les régressions inspectent chaque rendu de la liste, pour une première ouverture ciblée et une conversation déjà ouverte, en DM et salon, avec une cible déjà chargée ou absente et une seconde sélection du même message.
+
+Chaque sélection de résultat remonte une fenêtre centrée sur le message. S'il est déjà chargé, ses messages sont réutilisés sans nouvelle requête ; une image permet d'afficher l'indicateur de chargement et de démonter la liste. Sinon, la fenêtre est lue sur le serveur. La fenêtre locale est limitée à 101 messages et la pagination reprend des deux côtés si des messages ont été retirés. Les lignes de la fenêtre ciblée sont rendues dès le montage, avec une taille de lot initial stable après la révélation, pour éviter les ajouts progressifs autour de la cible. Le contour de mise en évidence est dessiné en superposition et ne modifie jamais les dimensions de la bulle. L'indicateur reste affiché pendant le placement natif, sans animation de défilement ; une seconde sélection du même résultat suit le même chemin. Les tests couvrent les DM et salons, la réutilisation sans réseau, les curseurs d'une fenêtre locale réduite et le contour sans modification de mise en page. La fluidité native reste à confirmer sur appareil.
+
+La recherche générale montre les comptes par personne et serveur, avec « Voir plus » indépendant par catégorie; la recherche dans un DM ou un salon charge les messages suivants uniquement avec « Plus de résultats ». Le défilement n'ajoute pas automatiquement des lignes. Le retour d'un résultat vers une conversation déjà ouverte conserve son ancre initiale : seul le saut vers le message charge la nouvelle page, sans relancer le chargement initial en concurrence. Les régressions DM et salon vérifient la fin du chargement, le défilement et une seconde sélection du même résultat. Validation manuelle sur appareil non effectuée. Le bloc Chatvardage de l'accueil affiche le logo du frontend (déjà présent dans les ressources mobiles); les icônes des raccourcis sont conservées.
+
+### Conversation et messagerie : fin des messages récents
+
+Après une ouverture ciblée ou un saut de recherche, le mobile vérifie avec une requête d'historique limitée à un message si un résultat existe après le dernier message affiché. Le bouton « Charger les messages plus récents » est masqué quand cette borne est atteinte, y compris si la dernière page contient exactement 50 messages. La vérification ne résout pas les pseudos. Une panne de cette vérification conserve la possibilité de charger pour ne pas masquer des messages inconnus. Les régressions couvrent les DM, salons et pages pleines; validation manuelle sur appareil non effectuée.
+
+## Renforcement sécurité — 9 octobre 2026
+
+Un build de diffusion exige une origine explicite `EXPO_PUBLIC_API_URL=https://...`, sans identifiants, chemin, paramètres ou fragment. La déduction depuis Metro et HTTP sont réservés au développement. La recherche paginée partagée annule les requêtes remplacées et déduplique les résultats d'une même page; les fichiers partagés restent identiques au Frontend.
+
+L'override YAML concerne seulement l'outil `@istanbuljs/load-nyc-config`. Les versions Expo restent alignées sur le SDK 57 (`expo install --check`); ne pas utiliser `npm audit fix --force`.
+
+### Limites connues
+
+L'audit npm conserve des alertes élevées : [braces GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), utilisé par la chaîne Metro/Jest, et [node-forge GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv), via les outils Expo. Aucun correctif publié n'est disponible pour ces deux avis lors de l'audit du 9 octobre 2026. Les compteurs incluent les dépendants, pas autant de failles distinctes. Retirer cette exception dès une version corrigée compatible avec le SDK; le contrôle `npm audit --audit-level=high` reste actif et échoue actuellement. Voir `../A26_5A6_01-Infra/docs/audit-securite-2026-10-09.md`.
+
+Une URL de configuration syntaxiquement invalide produit le même diagnostic explicite EXPO_PUBLIC_API_URL qu’une origine interdite, sans afficher sa valeur. Expo 57 installe son implémentation WHATWG URL au chargement du runtime; aucun deuxième polyfill n’est ajouté. Les tests de configuration exécutent les deux parseurs Node et Expo 57. La validation sur appareil physique reste à effectuer.

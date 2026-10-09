@@ -3,7 +3,7 @@ import { isUuid, parseConversationId } from '@/types/conversationId';
 
 import { ApiError } from './ApiError';
 import { apiFetch } from './httpClient';
-import { lookupPseudos } from './usersService';
+import { lookupDisplayNames } from './usersService';
 
 export { MAX_QUERY_LENGTH, MIN_QUERY_LENGTH, normalizeQuery } from '@/partage/search';
 export type { SearchPage, SearchResult } from '@/partage/search';
@@ -86,7 +86,7 @@ export async function searchMessages(input: SearchInput): Promise<SearchPage> {
     .flatMap((e) => [e.senderId, ...(e.kind === 'dm' ? [parseConversationId(e.conversationId)!.targetId] : [])])
     .filter(isUuid);
   const [names, channels] = await Promise.all([
-    ids.length ? lookupPseudos(ids).catch(() => ({}) as Record<string, string>) : Promise.resolve({} as Record<string, string>),
+    ids.length ? lookupDisplayNames(ids).catch(() => ({}) as Record<string, string>) : Promise.resolve({} as Record<string, string>),
     entries.some((e) => e.kind === 'room') ? channelNames() : Promise.resolve({} as Record<string, ChannelInfo>),
   ]);
 

@@ -29,7 +29,36 @@ describe('fetchServers', () => {
     const [result] = await fetchServers({
       getCounts: async () => ({ [`room:${C1}`]: 2, [`room:${C2}`]: 5, [`room:other`]: 9 }),
     });
-    expect(result).toEqual({ id: S, name: 'Chatvardage', memberCount: 12, channelIds: [C1, C2], unreadCount: 7 });
+    // Réponse d'activité invalide (ici la liste des serveurs) : aucune activité connue.
+    expect(result).toEqual({ id: S, name: 'Chatvardage', memberCount: 12, channelIds: [C1, C2], unreadCount: 7, lastActivity: null });
+  });
+
+  it('trie du serveur le plus récemment actif au moins actif, sans activité en dernier', async () => {
+    const calme = { ...server, id: 'calme', salons: [{ id: 'c3', nom: 'x' }] };
+    const vide = { ...server, id: 'vide', salons: [{ id: 'c4', nom: 'y' }] };
+    apiFetch.mockImplementation(async (path: string) =>
+      path === '/api/messages/activity'
+        ? { rooms: { [`room:${C1}`]: '2026-10-01T10:00:00.000Z', [`room:${C2}`]: '2026-10-08T10:00:00.000Z', 'room:c3': '2026-10-05T10:00:00.000Z' } }
+        : [vide, calme, server],
+    );
+    const result = await fetchServers();
+    expect(result.map((s) => s.id)).toEqual([S, 'calme', 'vide']);
+    expect(result[0].lastActivity).toBe('2026-10-08T10:00:00.000Z');
+    expect(apiFetch).toHaveBeenCalledWith('/api/messages/activity');
+    // Activité indisponible : l'ordre de l'API est conservé.
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === '/api/messages/activity') throw new Error('503');
+      return [vide, calme, server];
+    });
+    expect((await fetchServers()).map((s) => s.id)).toEqual(['vide', 'calme', S]);
+  });
+
+  it('classe une date d’activité illisible comme sans activité', async () => {
+    const calme = { ...server, id: 'calme', salons: [{ id: 'c3', nom: 'x' }] };
+    apiFetch.mockImplementation(async (path: string) =>
+      path === '/api/messages/activity' ? { rooms: { [`room:${C1}`]: 'pas une date', 'room:c3': '2026-10-05T10:00:00.000Z' } } : [server, calme],
+    );
+    expect((await fetchServers()).map((s) => s.id)).toEqual(['calme', S]);
   });
 
   it('ignore les compteurs négatifs et une source de non-lus en panne', async () => {

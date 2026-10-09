@@ -5,4 +5,6 @@ export type ServerSummary = {
   memberCount: number;
   channelIds: string[];
   unreadCount: number;
+  /** Date du dernier message de ses salons (tri du plus actif au moins actif) ; absent sans message. */
+  lastActivity?: string | null;
 };

@@ -7,6 +7,8 @@ import { useSession } from '@/session/SessionContext';
 
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('@/hooks/useNewDirectMessage', () => ({ useNewDirectMessage: jest.fn() }));
+let mockProfiles: Record<string, { alias: string | null }> = {};
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => mockProfiles }));
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn(() => ({ user: { id: 'me' } })) }));
 
 const NEW_ID = '11111111-1111-4111-8111-111111111111';
@@ -31,6 +33,7 @@ const element = () => <NewDirectMessageScreen navigation={{ replace } as never} 
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockProfiles = {};
   mockState({});
 });
 
@@ -92,4 +95,16 @@ it('la carte plus déclenche son action sans afficher le texte Nouveau', async (
   expect(screen.getByRole('button', { name: 'Nouveau message privé' })).toHaveStyle({ minHeight: 64, borderRadius: 12 });
   await userEvent.setup().press(screen.getByRole('button', { name: 'Nouveau message privé' }));
   expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it('affiche l’alias avec le pseudo en second et ouvre la conversation sous l’alias', async () => {
+  mockProfiles = { [OLD_ID]: { alias: 'Ali' } };
+  mockState({ searching: true, search: { status: 'ready', users: [{ id: OLD_ID, pseudo: 'alice' }, { id: NEW_ID, pseudo: 'bob' }] } as HookState['search'] });
+  await render(element());
+  expect(screen.getByText('Ali')).toBeTruthy();
+  expect(screen.getByText('@alice')).toBeTruthy();
+  expect(screen.getByText('bob')).toBeTruthy();
+  expect(screen.queryByText('@bob')).toBeNull();
+  await fireEvent.press(screen.getByText('Ali'));
+  expect(replace).toHaveBeenCalledWith('Conversation', { conversationId: `dm:${OLD_ID}`, title: 'Ali' });
 });

@@ -14,6 +14,7 @@ const MESSAGE = '44444444-4444-4444-8444-444444444444';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('@/screens/RoomsScreen', () => ({ RoomsScreen: () => <MockText>Accueil annonces</MockText> }));
 let mockStatus: 'signedIn' | 'signedOut' | 'loading';
 let mockUser: { id: string } | null;
 const mockRealtime = {
@@ -92,6 +93,7 @@ beforeEach(() => {
 
 it("suit la conversation affichée et sa recherche, puis revient à « aucune »", async () => {
   await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   await waitFor(() => expect(screen.getByTestId('services')).toBeTruthy());
   expect(screen.getByTestId('services').props.children).toBe('me|aucune');
   await fireEvent.press(screen.getByText('Ouvrir conversation'));
@@ -103,6 +105,7 @@ it("suit la conversation affichée et sa recherche, puis revient à « aucune »
 
 it("plusieurs recherches de suite ne laissent qu'une conversation : la flèche ramène à la liste", async () => {
   await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   await fireEvent.press(screen.getByText('Ouvrir conversation'));
   for (let i = 0; i < 3; i++) {
     await fireEvent.press(screen.getByLabelText('Rechercher dans cette conversation'));
@@ -117,6 +120,7 @@ it("plusieurs recherches de suite ne laissent qu'une conversation : la flèche r
 
 it('ouvre la recherche limitée au salon affiché', async () => {
   await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   await fireEvent.press(screen.getByText('Ouvrir salon'));
   await fireEvent.press(screen.getByLabelText('Rechercher dans cette conversation'));
   expect(screen.getByText(`Recherche dans room:${ROOM}`)).toBeTruthy();
@@ -126,6 +130,7 @@ it.each(['Ouvrir invalide', 'Ouvrir sans paramètres'])(
   "n'ouvre aucune recherche pour une conversation invalide (%s)",
   async (button) => {
     await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
     await fireEvent.press(screen.getByText(button));
     await fireEvent.press(screen.getByLabelText('Rechercher dans cette conversation'));
     expect(screen.queryByText(/Recherche dans/)).toBeNull();
@@ -136,12 +141,14 @@ it.each(['Ouvrir invalide', 'Ouvrir sans paramètres'])(
 it("affiche les badges de non-lus des onglets, même sans permission de notification", async () => {
   jest.mocked(fetchUnreadCounts).mockResolvedValue({ [`dm:${OLI}`]: 2, [`room:${ROOM}`]: 120 });
   await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   await waitFor(() => expect(screen.getByText('2')).toBeTruthy());
   expect(screen.getByText('99+')).toBeTruthy();
 });
 
 it("affiche le bandeau de connexion seulement avec une session", async () => {
   const view = await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   expect(screen.getByTestId('connection-status')).toBeTruthy();
   await act(async () => view.unmount());
   mockStatus = 'signedOut';

@@ -1,6 +1,7 @@
 import { mapWithConcurrency } from '@/utils/mapWithConcurrency';
 
 import { apiFetch } from './httpClient';
+import { getPublicProfiles, type PublicProfile } from './publicProfiles.service';
 
 const MAX_IDS = 100;
 const CONCURRENCY = 3;
@@ -32,6 +33,20 @@ export async function lookupPseudos(ids: string[]): Promise<Record<string, strin
   const result: Record<string, string> = {};
   for (const users of pages) for (const u of users) result[u.id] = u.pseudo;
   return result;
+}
+
+/**
+ * Résout `{ id -> nom affiché }` : l'alias choisi dans le profil (User-Config-Service) s'il existe, sinon le
+ * pseudo. Une panne des profils publics laisse les pseudos ; une panne des pseudos est propagée.
+ */
+export async function lookupDisplayNames(ids: string[]): Promise<Record<string, string>> {
+  const [pseudos, profiles] = await Promise.all([
+    lookupPseudos(ids),
+    getPublicProfiles(ids).catch((): PublicProfile[] => []),
+  ]);
+  const names = { ...pseudos };
+  for (const profile of profiles) if (profile?.alias) names[profile.idUtilisateur] = profile.alias;
+  return names;
 }
 
 /**

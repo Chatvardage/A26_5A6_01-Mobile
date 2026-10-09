@@ -40,7 +40,7 @@ const channel = (id: string, title: string, unreadCount = 0): ConversationSummar
 const dm: ConversationSummary = { id: `dm:${OLI}`, kind: 'dm', title: 'oli', lastMessage: null, unreadCount: 5 };
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <UnreadProvider>{children}</UnreadProvider>;
-const base = { navigation: { navigate: jest.fn() }, route: { params: { serverId: SERVER } } };
+const base = { navigation: { navigate: jest.fn(), setOptions: jest.fn() }, route: { params: { serverId: SERVER } } };
 const serversProps = base as unknown as Parameters<typeof ServersScreen>[0];
 const serverProps = base as unknown as Parameters<typeof ServerScreen>[0];
 const dmProps = base as unknown as Parameters<typeof DirectMessagesScreen>[0];

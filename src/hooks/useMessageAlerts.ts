@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { getPermission, showMessageNotification } from '@/adapters/notifications.adapter';
+import { useProfile } from '@/profile/ProfileContext';
 import { useTranslation } from '@/i18n';
+import { confirmDelivery } from '@/services/receipts.service';
 import { markConversationRead } from '@/services/unreadService';
-import { lookupPseudos } from '@/services/usersService';
+import { lookupDisplayNames } from '@/services/usersService';
 import { useSession } from '@/session/SessionContext';
 import { toConversationId } from '@/types/conversationId';
 import { useUnread } from '@/unread/UnreadContext';
@@ -42,6 +44,8 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
   const { subscribe } = useSession().realtime;
   const unread = useUnread();
   const { strings } = useTranslation();
+  const { profile } = useProfile();
+  const mode = profile?.modeNotification;
   const active = useRef(activeConversationId);
   const unreadRef = useRef(unread);
   const titles = useRef(new Map<string, string>());
@@ -69,19 +73,22 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
   }, [activeConversationId]);
 
   useEffect(() => {
+    let alive = true;
     const notify = async (conversationId: string, senderId: string) => {
+      if (mode !== 'systeme') return;
       if (!granted.current) {
         granted.current = (await getPermission()) === 'granted';
         if (!granted.current) return;
       }
       if (!titles.current.has(senderId)) {
-        const names = await lookupPseudos([senderId]).catch(() => ({}) as Record<string, string>);
+        const names = await lookupDisplayNames([senderId]).catch(() => ({}) as Record<string, string>);
         if (names[senderId]) {
           // Cache borné (le plus ancien est oublié) : une longue session sur un serveur très actif ne le fait pas grossir.
           if (titles.current.size >= MAX_CACHED_TITLES) titles.current.delete(titles.current.keys().next().value as string);
           titles.current.set(senderId, names[senderId]);
         }
       }
+      if (!alive || (active.current === conversationId && AppState.currentState === 'active')) return;
       await showMessageNotification({
         conversationId,
         title: titles.current.get(senderId) ?? strings.brand,
@@ -92,6 +99,7 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
     const handle = (kind: 'dm' | 'room') => (raw: unknown) => {
       const incoming = parseIncoming(kind, raw, userId);
       if (!incoming) return;
+      if (kind === 'dm' && raw && typeof raw === 'object' && 'id' in raw && typeof raw.id === 'string') void confirmDelivery(raw.id).catch(() => undefined);
       if (active.current === incoming.conversationId && AppState.currentState === 'active') {
         void markConversationRead(incoming.conversationId).catch(() => undefined);
         return;
@@ -104,11 +112,12 @@ export function useMessageAlerts(userId: string, activeConversationId: string | 
       const offDm = subscribe('private-message.created', handle('dm'));
       const offRoom = subscribe('room-message.created', handle('room'));
       return () => {
+        alive = false;
         offDm();
         offRoom();
       };
     } catch {
       return undefined;
     }
-  }, [userId, strings, subscribe]);
+  }, [userId, strings, subscribe, mode]);
 }

@@ -7,7 +7,7 @@ import type { ChatMessage } from '@/types/conversation';
 
 jest.mock('@/services/messagesService', () => {
   const actual = jest.requireActual<typeof import('@/services/messagesService')>('@/services/messagesService');
-  return { ...actual, fetchHistory: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn(), deleteMessage: jest.fn() };
+  return { ...actual, fetchHistory: jest.fn(), hasNewerMessages: jest.fn(async () => true), sendMessage: jest.fn(), editMessage: jest.fn(), deleteMessage: jest.fn() };
 });
 jest.mock('@/services/usersService', () => ({ lookupPseudos: jest.fn() }));
 const mockHandlers = new Map<string, (payload: unknown) => void>();

@@ -19,9 +19,24 @@ export function isLocalHost(host: string): boolean {
  * 2. la machine qui sert Metro (`hostUri`), sur le port mobile du Gateway ;
  * 3. `localhost`.
  */
-export function resolveApiUrl(configured: string | undefined, hostUri: string | null | undefined): string {
+export function resolveApiUrl(configured: string | undefined, hostUri: string | null | undefined, development = __DEV__): string {
   const explicit = configured?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
+  if (explicit) {
+    let url: URL;
+    try {
+      url = new URL(explicit);
+    } catch {
+      throw new Error('EXPO_PUBLIC_API_URL must be an HTTP(S) origin without credentials.');
+    }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+      throw new Error('EXPO_PUBLIC_API_URL must be an HTTP(S) origin without credentials.');
+    }
+    if (!development && url.protocol !== 'https:') {
+      throw new Error('EXPO_PUBLIC_API_URL must use HTTPS in a release build.');
+    }
+    return url.origin;
+  }
+  if (!development) throw new Error('EXPO_PUBLIC_API_URL is required in a release build.');
 
   const host = hostUri?.split(':')[0]?.trim();
   // Seule une adresse locale désigne le poste qui héberge aussi le backend : tout autre hôte

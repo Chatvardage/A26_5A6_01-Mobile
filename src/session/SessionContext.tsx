@@ -9,6 +9,9 @@ export type Session = SessionState & {
   signIn: (identifiant: string, motDePasse: string) => Promise<void>;
   register: (input: Registration) => Promise<void>;
   signOut: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: (currentPassword: string) => Promise<void>;
+  logoutOthers: () => Promise<void>;
   restoreSession: () => Promise<void>;
   refreshSession: () => Promise<void>;
 };
@@ -29,6 +32,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         signIn: manager.signIn,
         register: manager.register,
         signOut: manager.signOut,
+        changePassword: manager.changePassword,
+        deleteAccount: manager.deleteAccount,
+        logoutOthers: manager.logoutOthers,
         restoreSession: manager.restoreSession,
         refreshSession: manager.refreshSession,
       }}

@@ -1,11 +1,14 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { FlatList } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ConversationScreen } from '@/screens/ConversationScreen';
 import { useMessages } from '@/hooks/useMessages';
 import { useSession } from '@/session/SessionContext';
 import type { ReactElement } from 'react';
+jest.mock('@/hooks/usePublicProfiles', () => ({ usePublicProfiles: () => ({}) }));
+jest.mock('@/hooks/useReadReceipts', () => ({ useReadReceipts: () => [] }));
+jest.mock('@/hooks/useCanWrite', () => ({ useCanWrite: () => true }));
 
 jest.mock('@/hooks/useCanModerate', () => ({ useCanModerate: () => false }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
@@ -14,6 +17,7 @@ jest.mock('@/hooks/useMessages', () => ({ useMessages: jest.fn() }));
 
 const DM = '11111111-1111-4111-8111-111111111111';
 const baseState = {
+  hasNewer: false, loadingNewer: false, loadNewer: jest.fn(), jumping: false,
   jumpTo: jest.fn(async () => true),
   remove: jest.fn(async () => undefined),
   messages: [],
@@ -149,10 +153,8 @@ describe('ConversationScreen', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Autre message' })).toBeNull();
     // L'appui long ouvre le menu d'actions (Modifier / Supprimer / Annuler) ; on choisit « Modifier ».
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await fireEvent(screen.getByRole('button', { name: 'Mon message' }), 'longPress');
-    await act(async () => alert.mock.calls[0][2]!.find((button) => button.text === 'Modifier')!.onPress!());
-    alert.mockRestore();
+    await fireEvent.press(screen.getByRole('button', { name: 'Modifier' }));
     expect(screen.getByLabelText('Modifier le message')).toHaveDisplayValue('Mon message');
     await fireEvent.changeText(screen.getByLabelText('Modifier le message'), 'Texte corrigé');
     await fireEvent.press(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -166,7 +168,7 @@ describe('ConversationScreen', () => {
       jest.mocked(useMessages).mockReturnValueOnce({ ...baseState, status: 'error' } as ReturnType<typeof useMessages>);
       const view = await renderScreen();
       expect(screen.getByText('Une erreur est survenue.')).toBeTruthy();
-      expect(useMessages).toHaveBeenCalledWith(`dm:${DM}`, '');
+      expect(useMessages).toHaveBeenCalledWith(`dm:${DM}`, '', undefined);
       (useMessages as jest.Mock).mockReturnValue({
         ...baseState, messages: [{ id: 'one', senderId: 'alice', content: 'Texte', createdAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z' }],
       });
@@ -175,4 +177,17 @@ describe('ConversationScreen', () => {
       expect(screen.queryByText('Réessayer')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Texte' })).toBeNull();
     });
+});
+
+it('suit un nouveau message près du bas et préserve la position dans l’historique', async () => {
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => undefined);
+  const message = { id:'first',senderId:'alice',content:'Premier',createdAt:'2026-10-08T10:00:00Z',updatedAt:'2026-10-08T10:00:00Z' };
+  jest.mocked(useMessages).mockReturnValue({...baseState,messages:[message]} as never);
+  const view = await renderScreen(); scroll.mockClear();
+  await fireEvent.scroll(screen.getByTestId('messages-list'), {nativeEvent:{contentOffset:{y:800,x:0},contentSize:{width:400,height:2000},layoutMeasurement:{width:400,height:700}}});
+  jest.mocked(useMessages).mockReturnValue({...baseState,messages:[{...message,id:'second',content:'Reçu'},message]} as never);
+  await view.rerender(withSafeArea(screenElement(`dm:${DM}`))); expect(scroll).not.toHaveBeenCalled();
+  await fireEvent.scroll(screen.getByTestId('messages-list'), {nativeEvent:{contentOffset:{y:500,x:0},contentSize:{width:400,height:2000},layoutMeasurement:{width:400,height:700}}});
+  jest.mocked(useMessages).mockReturnValue({...baseState,messages:[{...message,id:'third',senderId:'user-id',content:'Envoyé'},message]} as never);
+  await view.rerender(withSafeArea(screenElement(`dm:${DM}`))); await waitFor(() => expect(scroll).toHaveBeenCalledWith({offset:0,animated:true}));scroll.mockRestore();
 });

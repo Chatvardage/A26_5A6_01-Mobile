@@ -131,3 +131,13 @@ Autres points de la même revue, non appliqués :
 - **`useCanModerate` rafraîchit sur tout `serveur.change`, sans filtre par serveur.** La conversation ne porte que l'identifiant
   du salon : retrouver son serveur demande la liste `GET /api/servers`, déjà relue par ce rafraîchissement. Filtrer coûterait
   un appel de plus pour éviter un appel ; à revoir si le contrat expose le serveur du salon.
+
+### Reprise sécurité — review 6078292661
+
+- Diagnostic EXPO_PUBLIC_API_URL harmonisé pour les erreurs de syntaxe, avec tests des URL malformées.
+- Le test d’identifiants contient réellement https://u:p@chat.example.test : la review a reçu un texte masqué, pas le fichier. La couverture de ce refus existe et passe.
+- Pas de react-native-url-polyfill supplémentaire : Expo 57 installe déjà URL depuis whatwg-url-minimum dans winter/runtime.native.ts, chargé par expo avant App. Les vérifications automatisées n’équivalent pas à une validation sur appareil, qui reste requise.
+- Une normalisation globale des fins de ligne ou un nouveau .gitattributes n’apporte pas de protection à ce correctif et modifierait inutilement des fichiers partagés.
+- moreController.current n’est pas remis à null après résolution : abort d’un signal déjà terminé est inoffensif, les requêtes remplacées sont annulées et les tests couvrent le cycle de vie. Modifier le fichier partagé nécessiterait une nouvelle PR Frontend sans gain fonctionnel.
+- Les points positifs useAsyncResource, déduplication, recherche, override YAML et documentation ne demandent pas de changement. Le vérificateur confirme les copies partagées identiques.
+- Le volume du lockfile ne justifie pas une réécriture : npm ci est le contrôle reproductible. Les avis high braces/node-forge restent sans correctif compatible publié; npm audit fix --force casserait le SDK Expo. Ils restent documentés et non masqués.

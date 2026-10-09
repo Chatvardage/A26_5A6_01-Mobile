@@ -6,6 +6,7 @@ import { UnreadBadge } from '@/components/UnreadBadge';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ServerSummary } from '@/types/server';
+import { displayName } from '@/utils/displayNames';
 import { useTranslation } from '@/i18n';
 
 type Props = { server: ServerSummary; onPress: (server: ServerSummary) => void };
@@ -19,7 +20,7 @@ function ServerItemBase({ server, onPress }: Props) {
     <Pressable
       onPress={() => onPress(server)}
       accessibilityRole="button"
-      accessibilityLabel={`${server.name}, ${details}${server.unreadCount > 0 ? `, ${strings.server.unread(server.unreadCount)}` : ''}`}
+      accessibilityLabel={`${displayName(server.name, strings)}, ${details}${server.unreadCount > 0 ? `, ${strings.server.unread(server.unreadCount)}` : ''}`}
       android_ripple={{ color: theme.backgroundSelected }}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundSelected }]}
     >
@@ -30,7 +31,7 @@ function ServerItemBase({ server, onPress }: Props) {
       </View>
       <View style={styles.main}>
         <ThemedText type="smallBold" numberOfLines={1}>
-          {server.name}
+          {displayName(server.name, strings)}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
           {details}

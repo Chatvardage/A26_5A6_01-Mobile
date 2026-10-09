@@ -7,8 +7,20 @@ test('reconnaît les IPv4 privées et exclut les autres adresses', () => {
   expect(isPrivateIpv4('192.168.1.999')).toBe(false);
 });
 
-test('force le port 3000 sous Linux natif et conserve le chemin de l URL existante', () => {
-  expect(buildApiUrl('http://192.168.1.10:3006/api', '192.168.1.20')).toBe('http://192.168.1.20:3000/api');
+test.each([
+  ['Linux natif', 'linux', 'Linux version 6.8', '3000'],
+  ['WSL', 'linux', 'Linux version 6.8 microsoft-standard-WSL2', '3006'],
+  ['Windows', 'win32', '', '3006'],
+])('choisit le port sur %s et conserve le chemin configuré', (_name, platform, version, port) => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  const read = jest.spyOn(require('node:fs'), 'readFileSync').mockReturnValue(version);
+  try {
+    expect(buildApiUrl('http://192.168.1.10:3006/api', '192.168.1.20')).toBe(`http://192.168.1.20:${port}/api`);
+  } finally {
+    read.mockRestore();
+    Object.defineProperty(process, 'platform', descriptor);
+  }
 });
 
 test('remplace seulement la variable API dans le fichier env', () => {

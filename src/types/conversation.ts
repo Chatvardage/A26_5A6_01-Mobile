@@ -19,6 +19,7 @@ export type ConversationSummary = {
 
 export type ChatMessage = {
   id: string;
+  deliveredAt?: string | null;
   senderId: string;
   senderName?: string;
   content: string;

@@ -37,7 +37,7 @@ type ScreenProps = {
 type TabProps = {
   initialRouteName: string;
   backBehavior: string;
-  screenOptions: (props: { route: { name: 'DirectMessages' | 'Servers' | 'Search' | 'Preferences' } }) => {
+  screenOptions: (props: { route: { name: 'Rooms' | 'DirectMessages' | 'Servers' | 'Search' | 'Preferences' } }) => {
     tabBarIcon: (props: { color: string; size: number }) => ReactNode;
   };
 };
@@ -73,9 +73,9 @@ jest.mock('@react-navigation/bottom-tabs', () => ({
   }),
 }));
 jest.mock('expo-symbols', () => ({
-  SymbolView: ({ name, tintColor, size }: { name: string; tintColor: string; size: number }) => {
+  SymbolView: ({ name, tintColor, size }: { name: { ios: string; android: string; web: string }; tintColor: string; size: number }) => {
     const { View } = jest.requireActual('react-native');
-    return <View testID={`icon-${name}`} style={{ color: tintColor, width: size }} />;
+    return <View testID={`icon-${name.ios}`} style={{ color: tintColor, width: size }} />;
   },
 }));
 
@@ -116,11 +116,16 @@ describe('RootNavigator', () => {
     (useSession as jest.Mock).mockReturnValue({ status: 'signedIn', realtime: mockRealtime });
     jest.mocked(useColorScheme).mockReturnValue('dark');
     await render(<RootNavigator />);
-    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'Server', 'Conversation', 'ConversationSearch', 'NewDirectMessage']);
+    expect(mockStackScreens.map((route) => route.name)).toEqual(['Main', 'DiscoverServers', 'ManageServer', 'EditRoom', 'ServerMembers', 'Server', 'Conversation', 'ConversationSearch', 'ServerSearch', 'NewDirectMessage']);
     expect(mockTheme.colors.background).toBe(Colors.dark.background);
     expect(mockTheme.colors.primary).toBe(Colors.dark.tint);
-    expect(mockStackScreens[4].options).toEqual({ title: 'Nouveau message', presentation: 'modal' });
-    for (const route of mockStackScreens.slice(1, 3)) {
+    expect(mockStackScreens[3].options).toEqual({ title: 'Modifier le salon' });
+    expect(mockStackScreens[8].options).toEqual({ title: 'Recherche' });
+    expect(mockStackScreens[9].options).toEqual({ title: 'Nouveau message' });
+    const discover = mockStackScreens[1].options as unknown as (props: { route: { params?: { mode?: string } } }) => { title: string };
+    expect(discover({ route: { params: { mode: 'create' } } }).title).toBe('Créer un serveur');
+    expect(discover({ route: {} }).title).toBe('Découvrir des serveurs');
+    for (const route of mockStackScreens.slice(5, 7)) {
       if (typeof route.options !== 'function') throw new Error('Options dynamiques attendues');
       expect(route.options({ route: {} }).title).toBe(route.name === 'Server' ? 'Serveur' : 'Conversation');
       expect(route.options({ route: { params: { title: 'Titre transmis' } } }).title).toBe('Titre transmis');
@@ -128,16 +133,16 @@ describe('RootNavigator', () => {
   });
 });
 
-it('configure les quatre onglets, leurs titres et leurs icônes', async () => {
+it('configure les cinq onglets, leurs titres et leurs icônes', async () => {
   const view = await render(<MainTabs />);
-  expect(mockTabProps.initialRouteName).toBe('DirectMessages');
+  expect(mockTabProps.initialRouteName).toBe('Rooms');
   expect(mockTabProps.backBehavior).toBe('firstRoute');
-  expect(mockTabScreens.map((route) => route.name)).toEqual(['DirectMessages', 'Servers', 'Search', 'Preferences']);
+  expect(mockTabScreens.map((route) => route.name)).toEqual(['Rooms', 'DirectMessages', 'Servers', 'Search', 'Preferences']);
   expect(mockTabScreens.map((route) => route.options)).toEqual([
-    { title: 'Messages privés' }, { title: 'Serveurs' }, { title: 'Recherche' }, { title: 'Préférences' },
+    { title: 'Accueil', tabBarLabel: 'Accueil' }, { title: 'Messages privés', tabBarLabel: 'Messages' }, { title: 'Serveurs' }, { title: 'Recherche' }, { title: 'Paramètres' },
   ]);
   const icons = [
-    ['DirectMessages', 'bubble.left'], ['Servers', 'server.rack'], ['Search', 'magnifyingglass'], ['Preferences', 'gearshape'],
+    ['Rooms', 'house'], ['DirectMessages', 'bubble.left'], ['Servers', 'server.rack'], ['Search', 'magnifyingglass'], ['Preferences', 'gearshape'],
   ] as const;
   for (const [name, icon] of icons) {
     const options = mockTabProps.screenOptions({ route: { name } });

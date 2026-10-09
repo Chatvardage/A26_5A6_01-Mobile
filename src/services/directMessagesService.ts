@@ -3,7 +3,7 @@ import { toConversationId } from '@/types/conversationId';
 
 import { apiFetch } from './httpClient';
 import { getCountsSafe, noUnreadSource, type UnreadSource } from './unreadSource';
-import { lookupPseudos } from './usersService';
+import { lookupDisplayNames } from './usersService';
 import { getTranslations } from '@/i18n';
 
 type DmItem = {
@@ -19,7 +19,7 @@ export async function fetchDirectMessages(unread: UnreadSource = noUnreadSource)
     apiFetch<DmItem[]>('/api/messages/conversations'),
     getCountsSafe(unread),
   ]);
-  const pseudos = await lookupPseudos(items.map((i) => i.otherUserId)).catch(() => ({}) as Record<string, string>);
+  const names = await lookupDisplayNames(items.map((i) => i.otherUserId)).catch(() => ({}) as Record<string, string>);
 
   return items
     .map((item): ConversationSummary => {
@@ -27,7 +27,7 @@ export async function fetchDirectMessages(unread: UnreadSource = noUnreadSource)
       return {
         id,
         kind: 'dm',
-        title: pseudos[item.otherUserId] ?? getTranslations().conversation.unknownUser,
+        title: names[item.otherUserId] ?? getTranslations().conversation.unknownUser,
         lastMessage: item.lastMessage,
         unreadCount: Math.max(0, counts[id] ?? 0),
       };

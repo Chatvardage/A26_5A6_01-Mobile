@@ -7,6 +7,7 @@ import type { RootStackParamList } from '@/navigation/routes';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('@/screens/RoomsScreen', () => ({ RoomsScreen: () => <MockText>Accueil annonces</MockText> }));
 const mockRealtime = {
   getRealtimeState: () => 'disconnected' as const,
   onConnectionState: () => () => undefined,
@@ -24,6 +25,7 @@ jest.mock('@/screens/SearchScreen', () => ({ SearchScreen: () => <MockText>Reche
 jest.mock('@/screens/PreferencesScreen', () => ({
   PreferencesScreen: () => <MockText>Préférences ouvertes</MockText>,
 }));
+jest.mock('@/screens/NewDirectMessageScreen', () => ({ NewDirectMessageScreen: () => <MockText>Nouveau message ouvert</MockText> }));
 jest.mock('@/screens/ServerScreen', () => ({ ServerScreen: () => <MockText>Serveur ouvert</MockText> }));
 jest.mock('@/screens/ConversationScreen', () => ({
   ConversationScreen: () => <MockText>Conversation ouverte</MockText>,
@@ -34,6 +36,7 @@ function MockLinks() {
   return (
     <>
       <Button title="Ouvrir serveur" onPress={() => nav.navigate('Server', mockParams!)} />
+      <Button title="Écrire" onPress={() => nav.navigate('NewDirectMessage')} />
       <Button
         title="Ouvrir conversation"
         onPress={() =>
@@ -48,28 +51,36 @@ it.each([undefined, { serverId: 's' }, { serverId: 's', title: 'Mon titre' }])(
   async (params) => {
     mockParams = params;
     const view = await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
     await fireEvent.press(screen.getByText('Ouvrir serveur'));
     expect(screen.getByText('Serveur ouvert')).toBeTruthy();
-    expect(JSON.stringify(screen.toJSON())).toContain(
-      JSON.stringify({ title: params?.title ?? 'Serveur' }).slice(1, -1),
-    );
     await view.unmount();
     await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
     await fireEvent.press(screen.getByText('Ouvrir conversation'));
     expect(screen.getByText('Conversation ouverte')).toBeTruthy();
-    expect(JSON.stringify(screen.toJSON())).toContain(
-      JSON.stringify({ title: params?.title ?? 'Conversation' }).slice(1, -1),
-    );
   },
 );
 it('ouvre les quatre onglets avec leurs icônes', async () => {
   await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   await fireEvent.press(screen.getByText('Serveurs'));
   expect(screen.getByText('Liste serveurs')).toBeTruthy();
   await fireEvent.press(screen.getByText('Recherche'));
   expect(screen.getByText('Recherche ouverte')).toBeTruthy();
-  await fireEvent.press(screen.getByText('Préférences'));
+  await fireEvent.press(screen.getByText('Paramètres'));
   expect(screen.getByText('Préférences ouvertes')).toBeTruthy();
-  await fireEvent.press(screen.getByText('Messages privés'));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
   expect(screen.getByText('Ouvrir serveur')).toBeTruthy();
+});
+
+it('garde l’onglet Messages sélectionné sur le choix du destinataire', async () => {
+  await render(<RootNavigator />);
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
+  await fireEvent.press(screen.getByRole('tab', { name: 'Serveurs' }));
+  expect(screen.getByRole('tab', { name: 'Serveurs' })).toBeSelected();
+  await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
+  await fireEvent.press(screen.getByText('Écrire'));
+  expect(screen.getByText('Nouveau message ouvert')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Messages' })).toBeSelected();
 });

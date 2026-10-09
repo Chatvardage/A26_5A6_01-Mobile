@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-08T17:12:26.193Z",
+  "api": "http://localhost:3000",
+  "checks": [
+    {
+      "name": "Accueil Chatvardage et annonces accessibles",
+      "status": "pass"
+    },
+    {
+      "name": "Chatvardage ne peut pas être quitté",
+      "status": "pass"
+    },
+    {
+      "name": "Création serveur public et salon",
+      "status": "pass"
+    },
+    {
+      "name": "Découverte, rejoindre et liste des salons",
+      "status": "pass"
+    },
+    {
+      "name": "Un membre ne peut pas créer un salon",
+      "status": "pass"
+    },
+    {
+      "name": "Quitter retire l’accès aux salons",
+      "status": "pass"
+    },
+    {
+      "name": "Invitation privée et acceptation",
+      "status": "pass"
+    },
+    {
+      "name": "Paramètres persistés et présence",
+      "status": "pass"
+    },
+    {
+      "name": "Message privé réel et historique",
+      "status": "pass"
+    },
+    {
+      "name": "Pagination membres et changement de rôle",
+      "status": "pass"
+    },
+    {
+      "name": "Droits du modérateur mis à jour",
+      "status": "pass"
+    },
+    {
+      "name": "Pagination DM directe et messages plus recents",
+      "status": "pass"
+    },
+    {
+      "name": "Une cible DM etrangere est refusee",
+      "status": "pass"
+    },
+    {
+      "name": "L expediteur ne peut pas confirmer la reception",
+      "status": "pass"
+    },
+    {
+      "name": "Livraison reelle et confirmation idempotente",
+      "status": "pass"
+    },
+    {
+      "name": "Pagination directe de salon et cible etrangere refusee",
+      "status": "pass"
+    },
+    {
+      "name": "Un moderateur ne peut pas exclure le proprietaire",
+      "status": "pass"
+    },
+    {
+      "name": "Exclusion reelle et retrait de la liste des membres",
+      "status": "pass"
+    },
+    {
+      "name": "Le membre exclu ne peut plus lire les messages du salon",
+      "status": "pass"
+    }
+  ]
+}

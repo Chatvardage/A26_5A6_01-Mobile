@@ -8,6 +8,7 @@ import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import type { RootStackParamList } from '@/navigation/routes';
 import { ApiError } from '@/services/ApiError';
 import { useSession } from '@/session/SessionContext';
+jest.mock('@/hooks/useConnection', () => ({ useConnection: () => ({ status: 'online', online: true }) }));
 
 jest.mock('@/session/SessionContext', () => ({ useSession: jest.fn() }));
 jest.mock('@/hooks/useNotificationPermission', () => ({

@@ -18,16 +18,37 @@ const LAST_MESSAGE_CONCURRENCY = 5;
 
 const roomId = (channelId: string) => toConversationId({ kind: 'room', targetId: channelId });
 
-/** Serveurs de l'utilisateur, dans l'ordre de l'API (serveur par défaut en premier). */
+/** Dernier message de chaque salon lisible ; une panne laisse simplement l'ordre de l'API. */
+async function fetchActivity(): Promise<Record<string, string>> {
+  try {
+    const body = await apiFetch<{ rooms?: Record<string, string> }>('/api/messages/activity');
+    return body?.rooms ?? {};
+  } catch {
+    return {};
+  }
+}
+
+const activityTime = (server: ServerSummary) => (server.lastActivity ? Date.parse(server.lastActivity) || 0 : 0);
+
+/**
+ * Serveurs de l'utilisateur, du plus récemment actif (dernier message d'un de ses salons) au moins actif.
+ * À activité égale (ou sans message), l'ordre de l'API est conservé.
+ */
 export async function fetchServers(unread: UnreadSource = noUnreadSource): Promise<ServerSummary[]> {
-  const [servers, counts] = await Promise.all([apiFetch<RawServer[]>('/api/servers'), getCountsSafe(unread)]);
-  return servers.map((server) => ({
-    id: server.id,
-    name: server.nom,
-    memberCount: server.nombreMembres,
-    channelIds: server.salons.map((s) => s.id),
-    unreadCount: server.salons.reduce((sum, s) => sum + Math.max(0, counts[roomId(s.id)] ?? 0), 0),
-  }));
+  const [servers, counts, activity] = await Promise.all([apiFetch<RawServer[]>('/api/servers'), getCountsSafe(unread), fetchActivity()]);
+  return servers
+    .map((server): ServerSummary => {
+      const last = server.salons.map((s) => activity[roomId(s.id)]).filter(Boolean).sort().at(-1) ?? null;
+      return {
+        id: server.id,
+        name: server.nom,
+        memberCount: server.nombreMembres,
+        channelIds: server.salons.map((s) => s.id),
+        unreadCount: server.salons.reduce((sum, s) => sum + Math.max(0, counts[roomId(s.id)] ?? 0), 0),
+        lastActivity: last,
+      };
+    })
+    .sort((a, b) => activityTime(b) - activityTime(a));
 }
 
 /**

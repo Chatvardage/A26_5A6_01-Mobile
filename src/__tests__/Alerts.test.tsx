@@ -8,26 +8,34 @@ import {
   onNotificationOpened,
   openSystemSettings,
   requestPermission,
+  showInvitationNotification,
   showMessageNotification,
 } from '@/adapters/notifications.adapter';
 import { AppServices } from '@/components/AppServices';
+import { INVITATION_BANNER_MS, parseInvitation, useInvitationAlerts } from '@/hooks/useInvitationAlerts';
 import { useMessageAlerts, parseIncoming } from '@/hooks/useMessageAlerts';
+import { getInvitations } from '@/services/rooms.service';
 import { resetNotificationNavigationForTests, useNotificationNavigation } from '@/hooks/useNotificationNavigation';
 import { useNotificationPermission } from '@/hooks/useNotificationPermission';
 import { useRefreshOnServerChange } from '@/hooks/useRefreshOnServerChange';
+import { useRefreshOnProfileChange } from '@/hooks/useRefreshOnProfileChange';
 import { useRoomSubscriptions } from '@/hooks/useRoomSubscriptions';
 import { PreferencesScreen } from '@/screens/PreferencesScreen';
 import { fetchServers } from '@/services/serversService';
 import { fetchUnreadCounts, markConversationRead } from '@/services/unreadService';
-import { lookupPseudos } from '@/services/usersService';
+import { lookupDisplayNames } from '@/services/usersService';
 import { UnreadProvider } from '@/unread/UnreadContext';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+let mockNotificationMode = 'systeme';
+jest.mock('@/profile/ProfileContext', () => ({ useProfile: () => ({ profile: { modeNotification: mockNotificationMode } }) }));
+jest.mock('@/hooks/useConnection', () => ({ useConnection: () => ({ status: 'online', online: true }) }));
 jest.mock('@/adapters/notifications.adapter');
 jest.mock('@/services/unreadService');
 jest.mock('@/services/usersService');
 jest.mock('@/services/serversService');
+jest.mock('@/services/rooms.service');
 const mockRealtime = { subscribe: jest.fn(), onReady: jest.fn(), joinRoom: jest.fn() };
 const { subscribe, onReady, joinRoom } = mockRealtime;
 jest.mock('@/session/SessionContext', () => ({
@@ -44,6 +52,7 @@ const handlers = new Map<string, (raw: unknown) => void>();
 let appState = 'active';
 
 beforeEach(() => {
+  mockNotificationMode = 'systeme';
   jest.clearAllMocks();
   handlers.clear();
   appState = 'active';
@@ -56,7 +65,7 @@ beforeEach(() => {
   jest.mocked(markConversationRead).mockResolvedValue();
   jest.mocked(fetchUnreadCounts).mockResolvedValue({});
   jest.mocked(onReady).mockReturnValue(jest.fn());
-  jest.mocked(lookupPseudos).mockResolvedValue({ [OLI]: 'oli' });
+  jest.mocked(lookupDisplayNames).mockResolvedValue({ [OLI]: 'oli' });
   jest.mocked(showMessageNotification).mockResolvedValue(true);
 });
 
@@ -94,37 +103,48 @@ describe('useMessageAlerts', () => {
   });
 
   it('notifie un message de salon avec le nom de la marque quand le pseudo est inconnu, puis réutilise le pseudo', async () => {
-    jest.mocked(lookupPseudos).mockResolvedValueOnce({});
+    jest.mocked(lookupDisplayNames).mockResolvedValueOnce({});
     await setup();
     await act(async () => handlers.get('room-message.created')!(roomEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(1));
     expect(showMessageNotification).toHaveBeenLastCalledWith({ conversationId: `room:${ROOM}`, title: 'Chatvardage', body: 'Nouveau message' });
-    jest.mocked(lookupPseudos).mockResolvedValue({ [OLI]: 'oli' });
+    jest.mocked(lookupDisplayNames).mockResolvedValue({ [OLI]: 'oli' });
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(3));
-    expect(lookupPseudos).toHaveBeenCalledTimes(2);
+    expect(lookupDisplayNames).toHaveBeenCalledTimes(2);
   });
 
   it("borne le cache des pseudos : au-delà de 500 expéditeurs le plus ancien est oublié et sa recherche reprend", async () => {
     await setup();
-    jest.mocked(lookupPseudos).mockClear();
+    jest.mocked(lookupDisplayNames).mockClear();
     for (let i = 0; i < 502; i++) {
       const senderId = `expediteur-${i}`;
-      jest.mocked(lookupPseudos).mockResolvedValueOnce({ [senderId]: `pseudo-${i}` });
+      jest.mocked(lookupDisplayNames).mockResolvedValueOnce({ [senderId]: `pseudo-${i}` });
       await act(async () => handlers.get('private-message.created')!({ id: `m${i}`, senderId, recipientId: ME }));
     }
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledTimes(502));
     // Le plus ancien a été évincé : il est cherché de nouveau.
-    jest.mocked(lookupPseudos).mockClear();
+    jest.mocked(lookupDisplayNames).mockClear();
     await act(async () =>
       handlers.get('private-message.created')!({ id: 'again', senderId: 'expediteur-0', recipientId: ME }),
     );
-    await waitFor(() => expect(lookupPseudos).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(lookupDisplayNames).toHaveBeenCalledTimes(1));
+  });
+
+  it('ne notifie plus après le démontage pendant la recherche du pseudo', async () => {
+    let names!: (value: Record<string, string>) => void;
+    jest.mocked(lookupDisplayNames).mockReturnValueOnce(new Promise(done => { names = done; }));
+    const hook = await setup();
+    await act(async () => handlers.get('private-message.created')!(dmEvent()));
+    await waitFor(() => expect(lookupDisplayNames).toHaveBeenCalled());
+    await hook.unmount();
+    await act(async () => names({ [OLI]: 'oli' }));
+    expect(showMessageNotification).not.toHaveBeenCalled();
   });
 
   it('tolère un annuaire des pseudos indisponible', async () => {
-    jest.mocked(lookupPseudos).mockRejectedValue(new Error('503'));
+    jest.mocked(lookupDisplayNames).mockRejectedValue(new Error('503'));
     await setup();
     await act(async () => handlers.get('private-message.created')!(dmEvent()));
     await waitFor(() => expect(showMessageNotification).toHaveBeenCalledWith(expect.objectContaining({ title: 'Chatvardage' })));
@@ -376,7 +396,7 @@ describe('permission de notification', () => {
 
   it.each([
     ['granted', 'Activées', null],
-    ['unavailable', 'Indisponibles sur cet appareil.', null],
+    ['unavailable', 'Notifications système indisponibles dans cet environnement. Sur Android avec Expo Go, installez la version de développement Chatvardage. Les badges restent actifs.', null],
     ['undetermined', 'Non activées', 'Activer les notifications'],
     ['denied', 'Refusées : activez-les dans les réglages du système.', 'Ouvrir les réglages'],
   ] as const)('affiche la permission %s dans les préférences', async (permission, label, button) => {
@@ -443,5 +463,146 @@ describe('AppServices', () => {
     jest.mocked(ref.isReady).mockReturnValue(false);
     opened({ id: 'c', conversationId: `dm:${OLI}` });
     expect(ref.navigate).not.toHaveBeenCalled();
+  });
+  it('ouvre les invitations au toucher d’une notification d’invitation', async () => {
+    jest.mocked(getPermission).mockResolvedValue('denied');
+    await mount();
+    (opened as (tap: unknown) => void)({ id: 'i1', invitations: true });
+    expect(ref.navigate).toHaveBeenCalledWith('DiscoverServers', { mode: 'discover' });
+    jest.mocked(ref.navigate).mockClear();
+    jest.mocked(ref.isReady).mockReturnValue(false);
+    (opened as (tap: unknown) => void)({ id: 'i2', invitations: true });
+    expect(ref.navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('useInvitationAlerts', () => {
+  const SERVER = '44444444-4444-4444-8444-444444444444';
+  const invitation = (serverId = SERVER) => ({ serveurId: serverId, raison: 'invitation', cibleId: ME });
+  const invitations = [{ serveur: { id: SERVER, nom: 'Équipe', nombreMembres: 2, icone: null, public: false, parDefaut: false }, invitePar: OLI, inviteLe: '2026-10-08' }];
+  // Plusieurs hooks d'AppServices écoutent `serveur.change` : on prévient chacun d'eux.
+  const receive = (raw: unknown) =>
+    act(async () => {
+      for (const [event, handler] of jest.mocked(subscribe).mock.calls as unknown as [string, (raw: unknown) => void][]) {
+        if (event === 'serveur.change') handler(raw);
+      }
+    });
+  beforeEach(() => jest.mocked(getInvitations).mockResolvedValue(invitations));
+
+  it('ne retient que les invitations qui me visent', () => {
+    expect(parseInvitation(invitation(), ME)).toBe(SERVER);
+    expect(parseInvitation({ ...invitation(), cibleId: OLI }, ME)).toBeNull();
+    expect(parseInvitation({ ...invitation(), raison: 'membres' }, ME)).toBeNull();
+    expect(parseInvitation({ ...invitation(), serveurId: 3 }, ME)).toBeNull();
+    expect(parseInvitation(null, ME)).toBeNull();
+  });
+
+  it.each(['systeme', 'discret'])('au premier plan, affiche le bandeau (mode %s) sans notification système', async (mode) => {
+    mockNotificationMode = mode;
+    const hook = await renderHook(() => useInvitationAlerts(ME));
+    await receive(invitation());
+    expect(hook.result.current.invitation).toEqual({ serverId: SERVER, name: 'Équipe' });
+    expect(showInvitationNotification).not.toHaveBeenCalled();
+    await receive({ ...invitation(), cibleId: OLI });
+    await act(async () => hook.result.current.dismiss());
+    expect(hook.result.current.invitation).toBeNull();
+  });
+
+  it('ferme le bandeau tout seul après quelques secondes', async () => {
+    jest.useFakeTimers();
+    try {
+      const hook = await renderHook(() => useInvitationAlerts(ME));
+      await receive(invitation());
+      expect(hook.result.current.invitation).not.toBeNull();
+      await act(async () => jest.advanceTimersByTime(INVITATION_BANNER_MS));
+      expect(hook.result.current.invitation).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('en arrière-plan, notifie avec le nom du serveur, ou un texte générique', async () => {
+    appState = 'background';
+    const hook = await renderHook(() => useInvitationAlerts(ME));
+    await receive(invitation());
+    expect(showInvitationNotification).toHaveBeenCalledWith({ title: 'Nouvelle invitation', body: 'Vous avez reçu une invitation pour le serveur Équipe.' });
+    expect(hook.result.current.invitation).toBeNull();
+    jest.mocked(getInvitations).mockRejectedValueOnce(new Error('x'));
+    await receive(invitation());
+    expect(showInvitationNotification).toHaveBeenLastCalledWith({ title: 'Nouvelle invitation', body: 'Vous avez reçu une invitation pour un serveur.' });
+  });
+
+  it('en arrière-plan, rien sans permission ni en mode discret', async () => {
+    appState = 'background';
+    jest.mocked(getPermission).mockResolvedValue('denied');
+    const first = await renderHook(() => useInvitationAlerts(ME));
+    await receive(invitation());
+    await first.unmount();
+    mockNotificationMode = 'discret';
+    jest.mocked(getPermission).mockResolvedValue('granted');
+    await renderHook(() => useInvitationAlerts(ME));
+    await receive(invitation());
+    expect(showInvitationNotification).not.toHaveBeenCalled();
+  });
+
+  it('ne fait rien en mode aucune, après le démontage, ni sans canal temps réel', async () => {
+    mockNotificationMode = 'aucune';
+    const none = await renderHook(() => useInvitationAlerts(ME));
+    expect(handlers.has('serveur.change')).toBe(false);
+    await none.unmount();
+    mockNotificationMode = 'systeme';
+    let resolve: (value: typeof invitations) => void = () => undefined;
+    jest.mocked(getInvitations).mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+    const last = await renderHook(() => useInvitationAlerts(ME));
+    await receive(invitation());
+    await last.unmount();
+    await act(async () => resolve(invitations));
+    expect(last.result.current.invitation).toBeNull();
+    jest.mocked(subscribe).mockImplementation(() => { throw new Error('Session absente'); });
+    await expect(renderHook(() => useInvitationAlerts(ME))).resolves.toBeDefined();
+  });
+
+  it('AppServices affiche le bandeau, qui ouvre les invitations ou se ferme', async () => {
+    const ref = { isReady: jest.fn(() => true), navigate: jest.fn() } as never as Parameters<typeof AppServices>[0]['navigationRef'];
+    jest.mocked(configureNotifications).mockResolvedValue();
+    jest.mocked(onNotificationOpened).mockReturnValue(jest.fn());
+    jest.mocked(getLaunchTap).mockResolvedValue(null);
+    jest.mocked(fetchServers).mockResolvedValue([]);
+    jest.mocked(onReady).mockReturnValue(jest.fn());
+    await render(<UnreadProvider><AppServices userId={ME} activeConversationId={null} navigationRef={ref} /></UnreadProvider>);
+    await receive(invitation());
+    expect(screen.getByText('Vous avez reçu une invitation pour le serveur Équipe. Toucher pour voir.')).toBeTruthy();
+    await userEvent.setup().press(screen.getByRole('button', { name: 'Nouvelle invitation · Toucher pour voir.' }));
+    expect(ref.navigate).toHaveBeenCalledWith('DiscoverServers', { mode: 'discover' });
+    expect(screen.queryByTestId('invitation-banner')).toBeNull();
+    jest.mocked(getInvitations).mockResolvedValue([]);
+    await receive(invitation());
+    expect(screen.getByText('Vous avez reçu une invitation pour un serveur. Toucher pour voir.')).toBeTruthy();
+    await userEvent.setup().press(screen.getByRole('button', { name: 'Fermer' }));
+    expect(screen.queryByTestId('invitation-banner')).toBeNull();
+  });
+});
+
+it.each(['discret','aucune'])('ne présente pas de notification système en mode %s',async mode=>{
+  mockNotificationMode=mode;
+  await renderHook(()=>useMessageAlerts(ME,null),{wrapper:UnreadProvider});
+  await act(async()=>handlers.get('private-message.created')!(dmEvent()));
+  expect(showMessageNotification).not.toHaveBeenCalled();
+});
+
+describe('useRefreshOnProfileChange', () => {
+  it('relit la liste à chaque changement de profil et se désabonne', async () => {
+    const refresh = jest.fn();
+    const hook = await renderHook(() => useRefreshOnProfileChange(refresh));
+    await act(async () => handlers.get('profil.changed')!({ userId: 'bob' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await hook.unmount();
+    expect(handlers.has('profil.changed')).toBe(false);
+  });
+
+  it('ne plante pas sans canal temps réel', async () => {
+    jest.mocked(subscribe).mockImplementationOnce(() => { throw new Error('non configuré'); });
+    await renderHook(() => useRefreshOnProfileChange(jest.fn()));
+    expect(handlers.has('profil.changed')).toBe(false);
   });
 });

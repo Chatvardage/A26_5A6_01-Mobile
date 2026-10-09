@@ -3,6 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { SessionProvider } from '@/session/SessionContext';
+import { ProfileProvider } from '@/profile/ProfileContext';
 import { I18nProvider } from '@/i18n';
 
 export default function App() {
@@ -10,7 +11,7 @@ export default function App() {
     <SafeAreaProvider>
       <I18nProvider>
         <SessionProvider>
-          <RootNavigator />
+          <ProfileProvider><RootNavigator /></ProfileProvider>
           <StatusBar style="auto" />
         </SessionProvider>
       </I18nProvider>

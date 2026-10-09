@@ -8,13 +8,16 @@ import { lookupPseudos } from '@/services/usersService';
 
 jest.mock('@/services/messagesService', () => {
   const actual = jest.requireActual<typeof import('@/services/messagesService')>('@/services/messagesService');
-  return { ...actual, mergeMessages: jest.fn(actual.mergeMessages), fetchHistory: jest.fn(), sendMessage: jest.fn(), editMessage: jest.fn() };
+  return { ...actual, mergeMessages: jest.fn(actual.mergeMessages), fetchHistory: jest.fn(), hasNewerMessages: jest.fn(async () => true), sendMessage: jest.fn(), editMessage: jest.fn() };
 });
 jest.mock('@/services/usersService', () => ({ lookupPseudos: jest.fn() }));
 jest.mock('@/session/SessionContext', () => ({
   useSession: () => ({ realtime: mockRealtime }),
 }));
 const mockRealtime = {
+  followPresence: jest.fn(async () => []),
+  publishPresence: jest.fn(),
+  publishProfile: jest.fn(),
   configureRealtime: jest.fn(),
   disconnectRealtime: jest.fn(),
   getRealtimeState: jest.fn(() => 'ready'),

@@ -22,14 +22,16 @@ function toPermission(N: Notifications, result: NotificationsModule.Notification
   return result.status === N.PermissionStatus.UNDETERMINED ? 'undetermined' : 'denied';
 }
 
-type Tap = { id: string; conversationId: string };
+/** Notification touchée : une conversation, ou la liste des invitations aux serveurs. */
+export type Tap = { id: string; conversationId: string } | { id: string; invitations: true };
 
 function toTap(N: Notifications, response: NotificationsModule.NotificationResponse | null | undefined): Tap | null {
   if (!response || response.actionIdentifier !== N.DEFAULT_ACTION_IDENTIFIER) return null;
-  const conversationId = (response.notification.request.content.data as { conversationId?: unknown } | undefined)
-    ?.conversationId;
-  if (typeof conversationId !== 'string') return null;
-  return { id: response.notification.request.identifier, conversationId };
+  const data = response.notification.request.content.data as { conversationId?: unknown; invitations?: unknown } | undefined;
+  const id = response.notification.request.identifier;
+  if (data?.invitations === true) return { id, invitations: true };
+  if (typeof data?.conversationId !== 'string') return null;
+  return { id, conversationId: data.conversationId };
 }
 
 export function openSystemSettings(): Promise<void> {
@@ -38,9 +40,9 @@ export function openSystemSettings(): Promise<void> {
 
 /**
  * Crée l'adaptateur autour d'une fonction de chargement du module `expo-notifications`. Le module n'est chargé
- * qu'à la première utilisation, jamais dans Expo Go sur Android (SDK 53+) où son simple import lève une erreur
- * (le push y a été retiré) : les notifications sont alors `unavailable`. Une development build est nécessaire
- * pour les tester sur Android. La fonction de chargement est un paramètre pour pouvoir simuler un module absent.
+ * qu'à la première utilisation, hors Expo Go sur Android : le chargement du package peut déclencher
+ * l'erreur du module push absent. Les notifications système nécessitent une build de développement
+ * dans cet environnement. Les badges de l'application restent disponibles.
  */
 export function createNotificationsAdapter(loadModule: () => Notifications = defaultLoader) {
   let cached: Notifications | null | undefined;
@@ -117,6 +119,21 @@ export function createNotificationsAdapter(loadModule: () => Notifications = def
     }
   }
 
+  /** Invitation à un serveur : seul le nom du serveur y figure ; le toucher ouvre les invitations. */
+  async function showInvitationNotification(input: { title: string; body: string }): Promise<boolean> {
+    const N = notifications();
+    if (!N) return false;
+    try {
+      await N.scheduleNotificationAsync({
+        content: { title: input.title, body: input.body, data: { invitations: true } },
+        trigger: Platform.OS === 'android' ? { channelId: CHANNEL_ID } : null,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Toucher d'une notification pendant que l'application tourne ; retourne le désabonnement. */
   function onNotificationOpened(handler: (tap: Tap) => void): () => void {
     const N = notifications();
@@ -154,7 +171,7 @@ export function createNotificationsAdapter(loadModule: () => Notifications = def
     }
   }
 
-  return { configureNotifications, getPermission, requestPermission, showMessageNotification, onNotificationOpened, getLaunchTap, setAppBadge };
+  return { configureNotifications, getPermission, requestPermission, showMessageNotification, showInvitationNotification, onNotificationOpened, getLaunchTap, setAppBadge };
 }
 
 // Instance de l'application : le module est chargé au premier appel.
@@ -163,6 +180,7 @@ export const {
   getPermission,
   requestPermission,
   showMessageNotification,
+  showInvitationNotification,
   onNotificationOpened,
   getLaunchTap,
   setAppBadge,
