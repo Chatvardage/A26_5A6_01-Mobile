@@ -458,7 +458,7 @@ d'identifiants, l'ajout et la suppression de fichiers, et la lecture/écriture d
 projet Xcode temporaire. Ce test ne remplace pas une compilation iOS sur macOS.
 Retirer la surcharge lorsque `xcode` adoptera une version corrigée compatible.
 
-Au **4 octobre 2026**, deux avis HIGH restent sans version corrigée publiée :
+Au **9 octobre 2026**, deux avis HIGH restent sans version corrigée publiée :
 
 - [`node-forge` ≤ 1.4.0](https://github.com/advisories/GHSA-86w9-cpqp-85rv) :
   validation insuffisante des signatures RSA; utilisé par les outils Expo.
@@ -473,6 +473,20 @@ aux outils concernés, sans considérer cette précaution comme un correctif.
 Ne pas utiliser `npm audit fix --force` : la résolution proposée inclut une
 rétrogradation incompatible vers Expo 44. Vérifier les nouveaux correctifs avec
 `npm audit` et `npx expo install --check`, puis refaire les tests avant une mise à jour.
+
+Vérification du **9 octobre 2026**, avec Node **22.23.2** et le SDK Expo **57** :
+
+- `npx expo install --fix` confirme que les dépendances sont à jour.
+- `npm audit fix` ne modifie ni le manifeste ni le verrouillage et termine en échec
+  avec **49 alertes HIGH**, **0 CRITICAL**, provenant des deux avis ci-dessus.
+- Les dernières versions publiées sur npm sont toujours `braces@3.0.3` et
+  `node-forge@1.4.0`, toutes deux affectées. Les avis officiels indiquent qu'aucune
+  version corrigée n'est disponible.
+
+Il n'existe donc actuellement aucune correction par mise à jour de ces deux
+paquets. Une migration de Jest seule ne retire pas `braces` de la chaîne Metro.
+Le résultat attendu reste un audit en échec tant que ces dépendances sont présentes
+et affectées; cette vérification ne constitue pas une résolution des failles.
 
 ### Préférences du téléphone et accueil
 
