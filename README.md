@@ -39,10 +39,12 @@ npm test
 npm start             # déduit l'IP de l'API si nécessaire puis lance Expo, avec adaptation WSL2
 ```
 
-`npm start` déduit l'IP LAN de l'API dans `.env` hors WSL2 seulement si aucune URL n'est
-encore configurée, puis lance la CLI Expo installée dans le projet avec le même exécutable
-Node, sans appeler `npx`. Une URL déjà présente dans l'environnement ou dans `.env` est
-conservée (notamment `10.0.2.2`, une adresse distante ou le mode miroir WSL2). Cela évite
+`npm start` actualise l'IP LAN de l'API dans `.env` hors WSL2 si aucune URL n'est fournie
+par l'environnement, puis lance la CLI Expo installée dans le projet avec le même exécutable
+Node, sans appeler `npx`. Une URL déjà présente dans l'environnement est conservée. Hors
+WSL2, une URL présente dans `.env` est actualisée avec l'IP LAN courante (notamment si
+l'ancienne adresse est périmée). Le mode miroir WSL2 et les adresses spécifiques comme
+`10.0.2.2` restent inchangés avec `npm start`. Cela évite
 l'erreur `spawn npx ENOENT` sous Windows ou WSL. Si la CLI Expo est absente, exécuter
 `npm ci` dans ce dépôt.
 
@@ -82,9 +84,9 @@ L'app (`src/config/env.ts`) prend la première source disponible :
 
 À l'étape 4, seule une adresse locale (`localhost`, `*.local`, IP privée `10.x`, `172.16-31.x`, `192.168.x`) est retenue : un tunnel (exp.direct, ngrok, Cloudflare…) ne donne pas accès au backend et est ignoré. Après toute modification de `.env`, relancer avec le cache vidé (`npm start -- -c`).
 
-Hors WSL2, `npm start` déduit l'IP LAN du PC dans `.env` seulement lors de la première
-configuration (sans `EXPO_PUBLIC_API_URL` dans l'environnement ou dans `.env`). Pour
-effectuer ou refaire cette mise à jour sans lancer Expo, exécuter depuis ce dépôt.
+Hors WSL2, `npm start` met à jour l'IP LAN du PC dans `.env` à chaque démarrage, sauf si
+`EXPO_PUBLIC_API_URL` est fournie dans l'environnement du shell. Pour effectuer ou refaire
+cette mise à jour sans lancer Expo, exécuter depuis ce dépôt.
 `npm run update-ip` force alors le port 3000 :
 
 ```bash
@@ -93,7 +95,7 @@ npm start -- -c
 ```
 
 Sous Linux natif, `npm run update-ip` remplace l'hôte de `EXPO_PUBLIC_API_URL` et force le port 3000.
-`npm start` ne modifie `.env` que si aucune URL n'est configurée et utilise alors aussi le port 3000. Le script choisit la première
+`npm start` actualise également une URL déjà présente dans `.env` et utilise alors aussi le port 3000. Le script choisit la première
 IPv4 privée détectée (`192.168.x.x`, `10.x.x.x` ou `172.16-31.x.x`). Si plusieurs
 interfaces (VPN, VirtualBox, Wi-Fi et Ethernet) sont actives, choisir explicitement
 l'adresse correcte :
